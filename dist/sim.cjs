@@ -2,6 +2,8 @@ const SIM = (() => {
 const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан','ис','ор','ну','са','вел','ин','то','ри','ла','мэ','зор','ан','ви','лей','дар','ми','ту','ре','ол','фа','ям','бо','се','ха','ют'];
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
+// model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
+const MODEL = { v: 'm13', date: '2026-11-20', note: 'меньше ранних смертей взрослых: переговоры перед войной, безопасные броды, помощь в голод' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -2483,7 +2485,7 @@ function shock(S, kind) {
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
 function restore(str) { const S = JSON.parse(str); index(S); return S; }
 
-return { newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 })();
 if (typeof module !== 'undefined') module.exports = SIM;
