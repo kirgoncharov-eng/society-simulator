@@ -5,59 +5,48 @@ on:
 permissions:
   contents: read
 jobs:
-  planting:
+  timing:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [summer-labor, early-crops]
-        seed: [5000, 12919, 20838, 28757, 36676, 44595]
-    env:
-      VARIANT: ${{ matrix.variant }}
-      WORLD_SEED: ${{ matrix.seed }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: de70b1343caf0450dfee1624fa68fe74a55bf923
+          ref: 9665c9e469fbd76f06b1f0fc9ff4866bca2d52ea
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Simulate one island for 80 years
-        run: |
-          node --input-type=commonjs - <<'NODE'
-          const fs = require('node:fs');
-          const jobs = 'src/engine/40-jobs.js';
-          const before = "['water', 'pray', 'guard', 'herd', 'fish', 'farm', 'craft', 'build', 'stone', 'wood']";
-          const after = "['water', 'pray', 'guard', 'herd', 'fish', 'build', 'farm', 'craft', 'stone', 'wood']";
-          const original = fs.readFileSync(jobs, 'utf8');
-          if (!original.includes(before)) throw Error('missing autumn job order');
-          if (process.env.VARIANT === 'early-crops') fs.writeFileSync(jobs, original.replace(before, after));
-          {
-            const climate = 'src/engine/37-weather.js', file = fs.readFileSync(climate, 'utf8');
-            if (!file.includes('available * 0.16')) throw Error('missing summer staffing');
-            let updated = file.replace('available * 0.16', 'available * 0.20');
-            if (process.env.VARIANT === 'early-crops') updated = updated.replace('food * 1.2 * rain', 'food * 1.45 * rain');
-            fs.writeFileSync(climate, updated);
-          }
-          NODE
-          npm run build
-          node --input-type=commonjs - <<'NODE'
-          const S = require('./dist/sim.cjs'), seed = Number(process.env.WORLD_SEED);
-          const world = S.newWorld(seed, {}), work = [0, 0, 0, 0], pop = [0, 0, 0, 0];
-          let min = Infinity;
-          for (let t = 1; t <= 80 * 360; t++) {
-            S.step(world);
-            if (t % 360 === 0 && t >= 3600) min = Math.min(min, S.popOf(world));
-            if (t % 30 !== 1) continue;
-            const season = Math.floor((t % 360) / 90);
-            for (const person of world.agents) {
-              if (!world._g.get(person.group)?.home) continue;
-              pop[season]++; work[season] += Number(person.job === 'farm');
-            }
-          }
-          const relevant = ['death','sick','burnout','war','plague','drown','lostAtSea','killed','births','childDeaths'];
-          const stats = Object.fromEntries(relevant.map(key => [key, world.stats[key] || 0]));
-          const villages = world.groups.filter(g => g.home).map(g => g.members.length);
-          console.log('CALIBRATION_RESULT ' + JSON.stringify({variant:process.env.VARIANT, seed, villages, min, stats, work, pop}));
-          NODE
+      - run: /usr/bin/time -p npm test
+      - run: git diff --exit-code -- dist
+      - uses: actions/checkout@v4
+        with:
+          ref: 8f7c69f614f3c01748c53192e43bd0c3548b9d4b
+          path: reference
+          persist-credentials: false
+      - run: /usr/bin/time -p npm test
+        working-directory: reference
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 9665c9e469fbd76f06b1f0fc9ff4866bca2d52ea
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run audit
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 9665c9e469fbd76f06b1f0fc9ff4866bca2d52ea
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build
+      - run: |
+          python3 -m pip install playwright
+          python3 -m playwright install --with-deps chromium
+          python3 tools/page_check.py
