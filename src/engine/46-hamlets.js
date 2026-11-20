@@ -108,7 +108,7 @@ function bud(S, g, L) {
   const F = mem.filter(m => m.age >= 25 && m.age < 55).sort((a, b) => (b.status * (0.5 + b.ambition) + b.skill) - (a.status * (0.5 + a.ambition) + a.skill))[0];
   if (!F) return;
   const kinF = mem.filter(m => m !== F && kin(m, F));
-  const rest = mem.filter(m => m !== F && !kinF.includes(m) && (m.trust[F.id] || 0) > (m.trust[L.id] || 0)).sort((a, b) => (b.trust[F.id] || 0) - (a.trust[F.id] || 0));
+  const rest = mem.filter(m => m !== F && !kinF.includes(m) && (m.trust[F.id] || 0) + bondW(m, F) > (m.trust[L.id] || 0) + bondW(m, L)).sort((a, b) => (b.trust[F.id] || 0) + bondW(b, F) - (a.trust[F.id] || 0) - bondW(a, F));
   const go = kinF.concat(rest).slice(0, want - 1);
   if (go.length < 5) return;
   const why = sent([`в «${g.name}» ${n} взрослых${(g.room === undefined ? 1 : g.room) < 0.5 ? ', и свободной земли рядом почти не осталось' : ''}`, g.treasury < n * 1.5 ? 'хлеба на всех не хватает' : '', (g.entropy || 0) > 1.2 ? 'в большой деревне трудно договориться: работа идёт вразнобой' : '', `${F.name} уводит свою родню и тех, кто ${F.sex === 'f' ? 'ей' : 'ему'} доверяет`, 'уходят без ссоры, со своей долей зерна и скота, и остаются союзниками']);

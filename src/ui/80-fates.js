@@ -15,7 +15,7 @@ function arcOf(p) {
 function storyText(p, full) {
   const B = p.bio, kids = B.filter(b => b[1] === 'child').length, kd = B.filter(b => b[1] === 'childDied').length;
   const key = B.filter(b => !['child', 'childDied', 'move'].includes(b[1]) || (b[1] === 'move' && full));
-  const pick = full ? key : key.filter(b => (({ born: 1, marry: 1, death: 1, drowned: 1 })[b[1]]) || ['leader', 'deposed', 'coup', 'schism', 'found', 'exiled', 'feud', 'revenge', 'murder', 'elope', 'returned', 'heir', 'bond', 'freed', 'master', 'client', 'retainer', 'plague', 'orphan', 'spouseDied'].includes(b[1])).slice(0, 9);
+  const pick = full ? key : key.filter(b => (({ born: 1, marry: 1, death: 1, drowned: 1 })[b[1]]) || ['leader', 'deposed', 'coup', 'schism', 'found', 'exiled', 'feud', 'revenge', 'murder', 'elope', 'returned', 'heir', 'bond', 'freed', 'master', 'client', 'retainer', 'plague', 'orphan', 'spouseDied', 'enemy', 'sworn', 'love', 'betrayed', 'reconcile'].includes(b[1])).slice(0, 9);
   const lines = pick.map(b => `<li><time>${yr(b[0])}</time><span>${esc(b[2])}</span></li>`);
   const fam = kids ? `<p class="famline">${kids} ${kids % 10 === 1 && kids % 100 !== 11 ? 'ребёнок' : kids % 10 > 1 && kids % 10 < 5 && (kids % 100 < 12 || kids % 100 > 14) ? 'ребёнка' : 'детей'}${kd ? `, из них ${kd} ${kd % 10 === 1 && kd % 100 !== 11 ? 'умер' : 'умерли'} в детстве` : ''}.</p>` : '';
   return `<ol class="life">${lines.join('')}</ol>${fam}`;

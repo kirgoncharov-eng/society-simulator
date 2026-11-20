@@ -80,6 +80,13 @@ function famTxt(a, g, L) {
   if (a.age > 55 && g) soc.push('старейшина: голос весит больше');
   return `<p class="rel">${parts.join('. ')}.</p>${soc.length ? `<p class="rel">${soc.map((t, i) => i ? t : t[0].toUpperCase() + t.slice(1)).join('; ')}.</p>` : ''}`;
 }
+// named ties with their cause: who is a friend, a rival, an enemy, and why
+const BOND_ORDER = { enemy: 0, love: 1, sworn: 2, rival: 3, debt: 4, friend: 5, mentor: 6, pupil: 7 };
+function bondsTxt(a) {
+  const bs = Object.entries(a.bonds || {}).map(([id, b]) => [S._a.get(+id), b]).filter(([o]) => o).sort((x, y) => BOND_ORDER[x[1][0]] - BOND_ORDER[y[1][0]] || y[1][2] - x[1][2]);
+  if (!bs.length) return '';
+  return `<p class="rel"><b>Связи</b><br>${bs.map(([o, b]) => `${esc(o.name)} — ${esc(SIM.bondLabel(a, o, b[0]))}: ${esc(b[3])}, г. ${yr(b[1])}`).join('<br>')}</p>`;
+}
 function card() {
   const el = $('card');
   if (!sel) return;
@@ -97,6 +104,7 @@ function card() {
   ${g && g.home && g.wsrc ? `<p class="rel">Вода: ${g.wsrc.kind === 'well' ? 'свой колодец' : g.wsrc.kind === 'spring' ? 'родник' : 'река'}, ${Math.round(g.wd)} шагов${g.wNeed ? `, воду носят ${g.wNeed} ${g.wNeed % 10 === 1 && g.wNeed % 100 !== 11 ? 'человек' : g.wNeed % 10 > 1 && g.wNeed % 10 < 5 && (g.wNeed % 100 < 12 || g.wNeed % 100 > 14) ? 'человека' : 'человек'}` : ''}${g.dirty > 0.35 ? '; вода нечистая, люди чаще болеют' : ''}${g.thirst ? '; <b style="color:var(--red)">воды нет</b>' : ''}.</p>` : g && g.home && !g.wsrc ? '<p class="rel"><b style="color:var(--red)">В деревне нет воды.</b></p>' : ''}
   ${g && g.home && ((g.pots || 0) >= 1 || (g.cloth || 0) >= 1 || (g.goats || 0) || g.fboats) ? `<p class="rel">Хозяйство: ${[g.goats ? `${g.goats} коз` : '', g.fboats ? `${g.fboats} ${g.fboats === 1 ? 'рыбацкая лодка' : g.fboats < 5 ? 'рыбацкие лодки' : 'рыбацких лодок'}` : '', (g.pots || 0) >= 1 ? `горшков ${Math.round(g.pots)}` : '', (g.cloth || 0) >= 1 ? `тканей ${Math.round(g.cloth)}` : ''].filter(Boolean).join(', ')}${(g.cloth || 0) >= g.members.length * 0.5 ? '. Тёплая одежда: зимой болеют реже' : ''}${(g.pots || 0) >= g.members.length * 0.5 ? '. Есть посуда: запасы хранятся дольше, воду носить легче' : ''}.</p>` : ''}
   ${famTxt(a, g, L)}
+  ${bondsTxt(a)}
   ${a.feud && !a.feud.done ? `<p class="rel"><b>Ждёт мести</b> за ${esc(a.feud.rel)} ${esc(a.feud.v)}: ${a.feud.personal ? esc(a.feud.Lname) : `«${esc(a.feud.gname)}»`}.</p>` : ''}
   <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : 'Следить камерой'}</button></div>
   ${a.bio && a.bio.length > 1 ? `<details class="chron1"><summary>Летопись жизни · ${arcOf({ bio: a.bio })}</summary>${storyText({ bio: a.bio }, true)}</details>` : ''}

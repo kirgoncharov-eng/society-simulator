@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm17', date: '2026-11-20', note: 'полевые работы зависят от времени года, заморозок портит урожай, а штормы оставляют лодки у берега' };
+const MODEL = { v: 'm18', date: '2026-11-20', note: 'личные связи с памятью: друзья, побратимы, соперники, враги, должники, учителя; у вражды есть имя и причина, она переходит к детям' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
