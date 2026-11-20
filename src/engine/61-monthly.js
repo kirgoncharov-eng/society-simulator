@@ -55,6 +55,7 @@ function monthly(S) {
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
   for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
   aidMonth(S);
+  hamletsMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -182,7 +183,7 @@ function groupMonth(S, g) {
     }
   }
   restructure(S, g);
-  if (!g.home && (n >= 6 || (n >= 4 && S.tick - g.founded > 720) || (n >= 3 && S.tick - g.founded > 1440))) settle(S, g);
+  if (!g.home && (n >= 6 || (n >= 5 && S.tick - g.founded > 720))) settle(S, g);
   jobs(S, g);
   // entropy
   let res = 0, fact = 0; for (const m of mem) { res += m.res; if ((m.trust[L.id] || 0) < 0) fact++; }
@@ -216,7 +217,7 @@ function groupMonth(S, g) {
       const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0)) > 0);
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
       if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
-      if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room)) {
+      if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
         const why = grievances(S, g, L, ch, sup, n) + ` Для переворота поддержки мало (${P0(frac)}), поэтому недовольные уходят сами.`;
         if (sup.length < 5 && g.home) {
           let dest = null, dv = -1e9;
@@ -276,7 +277,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   for (const m of sup) { m.res *= 0.4; bump(m, ch, 0.2); }
   const loyal = cur.filter(m => m !== ch && (m.trust[L.id] || 0) > (m.trust[ch.id] || 0));
   for (const m of loyal) bump(m, ch, -0.2);
-  if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6) {
+  if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6 * Math.min(1, 0.3 + fissionP(S, g))) {
     const ng = createGroup(S, L, loyal, g.id);
     S.hostility[key(g.id, ng.id)] = 0.9;
     log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
