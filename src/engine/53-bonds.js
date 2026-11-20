@@ -70,20 +70,20 @@ function inheritBonds(S, a, parents) {
   for (const p of parents) {
     if (!p || !p.bonds) continue;
     for (const id in p.bonds) {
-      const [k, , s, why] = p.bonds[id], o = S._a.get(+id); if (!o || o === a || kin(o, a)) continue;
-      if (k === 'enemy' && s > 0.3) { a.bonds = a.bonds || {}; if (!a.bonds[id]) a.bonds[id] = ['enemy', S.tick, s * 0.5, `враг рода: ${why.replace(/меня/g, fem(p, 'отца', 'мать'))}`]; }
+      const [k, , s, why, , ref] = p.bonds[id], o = S._a.get(+id); if (!o || o === a || kin(o, a)) continue;
+      if (k === 'enemy' && s > 0.3) { a.bonds = a.bonds || {}; if (!a.bonds[id]) a.bonds[id] = ref ? ['enemy', S.tick, s * 0.5, `враг рода: ${why.replace(/меня/g, fem(p, 'отца', 'мать'))}`, 0, cite(S, ref)] : ['enemy', S.tick, s * 0.5, `враг рода: ${why.replace(/меня/g, fem(p, 'отца', 'мать'))}`]; }
       else if ((k === 'friend' || k === 'sworn' || k === 'debt') && s > 0.35 && !(a.bonds && a.bonds[id])) { a.bonds = a.bonds || {}; a.bonds[id] = ['friend', S.tick, s * 0.4, `друг семьи: ${fem(o, 'дружил', 'дружила')} с ${fem(p, 'отцом', 'матерью')}`]; }
     }
   }
 }
 // sworn brothers: two who fought side by side and won, and already trusted each other
-function swornAfterBattle(S, band, place) {
+function swornAfterBattle(S, band, place, ev) {
   let made = 0;
   for (let i = 0; i < band.length && made < 2; i++) for (let j = i + 1; j < band.length && made < 2; j++) {
     const a = band[i], b = band[j];
     if (kin(a, b) || bondOf(a, b) || (a.trust[b.id] || 0) < 0.3 || (b.trust[a.id] || 0) < 0.3 || rnd(S) > 0.35) continue;
     const why = `вместе бились у «${place}»`;
-    bond(S, a, b, 'sworn', why, 0.7); bond(S, b, a, 'sworn', why, 0.7); made++;
+    bond(S, a, b, 'sworn', why, 0.7, false, ev); bond(S, b, a, 'sworn', why, 0.7, false, ev); made++;
   }
 }
 // childhood friends: a peer who grew up in the same village
