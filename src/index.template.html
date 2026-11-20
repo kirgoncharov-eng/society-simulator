@@ -32,6 +32,9 @@ h1{font:600 clamp(32px,4.4vw,48px)/1.05 "Source Serif 4",Georgia,serif;letter-sp
 .lab{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px;align-items:start}
 .plate{position:relative;width:100%;aspect-ratio:1;max-width:calc(100svh - 150px);min-width:min(100%,320px);background:var(--plate);border-radius:4px;overflow:hidden;touch-action:manipulation;cursor:crosshair}
 .plate canvas{position:absolute;inset:0;width:100%;height:100%}
+#nightShade{position:absolute;z-index:1;inset:0;background:#0c1733;pointer-events:none}
+.hud.tl #dayClock{font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:700px){.hud.tl:has(#dayClock:not([hidden])){flex-wrap:wrap;max-width:calc(100% - 145px);column-gap:6px;row-gap:4px}}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
 button,.seg label{font:500 15px/1 Inter,system-ui,sans-serif;min-height:44px;padding:0 14px;border-radius:4px;border:1px solid var(--rule);background:var(--bg);color:var(--ink);cursor:pointer}
 button:hover{border-color:var(--slate)}
@@ -369,8 +372,8 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
 
 <main class="band solo stageband"><div class="wrap wide">
   <div class="view" id="view">
-    <div class="plate" id="plate"><canvas id="cv" aria-label="Мир симуляции"></canvas><div id="v3lab" class="v3lab" hidden></div><p id="v3msg" class="v3msg" hidden></p>
-      <div class="hud tl" aria-live="off"><b id="hYear">Год 0</b><span id="hSeason">зима</span></div>
+    <div class="plate" id="plate"><canvas id="cv" aria-label="Мир симуляции"></canvas><div id="v3lab" class="v3lab" hidden></div><p id="v3msg" class="v3msg" hidden></p><div id="nightShade" hidden aria-hidden="true"></div>
+      <div class="hud tl" aria-live="off"><b id="hYear">Год 0</b><span id="hSeason">зима</span><span id="dayClock" hidden></span></div>
       <div class="hud tr"><span><em>люди</em><b id="hPop">0</b></span><span><em>групп</em><b id="hGroups">0</b></span><span class="wide2"><em>энтропия</em><b id="hEnt">0</b></span><span class="wide2"><em>Джини</em><b id="hGini">0</b></span></div>
       <button class="hud tick" id="ticker" hidden></button>
     </div>
@@ -381,6 +384,7 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
       <div class="vt" role="group" aria-label="Вид"><button id="v2d" class="on" aria-pressed="true">Карта</button><button id="v3d" aria-pressed="false">3D</button></div>
       <button class="main" id="play">Пауза</button>
       <div class="seg" role="radiogroup" aria-label="Скорость">
+        <input type="radio" name="sp" id="spDay" value="day"><label for="spDay" title="Около 16 секунд на день">Сутки</label>
         <input type="radio" name="sp" id="sp1" value="1" checked><label for="sp1">1×</label>
         <input type="radio" name="sp" id="sp4" value="4"><label for="sp4">4×</label>
         <input type="radio" name="sp" id="sp16" value="16"><label for="sp16">16×</label>
