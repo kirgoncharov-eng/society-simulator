@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm19', date: '2026-11-20', note: 'семья — дом: у каждой семьи свой дом, вдова остаётся в доме, дети его наследуют; без леса ставят мазанки' };
+const MODEL = { v: 'm20', date: '2026-11-20', note: 'споры и обычаи: наследники судятся за дом, кровь кончается местью или вирой, повторённое решение становится обычаем и переходит к соседям' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -75,9 +75,11 @@ function archiveGC(S) {
   for (const a of S.agents) {
     refs(a.bio);
     for (const m of a.grainMemories || []) if (m.ev) keep.add(m.ev);
+    if (a.feud && a.feud.ev && !a.feud.done) keep.add(a.feud.ev);
     for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
   }
   for (const l of S.legends || []) refs(l.bio);
+  for (const g of S.groups) for (const k in g.customEv || {}) keep.add(g.customEv[k]);
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }

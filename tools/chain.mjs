@@ -16,6 +16,7 @@ function noDangling(S, where) {
     for (const b of a.bio || []) check(b[3], `chronicle of ${a.name}`);
     for (const m of a.grainMemories || []) check(m.ev, `grain memory of ${a.name}`);
     for (const id in a.bonds || {}) check(a.bonds[id][5], `tie of ${a.name}`);
+    if (a.feud && a.feud.ev && !a.feud.done) check(a.feud.ev, `feud of ${a.name}`);
   }
   for (const l of S.legends || []) for (const b of l.bio || []) check(b[3], `legend of ${l.name}`);
   for (const e of S.events) for (const c of e.causes || []) check(c, `causes of event ${e.id}`);

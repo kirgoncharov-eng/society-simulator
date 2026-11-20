@@ -47,6 +47,7 @@ function householdsMonth(S) {
       if (next) {
         h.owner = next.id; h.oname = next.name; h.spouseOf = null;
         if (dead) bio(S, next, 'inheritHouse', next === widow ? `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме` : `Наследует дом ${oname}`, ref);
+        if (dead && next !== widow && heirs.includes(next)) inheritDispute(S, g, h, next, oname, ref);
       } else { h.owner = null; h.oname = null; h.emptyT = S.tick; }
     }
     // everyone checks their place: a house that burned or that they left no longer counts
