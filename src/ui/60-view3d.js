@@ -173,9 +173,9 @@ function rebuildStatic(W0, now) {
   for (const g of W0.groups) {
     if (!g.home) continue;
     const fill = hsl3(g.hue, C.dark ? -4 : 14), roofC = hsl3(g.hue, C.dark ? -20 : -14);
-    for (const hh of g.houses) { if (h >= 900) break; const y = gh(hh.x, hh.y); if (hh.ruined) { setInst(V3.houses, h, hh.x, y + 2, hh.y, 1, hh.x, 0.45); V3.houses.setColorAt(h, hexOf(rgba(C.muted, 1))); setInst(V3.roofs, h, hh.x, -50, hh.y, 0.01); h++; continue; } setInst(V3.houses, h, hh.x, y + 4, hh.y, 1, hh.x); V3.houses.setColorAt(h, fill); setInst(V3.roofs, h, hh.x, y + 11.4, hh.y, 1, hh.x); V3.roofs.setColorAt(h, roofC); h++; }
-    if (g.workshop && b < 80) { const w = g.workshop, y = gh(w.x, w.y); setInst(V3.big, b, w.x, y + 5, w.y); V3.big.setColorAt(b, roofC); setInst(V3.chim, b, w.x + 5, y + 13, w.y); b++; }
-    if (g.granary && s < 80) { const w = g.granary, y = gh(w.x, w.y); setInst(V3.silos, s, w.x, y + 5.5, w.y); V3.silos.setColorAt(s, fill); s++; }
+    for (const hh of g.houses) { if (h >= 900) break; const y = gh(hh.x, hh.y); if (hh.ruined) { setInst(V3.houses, h, hh.x, y + 2, hh.y, 1, -(hh.angle ?? Math.atan2(g.plan?.uy || 0, g.plan?.ux || 1)), 0.45); V3.houses.setColorAt(h, hexOf(rgba(C.muted, 1))); setInst(V3.roofs, h, hh.x, -50, hh.y, 0.01); h++; continue; } setInst(V3.houses, h, hh.x, y + 4, hh.y, 1, -(hh.angle ?? Math.atan2(g.plan?.uy || 0, g.plan?.ux || 1))); V3.houses.setColorAt(h, hh.earth ? hexOf("#a7926e") : fill); setInst(V3.roofs, h, hh.x, y + 11.4, hh.y, 1, -(hh.angle ?? Math.atan2(g.plan?.uy || 0, g.plan?.ux || 1))); V3.roofs.setColorAt(h, roofC); h++; }
+    if (g.workshop && b < 80) { const w = g.workshop, y = gh(w.x, w.y); setInst(V3.big, b, w.x, y + 5, w.y, 1, -(w.angle || 0)); V3.big.setColorAt(b, roofC); setInst(V3.chim, b, w.x + 5 * Math.cos(w.angle || 0), y + 13, w.y + 5 * Math.sin(w.angle || 0)); b++; }
+    if (g.granary && s < 80) { const w = g.granary, y = gh(w.x, w.y); setInst(V3.silos, s, w.x, y + 5.5, w.y, 1, -(w.angle || 0)); V3.silos.setColorAt(s, fill); s++; }
     if (g.shrine && sp < 80) { const w = g.shrine, y = gh(w.x, w.y), f = W0.faiths && W0.faiths[g.faith]; setInst(V3.spires, sp, w.x, y + 11, w.y); V3.spires.setColorAt(sp, hsl3(f ? f.hue : g.hue, -4)); sp++; }
   }
   for (const r of W0.ruins || []) for (const hh of r.houses) { if (h >= 900) break; const y = gh(hh.x, hh.y); setInst(V3.houses, h, hh.x, y + 2, hh.y, 1, hh.x, 0.45); V3.houses.setColorAt(h, hexOf(rgba(C.muted, 1)).clone()); setInst(V3.roofs, h, hh.x, y - 20, hh.y, 0.01); V3.roofs.setColorAt(h, hexOf(rgba(C.muted, 1)).clone()); h++; }
@@ -186,27 +186,33 @@ function rebuildStatic(W0, now) {
     const st = g.site;
     if (st && st.kind !== 'field' && st.kind !== 'walls' && si < 60) {
       const p = Math.min(1, st.prog / st.need), y = gh(st.x, st.y), w = st.kind === 'workshop' ? 1.6 : st.kind === 'granary' ? 1 : 1;
-      setInst(V3.sites, si++, st.x, y + 4 * Math.max(0.08, p), st.y, w, 0, Math.max(0.08, p));
+      setInst(V3.sites, si++, st.x, y + 4 * Math.max(0.08, p), st.y, w, -(st.angle || 0), Math.max(0.08, p));
       for (const [dx, dz] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) if (sc < 240) setInst(V3.scaf, sc++, st.x + dx * w, y + 7.5, st.y + dz * w);
     }
     if (sh > 0) for (const f of g.fields) for (let i = 0; i < 6 && cr < 900; i++) { const fx = f.x - 6 + (i % 3) * 6, fz = f.y - 3.5 + Math.floor(i / 3) * 7; setInst(V3.crops, cr, fx, gh(fx, fz) + sh * 2.2, fz, 1, 0, sh * 4.4); V3.crops.setColorAt(cr, ccol); cr++; }
   }
   let bi = 0, ri = 0;
-  const rows = {}; for (const k in W0.bridge || {}) { const cc = +k, j = (cc / 50) | 0, i = cc % 50; const r = rows[j] || (rows[j] = [i, i]); r[0] = Math.min(r[0], i); r[1] = Math.max(r[1], i); }
-  for (const j in rows) { if (bi >= 80) break; const [i0, i1] = rows[j], x0 = i0 * 20 - 16, x1 = i1 * 20 + 36, z = j * 20 + 10, len = (x1 - x0) / 24, cx = (x0 + x1) / 2, y = Math.max(gh(x0, z), gh(x1, z), 0) + 1.5; setInst(V3.bridges, bi++, cx, y, z, 1, 0, 1); V3.bridges.setMatrixAt(bi - 1, V3.dummy.matrix.compose(V3.dummy.position.set(cx, y, z), V3.dummy.quaternion.identity(), V3.dummy.scale.set(len, 1, 1)) && V3.dummy.matrix); if (ri < 158) for (const dz of [-5, 5]) { V3.rails.setMatrixAt(ri++, V3.dummy.matrix.compose(V3.dummy.position.set(cx, y + 2.2, z + dz), V3.dummy.quaternion.identity(), V3.dummy.scale.set(len, 1, 1)) && V3.dummy.matrix); } }
+  for (const { a, b } of bridgeSpans(W0)) {
+    if (bi >= 80) break;
+    const len = (b.x - a.x) / 24, x = (a.x + b.x) / 2, z = a.y;
+    const y = Math.max(gh(a.x, z), gh(b.x, z), 0) + 1.5;
+    V3.bridges.setMatrixAt(bi++, V3.dummy.matrix.compose(V3.dummy.position.set(x, y, z), V3.dummy.quaternion.identity(), V3.dummy.scale.set(len, 1, 1)));
+    if (ri < 158) for (const dz of [-5, 5]) V3.rails.setMatrixAt(ri++, V3.dummy.matrix.compose(V3.dummy.position.set(x, y + 2.2, z + dz), V3.dummy.quaternion.identity(), V3.dummy.scale.set(len, 1, 1)));
+  }
   V3.bridges.count = bi; V3.rails.count = ri; V3.bridges.instanceMatrix.needsUpdate = true; V3.rails.instanceMatrix.needsUpdate = true;
   V3.water.material.color.set(W0.frozen ? (C.dark ? 0xb8c8d4 : 0xe4eef4) : 0x6fa8c8); V3.water.material.opacity = W0.frozen ? 0.96 : 0.93;
   for (const [m, c] of [[V3.sites, si], [V3.scaf, sc], [V3.crops, cr]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   for (const [m, c] of [[V3.houses, h], [V3.roofs, h], [V3.big, b], [V3.chim, b], [V3.silos, s], [V3.spires, sp]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-  const wk = W0.groups.filter(g => g.walls && g.home).map(g => `${g.id}:${g.houses.length}`).join(',');
+  const wk = JSON.stringify(W0.groups.filter(g => g.wallPlan).map(g => g.wallPlan.segments));
   if (wk !== V3.wallsKey) {
     V3.wallsKey = wk;
     for (const ch of [...V3.wallG.children]) { V3.wallG.remove(ch); ch.geometry.dispose(); }
-    for (const g of W0.groups) {
-      if (!g.walls || !g.home) continue;
-      const R = Math.max(26, ...g.houses.map(hh => Math.hypot(hh.x - g.home.x, hh.y - g.home.y) + 12));
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 7, 40, 1, true), new THREE.MeshLambertMaterial({ color: 0x8a6234, side: THREE.DoubleSide }));
-      m.position.set(g.home.x, gh(g.home.x, g.home.y) + 3.5, g.home.y); V3.wallG.add(m);
+    if (!V3.wallMaterial) V3.wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8a6234 });
+    for (const g of W0.groups) for (const { a, b } of g.wallPlan?.segments || []) {
+      const dx = b.x - a.x, dz = b.y - a.y, x = (a.x + b.x) / 2, z = (a.y + b.y) / 2;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(dx, dz), 7, 2), V3.wallMaterial);
+      m.rotation.y = -Math.atan2(dz, dx);
+      m.position.set(x, gh(x, z) + 3.5, z); V3.wallG.add(m);
     }
   }
 }
@@ -233,7 +239,7 @@ function render3D(now) {
     if (!g.home) continue;
     const chimneys = [];
     if (winter) for (const hh of g.houses.slice(0, 6)) chimneys.push([hh.x, gh(hh.x, hh.y) + 15, hh.y, 0.8]);
-    if (g.workshop && g.members.some(id => { const m = W0._a.get(id); return m && m.job === 'craft'; })) chimneys.push([g.workshop.x + 5, gh(g.workshop.x, g.workshop.y) + 18, g.workshop.y, 1.2]);
+    if (g.workshop && g.members.some(id => { const m = W0._a.get(id); return m && m.job === 'craft'; })) chimneys.push([g.workshop.x + 5 * Math.cos(g.workshop.angle || 0), gh(g.workshop.x, g.workshop.y) + 18, g.workshop.y + 5 * Math.sin(g.workshop.angle || 0), 1.2]);
     for (const [x, y, z, k] of chimneys) for (let i = 0; i < 3 && sm < 360; i++) { const p = (tt + i / 3 + x * 0.013) % 1; setInst(V3.smoke, sm++, x + p * 5, y + p * 20, z + p * 2, k * (0.5 + p * 1.3)); }
   }
   { let hb = 0, sl = 0;

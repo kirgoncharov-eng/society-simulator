@@ -167,13 +167,53 @@ function drawNet(c, W0, k = 1) {
     c.stroke();
   }
   for (const g of W0.groups) {
-    if (!g.home || !g.plan || g.houses.length < 3) continue;
-    let lo = 0, hi = 0; for (const h of g.houses) { const t = (h.x - g.home.x) * g.plan.ux + (h.y - g.home.y) * g.plan.uy; if (Math.abs((h.x - g.home.x) * -g.plan.uy + (h.y - g.home.y) * g.plan.ux) < 18) { lo = Math.min(lo, t); hi = Math.max(hi, t); } }
-    c.strokeStyle = C.dark ? 'rgba(150,125,90,.75)' : 'rgba(168,134,88,.75)'; c.lineWidth = 3.2 * k; c.beginPath();
-    c.moveTo(g.home.x + g.plan.ux * (lo - 8), g.home.y + g.plan.uy * (lo - 8)); c.lineTo(g.home.x + g.plan.ux * (hi + 8), g.home.y + g.plan.uy * (hi + 8)); c.stroke();
+    const street = g.plan?.street;
+    if (!g.home || !street || !g.houses.length) continue;
+    let lo = -8, hi = 8;
+    for (const h of [...g.houses, ...(g.wallPlan?.gates || [])]) {
+      const x = h.x - g.home.x, y = h.y - g.home.y;
+      if (Math.abs(y * g.plan.ux - x * g.plan.uy) > 22) continue;
+      const t = x * g.plan.ux + y * g.plan.uy;
+      lo = Math.min(lo, t - 8); hi = Math.max(hi, t + 8);
+    }
+    lo = Math.max(lo, -Math.hypot(street.a.x - g.home.x, street.a.y - g.home.y));
+    hi = Math.min(hi, Math.hypot(street.b.x - g.home.x, street.b.y - g.home.y));
+    c.strokeStyle = C.dark ? 'rgba(150,125,90,.75)' : 'rgba(168,134,88,.75)';
+    c.lineWidth = street.width * 0.55 * k; c.beginPath();
+    c.moveTo(g.home.x + lo * g.plan.ux, g.home.y + lo * g.plan.uy);
+    c.lineTo(g.home.x + hi * g.plan.ux, g.home.y + hi * g.plan.uy); c.stroke();
   }
-  for (const k2 in W0.bridge || {}) { const cc = +k2, x = (cc % 50) * 20, y = ((cc / 50) | 0) * 20; c.fillStyle = C.dark ? '#8a6a44' : '#9b7445'; c.fillRect(x - 2, y + 5, 24, 10); c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 0.9; c.strokeRect(x - 2, y + 5, 24, 10); c.beginPath(); for (let i = 2; i < 22; i += 4) { c.moveTo(x + i, y + 5); c.lineTo(x + i, y + 15); } c.stroke(); }
+  for (const { a, b } of bridgeSpans(W0)) {
+    c.fillStyle = C.dark ? '#8a6a44' : '#9b7445';
+    c.fillRect(a.x, a.y - 5, b.x - a.x, 10);
+    c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 0.9;
+    c.strokeRect(a.x, a.y - 5, b.x - a.x, 10);
+    c.beginPath();
+    for (let x = a.x + 4; x < b.x; x += 4) { c.moveTo(x, a.y - 5); c.lineTo(x, a.y + 5); }
+    c.stroke();
+  }
   c.lineCap = 'butt';
+}
+function bridgeSpans(W0) {
+  const spans = (W0.bridgePlans || []).map(p => ({ a: p.approaches[0], b: p.approaches[1] }));
+  const saved = new Set((W0.bridgePlans || []).flatMap(p => p.cells));
+  const rows = new Map();
+  for (const key in W0.bridge || {}) {
+    const cell = +key;
+    if (saved.has(cell)) continue;
+    const row = Math.floor(cell / 50), x = (cell % 50) * 20 + 10;
+    const span = rows.get(row) || { a: { x: x - 20, y: row * 20 + 10 }, b: { x: x + 20, y: row * 20 + 10 } };
+    span.a.x = Math.min(span.a.x, x - 20); span.b.x = Math.max(span.b.x, x + 20);
+    rows.set(row, span);
+  }
+  return spans.concat([...rows.values()]);
+}
+function drawWall(g, px) {
+  if (!g.wallPlan) return;
+  ctx.strokeStyle = C.dark ? '#7a5a36' : '#8a6234'; ctx.lineWidth = px(3);
+  ctx.beginPath();
+  for (const { a, b } of g.wallPlan.segments) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+  ctx.stroke();
 }
 function houseGlyph(x, y, sz, fill, roof, dashed, px) {
   ctx.beginPath(); ctx.rect(x - sz / 2, y - sz * .2, sz, sz * .7);
@@ -299,7 +339,7 @@ function draw(now) {
     ctx.globalAlpha = fgs && !fgs.has(g.id) ? .45 : 1;
     const fill = hueC(g.hue, 1, C.dark ? -6 : 12), roof = hueC(g.hue, 1, C.dark ? -22 : -14);
     if (g.stoneCell !== null && g.stoneCell !== undefined && (g.workshop || g.stone > 0.5)) quarryGlyph((g.stoneCell % 50) * 20 + 10, Math.floor(g.stoneCell / 50) * 20 + 10, px);
-    for (const hh of g.houses) if (hh.ruined) { const ga = ctx.globalAlpha; ctx.globalAlpha = .5 * ga; houseGlyph(hh.x, hh.y, 12, rgba(C.muted, .5), rgba(C.muted, .8), true, px); ctx.globalAlpha = ga; } else houseGlyph(hh.x, hh.y, 13, fill, roof, false, px);
+    for (const hh of g.houses) if (hh.ruined) { const ga = ctx.globalAlpha; ctx.globalAlpha = .5 * ga; houseGlyph(hh.x, hh.y, 12, rgba(C.muted, .5), rgba(C.muted, .8), true, px); ctx.globalAlpha = ga; } else houseGlyph(hh.x, hh.y, 13, hh.earth ? '#a7926e' : fill, roof, false, px);
     if (g.granary) granaryGlyph(g.granary.x, g.granary.y, fill, roof, false, px);
     if (g.shrine) { const f = S.faiths && S.faiths[g.faith], fc = f ? hueC(f.hue, 1, -4) : roof, x0 = g.shrine.x, y0 = g.shrine.y; ctx.fillStyle = fc; ctx.beginPath(); ctx.moveTo(x0 - 7, y0 + 5); ctx.lineTo(x0 + 7, y0 + 5); ctx.lineTo(x0 + 4, y0 - 1); ctx.lineTo(x0 + 2, y0 - 1); ctx.lineTo(x0, y0 - 9); ctx.lineTo(x0 - 2, y0 - 1); ctx.lineTo(x0 - 4, y0 - 1); ctx.closePath(); ctx.fill(); }
     if (g.site && g.site.kind === 'shrine') { ctx.setLineDash([px(2), px(2)]); ctx.strokeStyle = roof; ctx.lineWidth = px(1); ctx.strokeRect(g.site.x - 6, g.site.y - 6, 12, 11); ctx.setLineDash([]); }
@@ -311,11 +351,7 @@ function draw(now) {
   }
   for (const g of S.groups) {
     if (!g.home) continue;
-    if (g.walls) {
-      const R = Math.max(26, ...g.houses.map(h => Math.hypot(h.x - g.home.x, h.y - g.home.y) + 12));
-      ctx.strokeStyle = C.dark ? '#7a5a36' : '#8a6234'; ctx.lineWidth = px(3); ctx.setLineDash([px(3), px(2)]);
-      ctx.beginPath(); ctx.arc(g.home.x, g.home.y, R, 0, 7); ctx.stroke(); ctx.setLineDash([]);
-    }
+    drawWall(g, px);
     const lord = g.lord && S._g.get(g.lord);
     if (lord && lord.home) {
       ctx.strokeStyle = hueC(lord.hue, .9); ctx.lineWidth = px(2); ctx.setLineDash([px(1), px(4)]); ctx.lineCap = 'round';
