@@ -419,9 +419,17 @@ function passCost(S, c) {
   const r = S.road[c]; if (r === 2) k *= 0.5; else if (r === 1) k *= 0.72;
   return k;
 }
+function navigationCosts(S) {
+  if (S._costs && S._costsVersion === S.navV) return S._costs;
+  const costs = S._costs || (S._costs = new Float64Array(N * N));
+  for (let c = 0; c < costs.length; c++) costs[c] = passCost(S, c);
+  S._costsVersion = S.navV;
+  return costs;
+}
 function aStar(S, c0, c1) {
   if (c0 === c1) return [c0];
-  if (!passCost(S, c1) || !passCost(S, c0) && S.ter[c0] === 'w' && !S.frozen && !S.ford[c0] && !S.bridge[c0]) { if (!passCost(S, c1)) return null; }
+  const costs = navigationCosts(S);
+  if (!costs[c1] || !costs[c0] && S.ter[c0] === 'w' && !S.frozen && !S.ford[c0] && !S.bridge[c0]) { if (!costs[c1]) return null; }
   const NN = N * N, gS = S._gS || (S._gS = new Float64Array(NN)), from = S._from || (S._from = new Int32Array(NN)), seen = S._seen || (S._seen = new Int32Array(NN));
   S._stamp = (S._stamp || 0) + 1; const stamp = S._stamp;
   const tx = c1 % N, ty = (c1 / N) | 0, h = c => { const dx = Math.abs(c % N - tx), dy = Math.abs(((c / N) | 0) - ty); return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 0.5; };
@@ -437,8 +445,8 @@ function aStar(S, c0, c1) {
     const cx = c % N, cy = (c / N) | 0;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue; const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-      const nc = ny * N + nx, k = passCost(S, nc); if (!k) continue;
-      if (dx && dy && (!passCost(S, cy * N + nx) || !passCost(S, ny * N + cx))) continue;
+      const nc = ny * N + nx, k = costs[nc]; if (!k) continue;
+      if (dx && dy && (!costs[cy * N + nx] || !costs[ny * N + cx])) continue;
       const ng = gS[c] + k * (dx && dy ? 1.414 : 1);
       if (seen[nc] !== stamp || ng < gS[nc]) { seen[nc] = stamp; gS[nc] = ng; from[nc] = c; push(nc, ng + h(nc)); }
     }
