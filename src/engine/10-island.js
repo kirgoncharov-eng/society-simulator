@@ -71,7 +71,11 @@ function seaMonth(S) {
     g.wood -= 8;
     const tx = `Уплывает с семьёй за море: в «${g.name}» ${g.thirst ? 'нет воды' : hungryF > 0.3 ? 'голодно' : 'тесно, свободной земли нет'}`;
     for (const m of fam) bio(S, m, 'emigr', tx);
-    S.kids = (S.kids || []).filter(k => !fam.some(m => m.id === k.mo || m.id === k.fa));
+    S.kids = (S.kids || []).filter(k => {
+      if (!fam.some(m => m.id === k.mo || m.id === k.fa)) return true;
+      if (S.ageAudit && k.t > 0 && k.t <= S.ageAudit.lastBirthTick) S.ageAudit.leftBefore60++;
+      return false;
+    });
     const d = Math.hypot(bs.x - S.isle.x, bs.y - S.isle.y) || 1;
     S.boats.push({ x0: bs.x, y0: bs.y, x1: bs.x + (bs.x - S.isle.x) / d * 160, y1: bs.y + (bs.y - S.isle.y) / d * 160, t: S.tick, out: true });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
