@@ -79,6 +79,7 @@ function archiveGC(S) {
     for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
   }
   for (const l of S.legends || []) refs(l.bio);
+  for (const g of S.groups) for (const k in g.customEv || {}) keep.add(g.customEv[k]);
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }

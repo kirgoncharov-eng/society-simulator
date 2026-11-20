@@ -16,8 +16,11 @@ function ruling(S, g, kind, outcome, ev) {
 function setCustom(S, g, kind, outcome, causes, how) {
   g.customs = g.customs || {}; g.customs[kind] = outcome; S.stats.customs = (S.stats.customs || 0) + 1;
   const L = S._a.get(g.leader);
+  g.customEv = g.customEv || {};
   const text = kind === 'blood' && outcome === 'wergild' ? `«${g.name}» вводит обычай виры: за кровь платят, а не мстят` : kind === 'inherit' ? `В «${g.name}» складывается обычай наследства: ${CASE_LABEL.inherit[outcome]}` : `В «${g.name}» складывается обычай: ${CASE_LABEL[kind][outcome]}`;
-  return log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([how, 'теперь так решают и дальше, пока сход или новый вождь не переменят', L ? `обычай объявляет ${L.name}` : '']), who: L ? [L.id] : [], gs: [g.id], causes });
+  const ev = log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([how, 'теперь так решают и дальше, пока сход или новый вождь не переменят', L ? `обычай объявляет ${L.name}` : '']), who: L ? [L.id] : [], gs: [g.id], causes });
+  g.customEv[kind] = cite(S, ev.id);
+  return ev;
 }
 // who judges: the leader, or the assembly; returns the ruling the judge leans to without a custom
 function judge(S, g, kind) {
@@ -62,7 +65,7 @@ function bloodOrWergild(S, g, avenger, killer) {
   const kinPurse = Math.max(0, killer.wealth) + kinK.reduce((s, o) => s + Math.max(0, o.wealth - 2), 0);
   const help = custom || (L && L.coop > 0.5) ? Math.max(0, Math.min(12 - kinPurse, g.treasury * (custom ? 0.5 : 0.25))) : 0;
   const price = Math.min(12, kinPurse + help);
-  const p = price < (custom ? 4 : 7) ? 0 : custom ? 0.8 : clamp(0.1 + 0.35 * elders(S, g) + 0.2 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
+  const p = price < (custom ? 4 : 7) ? 0 : custom ? 0.8 : clamp(0.2 + 0.4 * elders(S, g) + 0.25 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
   if (rnd(S) > p) return false;
   // pay: the killer first, then the kin
   let due = price; const take = (o, cap) => { const x = Math.min(due, Math.max(0, cap)); o.wealth -= x; due -= x; };
@@ -88,4 +91,21 @@ function bloodShed(S, g, ev) {
   const L = S._a.get(g.leader);
   if (recent.length >= 2 && rnd(S) < 0.25 + 0.3 * ((L && L.coop) || 0.4) + 0.4 * elders(S, g))
     setCustom(S, g, 'blood', 'wergild', recent.map(c => c[3]).filter(Boolean), `за ${yrs(Math.max(1, Math.round((S.tick - recent[0][2]) / 360)))} кровь пролилась ${recent.length} ${pl(recent.length, 'раз', 'раза', 'раз')}, и каждая месть рождает новую`);
+}
+// customs spread the way other institutions do: a village takes up a neighbour's custom (trade, alliance, marriages)
+function customsYear(S) {
+  for (const g of S.groups) {
+    if (!g.home || g.dead || g.members.length < 5) continue;
+    for (const kind of ['blood', 'inherit']) {
+      if ((g.customs || {})[kind]) continue;
+      const im = imitP(S, g, o => !!(o.customs || {})[kind]);
+      if (!im.from || rnd(S) > im.p * 6) continue;
+      const o = im.from, outcome = o.customs[kind];
+      const text = kind === 'blood' ? `«${g.name}» перенимает у «${o.name}» обычай виры` : `«${g.name}» перенимает у «${o.name}» обычай наследства: ${CASE_LABEL.inherit[outcome]}`;
+      g.customs = g.customs || {}; g.customs[kind] = outcome; S.stats.customs = (S.stats.customs || 0) + 1; S.stats.customsCopied = (S.stats.customsCopied || 0) + 1;
+      const L = S._a.get(g.leader);
+      const ev = log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([`у «${o.name}» так заведено, и соседи видят, что это работает`, `связи между деревнями: торговля, союз или браки`, L ? `${L.name} вводит обычай у себя` : '']), who: L ? [L.id] : [], gs: [g.id, o.id], causes: (o.customEv || {})[kind] ? [o.customEv[kind]] : undefined });
+      g.customEv = g.customEv || {}; g.customEv[kind] = cite(S, ev.id);
+    }
+  }
 }
