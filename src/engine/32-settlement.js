@@ -138,7 +138,7 @@ function placedSite({ x, y, angle }) {
 function specialSpot(S, g, kind) {
   const plan = planOf(S, g);
   const angle = Math.atan2(plan.uy, plan.ux);
-  const radius = kind === 'house' ? 6 : kind === 'well' ? 5 : 8;
+  const radius = kind === 'house' ? 6 : kind === 'well' ? 5 : kind === 'cemetery' ? 10 : 8;
   const field = g.fields.reduce((near, f) => !near || dist(f, g.home) < dist(near, g.home) ? f : near, null);
   const quarry = g.stoneCell == null ? null : { x: (g.stoneCell % N) * CS + 10, y: Math.floor(g.stoneCell / N) * CS + 10 };
   let choice = null, best = -Infinity;
@@ -153,6 +153,7 @@ function specialSpot(S, g, kind) {
       if (kind === 'granary') score += Math.min(50, riverDist(S, p.x, p.y) - 24) - (field ? dist(p, field) * 0.5 : 0);
       if (kind === 'workshop') score -= (quarry ? dist(p, quarry) * 0.6 : 0) + Math.max(0, 24 - r) * 2;
       if (kind === 'well') score += wellOk(S, p.x, p.y) * 85;
+      if (kind === 'cemetery') score = (r < 42 ? -500 : -Math.abs(r - 75)) + Math.min(40, street) * 0.8;
       if (score > best) { best = score; choice = p; }
     }
     if (choice && kind === 'house') break;

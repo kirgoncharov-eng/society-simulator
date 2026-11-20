@@ -199,6 +199,7 @@ function plotOk(S, g, p, radius = 6) {
   if (!reach(S, g.home.x, g.home.y, p.x, p.y)) return false;
   for (const h of g.houses) if (dist(h, p) < radius + 5) return false;
   for (const b of [g.workshop, g.granary, g.shrine, g.well]) if (b && dist(b, p) < radius + 8) return false;
+  if (g.cemetery && dist(g.cemetery, p) < radius + 14) return false;
   return !g.wallPlan || g.wallPlan.segments.every(({ a, b }) => distanceToSegment(p, a, b) >= radius + 2);
 }
 
