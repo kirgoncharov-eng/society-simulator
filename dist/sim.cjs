@@ -2134,7 +2134,7 @@ function elders(S, g) { return g.members.map(id => S._a.get(id)).filter(m => m &
 // record a ruling; when the same ruling keeps coming back, it becomes the village's custom
 function ruling(S, g, kind, outcome, ev) {
   g.cases = g.cases || []; g.cases.push([kind, outcome, S.tick, ev]); if (g.cases.length > 16) g.cases.shift();
-  if ((g.customs || {})[kind]) S.stats['custom_' + kind + '_' + outcome] = (S.stats['custom_' + kind + '_' + outcome] || 0) + 1;
+  const cu = (g.customs || {})[kind]; if (cu) { const k = 'under_' + kind + '_' + cu + '_' + outcome; S.stats[k] = (S.stats[k] || 0) + 1; }
   S.stats['case_' + kind + '_' + outcome] = (S.stats['case_' + kind + '_' + outcome] || 0) + 1;
   g.customs = g.customs || {};
   if (g.customs[kind]) return;
