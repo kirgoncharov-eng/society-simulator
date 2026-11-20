@@ -18,7 +18,7 @@ function relations(S) {
     const contest = Math.min(1.5, rv / 30) + (A.target === B.target ? 0.3 : 0) + (d < 160 ? 0.15 : 0);
     if (A.state && A.state === B.state) h *= 0.5;
     // a personal feud between the two leaders drags their villages into it
-    const lf = Math.min(0, bondW(LA, LB)) + Math.min(0, bondW(LB, LA)); if (lf < 0 && d < 450) h += -lf * 0.012;
+    const lf = Math.min(0, bondW(LA, LB)) + Math.min(0, bondW(LB, LA)); if (lf < 0 && d < 450) h += -lf * 0.006;
     if (!al) h += contest * (0.03 + 0.12 * P.scarcity) * (0.5 + (LA.ambition + LB.ambition) / 2) * (0.7 + cdist(A, B)) - 0.08 * Math.max(0, mutual) - 0.02 * Math.min(3, (S.kinTies || {})[k] || 0);
     h -= h * decay; if (al) h *= 0.6;
     h = clamp(h, 0, 2);
