@@ -1266,7 +1266,7 @@ function money(S, g, L) {
     const total = bonds.reduce((s2, m) => s2 + m.debt, 0), creds = [...new Set(bonds.map(m => m.cred))].map(id => S._a.get(id)).filter(Boolean);
     if (g.gov === 'assembly' || L.coop > 0.62) {
       for (const m of mem) if (m.debt) { if (m.bond) bio(S, m, 'freed', `Вече прощает долги: ${m.sex === 'f' ? 'свободна' : 'свободен'} от кабалы`); m.debt = 0; m.cred = null; m.bond = false; m.res *= 0.5; bump(m, L, 0.15); }
-      for (const c of creds) bump(c, L, -0.3); bond(S, c, L, 'rival', 'списал долги, разорив заимодавцев', 0.5);
+      for (const c of creds) { bump(c, L, -0.3); bond(S, c, L, 'rival', 'списал долги, разорив заимодавцев', 0.5); }
       S.stats.jubilees = (S.stats.jubilees || 0) + 1;
       log(S, 'debt', `${g.gov === 'assembly' ? `Вече «${g.name}»` : `${L.name}`} списывает все долги`, g.home.x, g.home.y, g.hue, { why: sent([`в кабале ${bonds.length} ${pl(bonds.length, 'человек', 'человека', 'человек')}, общий долг ${Math.round(total)}`, 'кабальные готовы бунтовать', g.gov === 'assembly' ? 'на вече должников больше, чем ростовщиков' : `${L.name} склонен договариваться (${P0(L.coop)})`, `ростовщики ${creds.slice(0, 2).map(c => c.name).join(' и ')} теряют деньги и затаили обиду на лидера`]), who: bonds.map(m => m.id).concat(creds.map(c => c.id)), gs: [g.id] });
     } else {
