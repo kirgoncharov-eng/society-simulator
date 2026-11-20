@@ -29,12 +29,12 @@ function jobs(S, g) {
   if (L && n > 4) L.job = 'lead';
   const woodNeed = g.houses.length < wantH || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
   const stoneNeed = g.stoneCell !== null && ((needWS && g.stone < 4) || (g.workshop && g.stone < 6));
-  const lean = n <= 6 && g.treasury < n * 3 && season !== 0;
+  const lean = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
   const quota = {
     build: g.site ? (lean && g.site.kind !== 'field' ? 0 : Math.max(1, Math.round(n * 0.2))) : 0,
     wood: g.woodCell === null || lean ? 0 : woodNeed ? Math.max(1, Math.round(n * 0.2)) : (season === 0 ? 1 : 0),
     stone: stoneNeed ? Math.max(1, Math.round(n * 0.12)) : 0,
-    craft: (g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n * 1.2) || (n >= 5 && ((g.pots || 0) < n * 0.5 || ((g.goats || 0) >= 4 && (g.cloth || 0) < n * 0.6))) ? Math.max(1, Math.round(n * 0.1)) : 0,
+    craft: lean ? 0 : (g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n * 1.2) || (n >= 5 && ((g.pots || 0) < n * 0.5 || ((g.goats || 0) >= 4 && (g.cloth || 0) < n * 0.6))) ? Math.max(1, Math.round(n * 0.1)) : 0,
     farm: season === 0 ? 0 : g.fields.length * 2,
     pray: g.shrine ? 1 : 0,
     water: g.wNeed || 0,

@@ -95,8 +95,9 @@ function move(S) {
     if (nc !== a.lc) {
       if (S.ter[nc] === 'w' && !S.bridge[nc]) {
         const gg = a.group && S._g.get(a.group); if (gg) gg.cross = (gg.cross || 0) + 1;
-        const ss = seasonOf(S.tick), risk = S.frozen ? 0.0035 : ss === 1 ? 0.028 : 0.006;
-        if (rnd(S) < risk * (a.car ? 1.4 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
+        // a ford is dangerous in the spring flood and with a load on the back; thin ice at the start and end of winter
+        const dy = S.tick % 360, flood = dy >= 90 && dy < 150, risk = S.frozen ? (dy < 20 || dy >= 70 ? 0.002 : 0.0004) : flood ? 0.008 : 0.00025;
+        if (rnd(S) < risk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
       }
       a.lc = nc;
     }

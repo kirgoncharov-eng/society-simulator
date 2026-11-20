@@ -29,7 +29,7 @@ function homeEconomy(S, g, mem) {
     if (seas === 1) g.goats += Math.max(g.goats >= 2 ? 1 : 0, Math.round(g.goats * 0.14 * (g.goats < cap ? 1 : 0.2)));
     if (g.goats > cap) g.goats -= Math.ceil((g.goats - cap) * 0.15);
     if (seas !== 0) g.treasury += g.goats * 0.12 * (dry ? 0.6 : 1);
-    if (g.treasury < n * 0.3 && g.goats > 4) { const k = Math.min(g.goats - 4, Math.ceil(n / 6)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
+    if (g.treasury < n * 1.2 && g.goats > 3) { const k = Math.min(g.goats - 3, Math.ceil(n / 5)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
   } else if (S.tick - g.founded > 360 && rnd(S) < 0.01) { for (const o of S.groups) if (o !== g && o.goats > 8 && o.home && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300 && (S.hostility[key(o.id, g.id)] || 0) < 0.6) { o.goats -= 2; g.goats = 2; break; } }
   // sea fishing from boats
   const fishers = mem.filter(m => m.job === 'fish');
@@ -37,9 +37,12 @@ function homeEconomy(S, g, mem) {
     S.seaFish = S.seaFish || Array.from({ length: 12 }, () => ({ amt: 220, cap: 220 }));
     const sec = S.seaFish[sectorOf(S, g.landing.x, g.landing.y)], stock = sec.amt / sec.cap;
     let catchT = 0;
+    // winter storms: boats go out only when the village is short of food, otherwise fishers mend nets ashore
+    const needy = g.treasury < (n + 1) * 2;
     for (const m of fishers) {
+      if (seas === 0 && !needy) continue;
       const c = 3.4 * (0.4 + m.energy * 0.6) * (0.3 + 0.7 * stock) * (seas === 0 ? 0.45 : 1); catchT += c;
-      const risk = seas === 0 ? 0.0035 : seas === 3 ? 0.0018 : 0.0009;
+      const risk = seas === 0 ? 0.0025 : seas === 3 ? 0.0012 : seas === 1 ? 0.0005 : 0.00025;
       if (rnd(S) < risk) { bio(S, m, 'drowned', 'Уходит в море на лодке и не возвращается'); S.stats.lostAtSea = (S.stats.lostAtSea || 0) + 1; if (rnd(S) < 0.4 && g.fboats) g.fboats--; if (!S.firstLost || S.tick - S.firstLost > 360 * 6) { log(S, 'drown', `Лодка из «${g.name}» не возвращается с моря: ${m.name} не вернул${m.sex === 'f' ? 'ась' : 'ся'}`, g.landing.x, g.landing.y, g.hue, { first: !S.firstLost, why: seas === 0 ? 'Зимние шторма: в это время в море выходят только от голода.' : 'Море опасно и летом: лодку могло опрокинуть ветром.', who: [m.id], gs: [g.id] }); S.firstLost = S.tick; } removeAgent(S, m, 'drown'); }
     }
     sec.amt = Math.max(0, sec.amt - catchT * 0.55);

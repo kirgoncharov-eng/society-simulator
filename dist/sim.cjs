@@ -73,7 +73,7 @@ function homeEconomy(S, g, mem) {
     if (seas === 1) g.goats += Math.max(g.goats >= 2 ? 1 : 0, Math.round(g.goats * 0.14 * (g.goats < cap ? 1 : 0.2)));
     if (g.goats > cap) g.goats -= Math.ceil((g.goats - cap) * 0.15);
     if (seas !== 0) g.treasury += g.goats * 0.12 * (dry ? 0.6 : 1);
-    if (g.treasury < n * 0.3 && g.goats > 4) { const k = Math.min(g.goats - 4, Math.ceil(n / 6)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
+    if (g.treasury < n * 1.2 && g.goats > 3) { const k = Math.min(g.goats - 3, Math.ceil(n / 5)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
   } else if (S.tick - g.founded > 360 && rnd(S) < 0.01) { for (const o of S.groups) if (o !== g && o.goats > 8 && o.home && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300 && (S.hostility[key(o.id, g.id)] || 0) < 0.6) { o.goats -= 2; g.goats = 2; break; } }
   // sea fishing from boats
   const fishers = mem.filter(m => m.job === 'fish');
@@ -81,9 +81,12 @@ function homeEconomy(S, g, mem) {
     S.seaFish = S.seaFish || Array.from({ length: 12 }, () => ({ amt: 220, cap: 220 }));
     const sec = S.seaFish[sectorOf(S, g.landing.x, g.landing.y)], stock = sec.amt / sec.cap;
     let catchT = 0;
+    // winter storms: boats go out only when the village is short of food, otherwise fishers mend nets ashore
+    const needy = g.treasury < (n + 1) * 2;
     for (const m of fishers) {
+      if (seas === 0 && !needy) continue;
       const c = 3.4 * (0.4 + m.energy * 0.6) * (0.3 + 0.7 * stock) * (seas === 0 ? 0.45 : 1); catchT += c;
-      const risk = seas === 0 ? 0.0035 : seas === 3 ? 0.0018 : 0.0009;
+      const risk = seas === 0 ? 0.0025 : seas === 3 ? 0.0012 : seas === 1 ? 0.0005 : 0.00025;
       if (rnd(S) < risk) { bio(S, m, 'drowned', 'Уходит в море на лодке и не возвращается'); S.stats.lostAtSea = (S.stats.lostAtSea || 0) + 1; if (rnd(S) < 0.4 && g.fboats) g.fboats--; if (!S.firstLost || S.tick - S.firstLost > 360 * 6) { log(S, 'drown', `Лодка из «${g.name}» не возвращается с моря: ${m.name} не вернул${m.sex === 'f' ? 'ась' : 'ся'}`, g.landing.x, g.landing.y, g.hue, { first: !S.firstLost, why: seas === 0 ? 'Зимние шторма: в это время в море выходят только от голода.' : 'Море опасно и летом: лодку могло опрокинуть ветром.', who: [m.id], gs: [g.id] }); S.firstLost = S.tick; } removeAgent(S, m, 'drown'); }
     }
     sec.amt = Math.max(0, sec.amt - catchT * 0.55);
@@ -720,12 +723,12 @@ function jobs(S, g) {
   if (L && n > 4) L.job = 'lead';
   const woodNeed = g.houses.length < wantH || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
   const stoneNeed = g.stoneCell !== null && ((needWS && g.stone < 4) || (g.workshop && g.stone < 6));
-  const lean = n <= 6 && g.treasury < n * 3 && season !== 0;
+  const lean = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
   const quota = {
     build: g.site ? (lean && g.site.kind !== 'field' ? 0 : Math.max(1, Math.round(n * 0.2))) : 0,
     wood: g.woodCell === null || lean ? 0 : woodNeed ? Math.max(1, Math.round(n * 0.2)) : (season === 0 ? 1 : 0),
     stone: stoneNeed ? Math.max(1, Math.round(n * 0.12)) : 0,
-    craft: (g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n * 1.2) || (n >= 5 && ((g.pots || 0) < n * 0.5 || ((g.goats || 0) >= 4 && (g.cloth || 0) < n * 0.6))) ? Math.max(1, Math.round(n * 0.1)) : 0,
+    craft: lean ? 0 : (g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n * 1.2) || (n >= 5 && ((g.pots || 0) < n * 0.5 || ((g.goats || 0) >= 4 && (g.cloth || 0) < n * 0.6))) ? Math.max(1, Math.round(n * 0.1)) : 0,
     farm: season === 0 ? 0 : g.fields.length * 2,
     pray: g.shrine ? 1 : 0,
     water: g.wNeed || 0,
@@ -930,7 +933,7 @@ function warMonth(S) {
       const pdR = defence(S, B), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
       const prize = B.treasury + (B.tools || 0) * 4 + (A.lord === B.id ? 40 : 0);
       const v = odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
-      if (odds > 0.42 && v > bv) { bv = v; best = { B, fighters, pa, pd: pdR, odds, oddsR, h, d }; }
+      if (odds > 0.42 && v > bv) { bv = v; best = { B, fighters, pa, pd: pdR, odds, oddsR, h, d, av }; }
     }
     if (!best) continue;
     const hungry = A.famY === Math.floor(S.tick / 360);
@@ -938,6 +941,7 @@ function warMonth(S) {
     if (rnd(S) > (0.12 + 0.35 * LA.ambition + (hungry ? 0.2 : 0) + 0.4 * Math.max(0, young - 0.35) - 0.3 * elders) * (A.gov === 'assembly' && !hungry ? 0.45 : 1)) continue;
     const { B, fighters } = best;
     if (fighters.length < 3) continue;
+    if (parley(S, A, B, LA, best, best.av)) continue;
     const w = { id: S.warId++, att: A.id, def: B.id, phase: 'march', t: S.tick, fighters: fighters.map(m => m.id), pa: best.pa, pd: best.pd, oddsE: best.odds, oddsR: best.oddsR };
     for (const m of fighters) { m.war = w.id; m.job = 'war'; }
     S.wars.push(w); S.stats.wars++;
@@ -948,6 +952,23 @@ function warMonth(S) {
     log(S, 'war', `«${A.name}» идёт войной на «${B.name}»: ${fighters.length} ${pl(fighters.length, 'воин', 'воина', 'воинов')}`, A.home.x, A.home.y, A.hue, { why: w.why, who: [LA.id, ...w.fighters], gs: [A.id, B.id] });
   }
   for (const w of S.wars.slice()) if (S.tick - w.t > 420) endWar(S, w);
+}
+// talks before a war: the weaker side usually buys peace with a ransom instead of fighting
+function parley(S, A, B, LA, best, av) {
+  const LB = S._a.get(B.leader);
+  if (!LB || B.treasury < 4) return false;
+  const p = (0.35 + 0.3 * LB.coop + 0.4 * Math.max(0, best.oddsR - 0.45) + (A.lord === B.id ? -0.25 : 0) + (B.gov === 'assembly' ? 0.1 : 0)) * (av >= 2 ? 0.35 : 1) * (1 - 0.35 * LA.ambition);
+  if (rnd(S) > p) return false;
+  const rate = clamp(0.15 + 0.25 * best.oddsR, 0.15, 0.4), food = B.treasury * rate, tools = (B.tools || 0) * rate * 0.5, goats = B.goats > 4 ? Math.floor(B.goats * rate * 0.6) : 0;
+  B.treasury -= food; B.tools = (B.tools || 0) - tools; A.treasury += food; A.tools = (A.tools || 0) + tools;
+  if (goats) { B.goats -= goats; A.goats = (A.goats || 0) + goats; }
+  const k = key(A.id, B.id);
+  S.truce[k] = S.tick + 360 * 3; S.hostility[k] = (S.hostility[k] || 0) * 0.55;
+  S.stats.ransoms = (S.stats.ransoms || 0) + 1;
+  LA.status += 1; LA.rep = clamp((LA.rep || 0) + 0.04, -1, 1); LB.rep = clamp((LB.rep || 0) - 0.03, -1, 1);
+  for (const id of B.members) { const m = S._a.get(id); if (m && m.id !== B.leader) m.res = clamp(m.res + 0.05, 0, 1); }
+  log(S, 'ransom', `«${B.name}» откупается от войны с «${A.name}»: ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${goats ? `, ${goats} ${pl(goats, 'коза', 'козы', 'коз')}` : ''}`, B.home.x, B.home.y, A.hue, { why: sent([`${LA.name} собирает ${best.fighters.length} ${pl(best.fighters.length, 'воина', 'воинов', 'воинов')}, но сначала шлёт к «${B.name}» гонцов`, `${LB.name} видит, что шансы отбиться невелики (${P0(1 - best.oddsR)}), и предпочитает заплатить, а не хоронить своих`, LB.coop > 0.6 ? `${LB.name} миролюбив${LB.sex === 'f' ? 'а' : ''}` : '', 'на три года между деревнями мир, но в «' + B.name + '» многие недовольны откупом']), who: [LA.id, LB.id], gs: [A.id, B.id] });
+  return true;
 }
 function warband(S, A) {
   const L = S._a.get(A.leader), n = A.members.length;
@@ -979,18 +1000,22 @@ function battle(S, w, A, B, band) {
   const win = rnd(S) < pa * pa / (pa * pa + pd * pd + 1e-6);
   const LA = S._a.get(A.leader), LB = S._a.get(B.leader);
   const defenders = B.members.map(id => S._a.get(id)).filter(m => m && !m.car && !m.war && Math.hypot(m.x - B.home.x, m.y - B.home.y) < 160);
-  const lossA = win ? 0.1 : 0.3, lossB = win ? 0.25 : 0.08;
+  // most clashes are skirmishes: a few wounded, 0-2 dead; a rout with heavy losses is rare and needs a clear edge
+  const edge = win ? pa / Math.max(0.1, pd) : pd / Math.max(0.1, pa), rout = rnd(S) < clamp((edge - 1.2) * 0.12, 0, 0.3);
+  const lossA = win ? (rout ? 0.04 : 0.012) : (rout ? 0.2 : 0.05), lossB = win ? (rout ? 0.18 : 0.045) : (rout ? 0.03 : 0.012);
   const deadA = band.filter(() => rnd(S) < lossA), deadB = defenders.filter(m => m.role !== 'leader' || rnd(S) < 0.5).filter(() => rnd(S) < lossB);
+  const hurt = band.concat(defenders).filter(m => !deadA.includes(m) && !deadB.includes(m) && rnd(S) < (rout ? 0.15 : 0.08));
+  for (const m of hurt) { m.energy = Math.max(0.1, m.energy - 0.25); if (rnd(S) < 0.5) bio(S, m, 'wounded', `${m.sex === 'f' ? 'Ранена' : 'Ранен'} в битве у «${B.name}»`); }
   S.stats.battles++;
   const k = key(A.id, B.id);
   S.truce[k] = S.tick + 360 * 3; S.hostility[k] = win ? 0.8 : 1.1;
   let text, why, conquer = false;
   const ratio = pa / Math.max(0.1, pd);
   if (win) {
-    const food = B.treasury * 0.45, tools = (B.tools || 0) * 0.4, wood = (B.wood || 0) * 0.3;
+    const food = B.treasury * (rout ? 0.5 : 0.35), tools = (B.tools || 0) * (rout ? 0.45 : 0.3), wood = (B.wood || 0) * 0.3;
     B.treasury -= food; B.tools -= tools; B.wood -= wood; A.treasury += food; A.tools += tools; A.wood += wood;
     let burnt = 0;
-    if (B.houses.length > 1 && rnd(S) < 0.6) { const hh = B.houses.pop(); burnt = 1; S.ruins.push({ name: B.name, t: S.tick, x: hh.x, y: hh.y, houses: [hh], fields: [] }); }
+    if (B.houses.length > 1 && rnd(S) < (rout ? 0.7 : 0.3)) { const hh = B.houses.pop(); burnt = 1; S.ruins.push({ name: B.name, t: S.tick, x: hh.x, y: hh.y, houses: [hh], fields: [] }); }
     B.raided = S.tick; if (LB) B.legit = Math.max(0.2, B.legit - 0.2);
     let annexed = 0;
     if (S.own) { const bc = []; for (let c = 0; c < S.own.length; c++) if (S.own[c] === B.id) bc.push(c); bc.sort((p, q) => Math.hypot((p % N) * CS - A.home.x, Math.floor(p / N) * CS - A.home.y) - Math.hypot((q % N) * CS - A.home.x, Math.floor(q / N) * CS - A.home.y)); const nn = Math.min(10, Math.floor(bc.length / 4)); for (let i = 0; i < nn; i++) { if (S.occ[bc[i]]) continue; S.own[bc[i]] = A.id; annexed++; } }
@@ -1001,14 +1026,14 @@ function battle(S, w, A, B, band) {
     for (const m of band) { m.status += 0.6; m.xp.guard = (m.xp.guard || 0) + 0.35; if (m.xp.guard >= 1 && !m.master) m.master = 'guard'; }
     for (const m of B.members.map(id => S._a.get(id))) if (m && m.id !== B.leader) { m.res = clamp(m.res + 0.12, 0, 1); if (LB) bump(m, LB, -0.1); }
     conquer = !B.lord && B.members.length < A.members.length && ratio > 1.3 && LA && LA.ambition > 0.5 && rnd(S) < 0.6;
-    text = `Битва у «${B.name}»: войско «${A.name}» побеждает, уносит ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${burnt ? ', один дом сожжён' : ''}${annexed ? `, отрезает ${annexed} ${pl(annexed, 'клетку', 'клетки', 'клеток')} земли` : ''}`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол не спас' : 'частокола у защитников не было', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
+    text = `Битва у «${B.name}»: войско «${A.name}» ${rout ? 'наголову разбивает защитников' : 'берёт верх'}, уносит ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${burnt ? ', один дом сожжён' : ''}${annexed ? `, отрезает ${annexed} ${pl(annexed, 'клетку', 'клетки', 'клеток')} земли` : ''}`;
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол не спас' : 'частокола у защитников не было', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
   } else {
     if (LA) { LA.status = Math.max(0, LA.status - 2); A.legit = Math.max(0.2, A.legit - 0.25); LA.rep = clamp((LA.rep || 0) - 0.12, -1, 1); }
     A.warsLost++; B.warsWon++; A.trauma++;
     for (const m of A.members.map(id => S._a.get(id))) if (m && m.id !== A.leader) { m.res = clamp(m.res + 0.15, 0, 1); if (LA) bump(m, LA, -0.12); }
     for (const m of defenders) { m.status += 0.4; m.xp.guard = (m.xp.guard || 0) + 0.25; }
-    text = `Битва у «${B.name}»: защитники отбивают войско «${A.name}»`;
+    text = `Битва у «${B.name}»: защитники ${rout ? 'обращают в бегство' : 'отбивают'} войско «${A.name}»`;
     why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол удвоил оборону' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
   }
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
@@ -1656,8 +1681,9 @@ function move(S) {
     if (nc !== a.lc) {
       if (S.ter[nc] === 'w' && !S.bridge[nc]) {
         const gg = a.group && S._g.get(a.group); if (gg) gg.cross = (gg.cross || 0) + 1;
-        const ss = seasonOf(S.tick), risk = S.frozen ? 0.0035 : ss === 1 ? 0.028 : 0.006;
-        if (rnd(S) < risk * (a.car ? 1.4 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
+        // a ford is dangerous in the spring flood and with a load on the back; thin ice at the start and end of winter
+        const dy = S.tick % 360, flood = dy >= 90 && dy < 150, risk = S.frozen ? (dy < 20 || dy >= 70 ? 0.002 : 0.0004) : flood ? 0.008 : 0.00025;
+        if (rnd(S) < risk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
       }
       a.lc = nc;
     }
@@ -1915,6 +1941,7 @@ function monthly(S) {
   for (let c = 0; c < S.wood.length; c++) if (S.ter[c] === 'f' && S.wood[c] < 60) S.wood[c] = Math.min(60, S.wood[c] + 0.35);
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
   for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
+  aidMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -1923,6 +1950,36 @@ function monthly(S) {
   if (S.tick % 360 === 0) yearly(S);
 }
 
+// a hungry village asks its neighbours for grain; kin ties (parents and children living there) and friendly leaders make help likely
+function aidMonth(S) {
+  const needy = S.groups.filter(g => g.home && !g.dead && g.treasury < g.members.length * 1.2 && g.members.filter(id => { const m = S._a.get(id); return m && m.wealth < 0.3; }).length >= Math.max(2, g.members.length * 0.25));
+  if (!needy.length) return;
+  const tie = {};
+  for (const a of S.agents) { if (!a.group) continue; for (const pid of [a.mother, a.father]) { const p = pid && S._a.get(pid); if (p && p.group && p.group !== a.group) { const k = key(a.group, p.group); tie[k] = (tie[k] || 0) + 1; } } }
+  for (const g of needy) {
+    const LG = S._a.get(g.leader), n = g.members.length; if (!LG) continue;
+    let best = null, bv = 0;
+    for (const o of S.groups) {
+      if (o === g || !o.home || o.dead || o.treasury < o.members.length * 4) continue;
+      const k = key(g.id, o.id), h = S.hostility[k] || 0, d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y);
+      if (h > 0.6 || d > 420 || S.wars.some(w => (w.att === o.id && w.def === g.id) || (w.att === g.id && w.def === o.id))) continue;
+      const LO = S._a.get(o.leader); if (!LO) continue;
+      const t = tie[k] || 0, friend = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id || o.lord === g.id;
+      const p = clamp(0.1 + 0.35 * LO.coop + 0.12 * Math.min(4, t) + (friend ? 0.25 : 0) + 0.3 * ((LO.trust[LG.id] || 0)) - 0.4 * h, 0, 0.9);
+      const v = p * (o.treasury / o.members.length) / (1 + d / 250);
+      if (v > bv) { bv = v; best = { o, p, t, friend, LO, d }; }
+    }
+    if (!best || rnd(S) > best.p || !reach(S, best.o.home.x, best.o.home.y, g.home.x, g.home.y)) continue;
+    const { o, t, friend, LO } = best, amt = Math.min((o.treasury - o.members.length * 3) * 0.4, n * 2);
+    if (amt < 1) continue;
+    o.treasury -= amt; g.treasury += amt; S.stats.aid = (S.stats.aid || 0) + 1; S.stats.aidFood = (S.stats.aidFood || 0) + amt;
+    const k = key(g.id, o.id); S.hostility[k] = Math.max(0, (S.hostility[k] || 0) - 0.15);
+    bump(LG, LO, 0.15); LO.rep = clamp((LO.rep || 0) + 0.03, -1, 1); LO.status += 0.3;
+    g.aidFrom = g.aidFrom || {};
+    if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
+    g.aidFrom[o.id] = S.tick;
+  }
+}
 function groupMonth(S, g) {
   const P = S.params, L = S._a.get(g.leader);
   if (!L) return;
