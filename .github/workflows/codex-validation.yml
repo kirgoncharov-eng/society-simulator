@@ -5,34 +5,23 @@ on:
 permissions:
   contents: read
 jobs:
-  validation:
+  age:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ref: [54ab4607bc56166c99029bfadb6eaeeeef4585de, 63c899b1e09dd69db71fd86fe736af7bb11fb228]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.ref }}
+          ref: 8ef56f3a8f640b5d788f4d5b12065337810525d3
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: /usr/bin/time -p npm test
       - uses: actions/checkout@v4
-        if: matrix.ref == '54ab4607bc56166c99029bfadb6eaeeeef4585de'
         with:
-          ref: 66d07ceabbcfaeafd7c43c6b1254f146029fc857
+          ref: 8f7c69f614f3c01748c53192e43bd0c3548b9d4b
           path: reference
           persist-credentials: false
       - run: /usr/bin/time -p npm test
         working-directory: reference
-        if: matrix.ref == '54ab4607bc56166c99029bfadb6eaeeeef4585de'
       - run: /usr/bin/time -p npm run audit
-      - name: Browser smoke for weather display
-        if: matrix.ref == '54ab4607bc56166c99029bfadb6eaeeeef4585de'
-        run: |
-          python3 -m pip install playwright
-          python3 -m playwright install --with-deps chromium
-          python3 tools/page_check.py
+      - run: node tools/audit.mjs 1 5
