@@ -4391,7 +4391,7 @@ function packWorld(seed, snaps, eras) {
     pl: st.plagues || 0, pd: st.plague || 0, mar: st.marriages || 0, bo: st.bonds || 0, tk: R2(L.take), e: eras.map(e => e.split(': ')[1] || '') };
 }`;
 const ATLRUN = { on: false, workers: [], queue: [], done: 0, total: 0, t0: 0, res: [], params: null, years: 60, fb: null };
-const MODEL_V = 'm12';
+const MODEL_V = 'm13';
 function atlSrc() { for (const s of document.scripts) { const t = s.textContent || ''; if (t.includes('const SIM = (() =>') && !t.includes('function atlSrc')) return t; } return null; }
 function atlStart() {
   const n = +$('atlN').value, years = +$('atlY').value, own = $('atlOwn').checked;
