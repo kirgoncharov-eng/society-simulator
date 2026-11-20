@@ -253,8 +253,9 @@ function lifecycle(S) {
   for (const a of S.agents) {
     a.age += 1 / 360;
     a.wealth -= a.age < 18 ? 0.025 : 0.033;
+    if (a.wealth < -1.5) a.wealth = -1.5; // hunger is what one lacks now, not a debt that grows without end
     if (a.wealth < 0) a.energy -= 0.0008; else a.energy += 0.003 * (1.05 - a.energy);
-    const gq = a.group && S._g.get(a.group); if (gq && gq.home) { if (gq.thirst) a.energy -= 0.004; else if (gq.wShort > 1) a.energy -= 0.0012; }
+    const gq = a.group && S._g.get(a.group); if (gq && gq.home) { if (gq.thirst) a.energy -= 0.0016; else if (gq.wShort > 1) a.energy -= 0.0012; }
     if (winter) { if (a.shel && a.group) a.energy += 0.0004; else a.energy -= 0.0008; }
     a.energy = clamp(a.energy, 0, 1);
     if (a.age > a.life) dead.push([a, 'death']);

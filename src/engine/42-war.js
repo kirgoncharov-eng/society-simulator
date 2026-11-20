@@ -108,7 +108,7 @@ function battle(S, w, A, B, band) {
   const defenders = B.members.map(id => S._a.get(id)).filter(m => m && !m.car && !m.war && Math.hypot(m.x - B.home.x, m.y - B.home.y) < 160);
   // most clashes are skirmishes: a few wounded, 0-2 dead; a rout with heavy losses is rare and needs a clear edge
   const edge = win ? pa / Math.max(0.1, pd) : pd / Math.max(0.1, pa), rout = rnd(S) < clamp((edge - 1.2) * 0.12, 0, 0.3);
-  const lossA = win ? (rout ? 0.04 : 0.012) : (rout ? 0.2 : 0.05), lossB = win ? (rout ? 0.18 : 0.045) : (rout ? 0.03 : 0.012);
+  const lossA = win ? (rout ? 0.05 : 0.025) : (rout ? 0.22 : 0.09), lossB = win ? (rout ? 0.2 : 0.08) : (rout ? 0.04 : 0.025);
   const deadA = band.filter(() => rnd(S) < lossA), deadB = defenders.filter(m => m.role !== 'leader' || rnd(S) < 0.5).filter(() => rnd(S) < lossB);
   const hurt = band.concat(defenders).filter(m => !deadA.includes(m) && !deadB.includes(m) && rnd(S) < (rout ? 0.15 : 0.08));
   for (const m of hurt) { m.energy = Math.max(0.1, m.energy - 0.25); if (rnd(S) < 0.5) bio(S, m, 'wounded', `${m.sex === 'f' ? 'Ранена' : 'Ранен'} в битве у «${B.name}»`); }
