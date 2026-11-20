@@ -9,6 +9,7 @@ const causes = ['death', 'sick', 'burnout', 'war', 'plague', 'drown', 'lostAtSea
 const label = { death: 'old age', sick: 'sickness', burnout: 'hunger', war: 'war', plague: 'plague', drown: 'drowning', lostAtSea: 'lost at sea', killed: 'murder' };
 const tot = {}; let B = 0, CD = 0, minPop = Infinity; const allV = [], vMed = [], vSmall = [];
 const med = a => { const x = a.slice().sort((p, q) => p - q); return x.length ? x[Math.floor((x.length - 1) / 2)] : 0; };
+let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
 const age = { deaths: 0, sum: 0, eligible: 0, reached: 0, left: 0 };
 const lastBirthTick = Math.max(0, (Y - 60) * 360);
 for (let i = 0; i < W; i++) {
@@ -28,6 +29,10 @@ for (let i = 0; i < W; i++) {
   age.left += ages.leftBefore60;
   age.reached += ages.reached60 + aliveAt60;
   const st = S.stats; B += st.births || 0; CD += st.childDeaths || 0;
+  memoryMoves += st.aidMemoryMoves || 0;
+  sponsoredMoves += st.aidSponsoredMoves || 0;
+  aidReturned += st.aidReturned || 0;
+  aidChanged += st.aidMemoryChanged || 0;
   for (const k of causes) tot[k] = (tot[k] || 0) + (st[k] || 0);
   const adults = S.agents.filter(a => !a.kid), cbr = (st.births || 0) / Y / Math.max(1, pops.reduce((s, x) => s + x, 0) / pops.length) * 1000;
   const villages = S.groups.filter(g => g.home).map(g => g.members.length).sort((a, b) => b - a);
@@ -42,6 +47,7 @@ const sh = (...ks) => (ks.reduce((q, k) => q + (tot[k] || 0), 0) / sum * 100).to
 console.log(`groups: war ${sh('war')}%, water and sea ${sh('drown', 'lostAtSea')}%, hunger ${sh('burnout')}%, old age + sickness ${sh('death', 'sick')}%; lowest island population after year 10: ${minPop}`);
 console.log(`villages (adults): median over all islands ${med(allV)}, median by island ${vMed.join(' ')}; villages under 5 adults by island ${vSmall.join(' ')}`);
 console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
+console.log(`grain memories: ${memoryMoves} moves changed (${sponsoredMoves} through sponsorship), ${aidReturned} gifts returned (${aidChanged} decisions changed)`);
 console.log(`mean adult age at death (15+): ${age.deaths ? (age.sum / age.deaths).toFixed(1) + ' years, n=' + age.deaths : 'n/a'}`);
 console.log(age.eligible
   ? `survived to 60 (island-born): ${(100 * age.reached / age.eligible).toFixed(1)}% (${age.reached}/${age.eligible}; ${age.left} left before 60)`
