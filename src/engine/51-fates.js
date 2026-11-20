@@ -8,6 +8,45 @@ function bio(S, a, k, s) {
   a.drama = (a.drama || 0) + (BW[k] || 1);
 }
 function groupName(S, id) { const g = S._g.get(id); return g ? g.name : (S.arch && S.arch[id] ? S.arch[id].name : 'исчезнувшей деревни'); }
+const AID_MEMORY_MIN = 2 * 360, AID_MEMORY_MAX = 15 * 360;
+function rememberGrain(S, village, helper) {
+  for (const id of village.members) {
+    const a = S._a.get(id);
+    if (a.id !== village.leader && a.wealth >= 0.3) continue;
+    const memories = (a.grainMemories || []).filter(m => S.tick - m.tick <= AID_MEMORY_MAX);
+    if (memories.some(m => m.helper === helper.id)) continue;
+    memories.push({ helper: helper.id, tick: S.tick });
+    a.grainMemories = memories.slice(-4);
+    bio(S, a, 'aidReceived', `В голод получает зерно. Помощь присылает ${helper.name}`);
+  }
+}
+function rememberedGrain(S, witness, villageId, minAge) {
+  for (const memory of witness.grainMemories || []) {
+    const age = S.tick - memory.tick;
+    if (age < minAge || age > AID_MEMORY_MAX) continue;
+    const helper = S._a.get(memory.helper);
+    if (helper && helper.group === villageId) return { witness, helper, memory };
+  }
+  return null;
+}
+function grainObligation(S, village, leader, neighbour) {
+  const own = rememberedGrain(S, leader, neighbour.id, AID_MEMORY_MIN);
+  if (own) return own;
+  for (const id of village.members) {
+    if (id === leader.id) continue;
+    const obligation = rememberedGrain(S, S._a.get(id), neighbour.id, AID_MEMORY_MIN);
+    if (obligation) return obligation;
+  }
+  return null;
+}
+function repayGrain(S, village, obligation) {
+  for (const id of village.members) {
+    const a = S._a.get(id);
+    if (a.grainMemories) a.grainMemories = a.grainMemories.filter(m => m.helper !== obligation.helper.id);
+  }
+  const { witness, helper } = obligation;
+  bio(S, witness, 'aidReturned', `Деревня делится зерном в ответ на давнюю помощь. Тогда зерно присылает ${helper.name}`);
+}
 function kinOf(S, a) { return S.agents.filter(o => o !== a && kin(o, a) && o.spouse !== a.id || o.id === a.spouse); }
 function legend(S, a, why) {
   if ((a.drama || 0) < 14 || !a.bio) return;
