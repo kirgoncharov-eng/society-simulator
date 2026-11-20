@@ -14,7 +14,7 @@ function monthly(S) {
     const c = cellAt(a.x, a.y), t = S.ter[c], ci = c % N, cj = (c / N) | 0; let shore = false;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) { const x = ci + dx, y = cj + dy; if (x >= 0 && y >= 0 && x < N && y < N) { const q = S.ter[y * N + x]; if (q === 's' || q === 'b') shore = true; } }
     let f = shore ? 1.2 : t === 'f' ? 0.95 : t === 'r' || t === 'w' ? 0.85 : t === 'h' ? 0.5 : 0.75;
-    f *= (seas === 0 ? (shore ? 0.8 : 0.45) : 1) * (dry ? 0.5 : 1) / (1 + (crowdAt[(Math.floor(a.x / 100)) + ':' + Math.floor(a.y / 100)] || 1) / 14);
+    f *= (seas === 0 ? (shore ? 0.8 : 0.45) : 1) * (dry ? 0.5 : 1) * 1.25 / (1 + (crowdAt[(Math.floor(a.x / 100)) + ':' + Math.floor(a.y / 100)] || 1) / 20);
     a.wealth += f; S.stats.foraged = (S.stats.foraged || 0) + f;
     if (a.wealth > 0.5) continue;
     // alms or theft at a rich village nearby
@@ -40,10 +40,10 @@ function monthly(S) {
     const g0 = a.group && S._g.get(a.group);
     if (g0 && (g0.members.length > 4 || a.role === 'leader' || g0.treasury > g0.members.length * 2)) continue;
     let best = null, bv = -1e9;
-    for (const g of S.groups) { if (!g.home || g.dead || g === g0 || g.members.length < 5) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d > 380) continue; const v = g.treasury / Math.max(1, g.members.length) - d / 60 + (a.exiledFrom === g.id ? -50 : 0); if (v > bv) { bv = v; best = g; } }
+    for (const g of S.groups) { if (!g.home || g.dead || g === g0 || g.members.length < (g0 ? 5 : 3)) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d > (g0 ? 380 : 600)) continue; const v = g.treasury / Math.max(1, g.members.length) - d / 60 + (a.exiledFrom === g.id ? -50 : 0); if (v > bv) { bv = v; best = g; } }
     if (!best || !reach(S, a.x, a.y, best.home.x, best.home.y)) continue;
     const L = S._a.get(best.leader); if (!L) continue;
-    if (rnd(S) < (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : 0.2)) { join(S, a, best, best.leader); bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`); }
+    if (rnd(S) < (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15)) { join(S, a, best, best.leader); bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`); }
   }
   for (const a of S.agents) { a.rep = (a.rep || 0) * 0.98; a.ref = Math.max((a.ref || 3) * 0.985, a.wealth); if (a.age > 55 && a.group) a.status += 0.05; }
   seaMonth(S);
