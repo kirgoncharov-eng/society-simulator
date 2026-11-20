@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [builders, summer]
+        variant: [summer-labor, early-crops]
         seed: [5000, 12919, 20838, 28757, 36676, 44595]
     env:
       VARIANT: ${{ matrix.variant }}
@@ -32,11 +32,13 @@ jobs:
           const after = "['water', 'pray', 'guard', 'herd', 'fish', 'build', 'farm', 'craft', 'stone', 'wood']";
           const original = fs.readFileSync(jobs, 'utf8');
           if (!original.includes(before)) throw Error('missing autumn job order');
-          fs.writeFileSync(jobs, original.replace(before, after));
-          if (process.env.VARIANT === 'summer') {
+          if (process.env.VARIANT === 'early-crops') fs.writeFileSync(jobs, original.replace(before, after));
+          {
             const climate = 'src/engine/37-weather.js', file = fs.readFileSync(climate, 'utf8');
             if (!file.includes('available * 0.16')) throw Error('missing summer staffing');
-            fs.writeFileSync(climate, file.replace('available * 0.16', 'available * 0.20'));
+            let updated = file.replace('available * 0.16', 'available * 0.20');
+            if (process.env.VARIANT === 'early-crops') updated = updated.replace('food * 1.2 * rain', 'food * 1.45 * rain');
+            fs.writeFileSync(climate, updated);
           }
           NODE
           npm run build
