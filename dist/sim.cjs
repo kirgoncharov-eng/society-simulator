@@ -467,7 +467,12 @@ function passCost(S, c) {
 function navigationCosts(S) {
   if (S._costs && S._costsVersion === S.navV) return S._costs;
   const costs = S._costs || (S._costs = new Float64Array(N * N));
-  for (let c = 0; c < costs.length; c++) costs[c] = passCost(S, c);
+  const drag = S._moveDrag || (S._moveDrag = new Float64Array(costs.length));
+  for (let c = 0; c < costs.length; c++) {
+    const cost = passCost(S, c);
+    costs[c] = cost;
+    drag[c] = Math.pow(Math.max(0.5, cost || 3), 0.4);
+  }
   S._costsVersion = S.navV;
   return costs;
 }
@@ -479,8 +484,36 @@ function aStar(S, c0, c1) {
   S._stamp = (S._stamp || 0) + 1; const stamp = S._stamp;
   const tx = c1 % N, ty = (c1 / N) | 0, h = c => { const dx = Math.abs(c % N - tx), dy = Math.abs(((c / N) | 0) - ty); return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 0.5; };
   const heap = [], hf = [];
-  const push = (c, f) => { heap.push(c); hf.push(f); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (hf[p] <= hf[i]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; [hf[p], hf[i]] = [hf[i], hf[p]]; i = p; } };
-  const pop = () => { const top = heap[0], lc = heap.pop(), lf = hf.pop(); if (heap.length) { heap[0] = lc; hf[0] = lf; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && hf[l] < hf[m]) m = l; if (r < heap.length && hf[r] < hf[m]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; [hf[m], hf[i]] = [hf[i], hf[m]]; i = m; } } return top; };
+  const push = (cell, priority) => {
+    let i = heap.length;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (hf[parent] <= priority) break;
+      heap[i] = heap[parent];
+      hf[i] = hf[parent];
+      i = parent;
+    }
+    heap[i] = cell;
+    hf[i] = priority;
+  };
+  const pop = () => {
+    const top = heap[0];
+    const last = heap.pop(), priority = hf.pop();
+    const size = heap.length;
+    if (!size) return top;
+    let i = 0;
+    for (let child = 2 * i + 1; child < size; child = 2 * i + 1) {
+      const right = child + 1;
+      if (right < size && hf[right] < hf[child]) child = right;
+      if (hf[child] >= priority) break;
+      heap[i] = heap[child];
+      hf[i] = hf[child];
+      i = child;
+    }
+    heap[i] = last;
+    hf[i] = priority;
+    return top;
+  };
   seen[c0] = stamp; gS[c0] = 0; from[c0] = -1; push(c0, h(c0));
   const closed = S._closed || (S._closed = new Int32Array(NN));
   let it = 0;
@@ -2098,10 +2131,10 @@ function step(S) {
   const regF = 0.38 * (1.25 - P.scarcity) * 1.9;
   for (const n of S.nodes) n.amt = Math.min(n.cap, n.amt + (n.kind === 'fish' ? regF : reg * 1.25));
   for (const g of S.groups) {
+    if (g.home) { g.cx = g.home.x; g.cy = g.home.y; continue; }
     let sx = 0, sy = 0;
     for (const id of g.members) { const m = S._a.get(id); sx += m.x; sy += m.y; }
     g.cx = sx / g.members.length; g.cy = sy / g.members.length;
-    if (g.home) { g.cx = g.home.x; g.cy = g.home.y; }
   }
   move(S);
   deliver(S);
@@ -2118,6 +2151,7 @@ function nodeOf(S, id) { for (const n of S.nodes) if (n.id === id) return n; ret
 
 function move(S) {
   const A = S.agents;
+  const costs = navigationCosts(S), drag = S._moveDrag;
   for (const a of A) {
     let tx, ty;
     const gH = a.group && S._g.get(a.group);
@@ -2169,18 +2203,18 @@ function move(S) {
       }
       tx = n ? n.x + Math.cos(a.id) * 22 : a.x; ty = n ? n.y + Math.sin(a.id) * 22 : a.y;
     }
-    if (S.ter[cellAt(a.x, a.y)] === 's' || (S.ter[cellAt(a.x, a.y)] === 'w' && !passCost(S, cellAt(a.x, a.y)))) toLand(S, a);
+    if (S.ter[cellAt(a.x, a.y)] === 's' || (S.ter[cellAt(a.x, a.y)] === 'w' && !costs[cellAt(a.x, a.y)])) toLand(S, a);
     const ca = cellAt(a.x, a.y), ct = cellAt(tx, ty); let onPath = false;
     if (ca !== ct) {
       const far = Math.abs(ca % N - ct % N) + Math.abs(((ca / N) | 0) - ((ct / N) | 0)) > 2;
       const bk = ca * 2500 + ct; if (a.bkK !== bk || a.bkV !== S.navV) { a.bkK = bk; a.bkV = S.navV; a.bkR = !far && blocked(S, a.x, a.y, tx, ty); }
       if (far || a.bkR) { const wp = navStep(S, a, ca, ct); if (wp) { tx = wp.x; ty = wp.y; a.stuck = 0; onPath = far; } else { tx = a.x; ty = a.y; a.stuck = (a.stuck || 0) + 1; } }
     }
-    const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1, pc = passCost(S, ca) || 3;
-    const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / Math.pow(Math.max(0.5, pc), 0.4));
+    const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
+    const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
     let nx = a.x + dx / d * sp + gauss(S) * 0.5, ny = a.y + dy / d * sp + gauss(S) * 0.5;
     const nc = cellAt(nx, ny);
-    if (nc !== ca && !passCost(S, nc)) { nx = a.x; ny = a.y; }
+    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; }
     a.x = nx; a.y = ny;
     if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
     if (nc !== a.lc) {
@@ -2353,7 +2387,7 @@ function lifecycle(S) {
     a.energy = clamp(a.energy, 0, 1);
     if (a.age > a.life) dead.push([a, 'death']);
     else if (a.energy < 0.03) dead.push([a, 'burnout']);
-    else if (rnd(S) < (0.004 + 0.0013 * Math.exp((a.age - 25) / 11)) / 360 * (a.energy < 0.3 ? 1.5 : 1) * (winter ? (a.group && ((S._g.get(a.group) || {}).cloth || 0) >= ((S._g.get(a.group) || {}).members || []).length * 0.5 ? 1.05 : 1.25) : 0.9) * (1 + 1.6 * ((a.group && (S._g.get(a.group) || {}).dirty) || 0))) dead.push([a, 'sick']);
+    else if (rnd(S) < (0.004 + 0.0013 * Math.exp((a.age - 25) / 11)) / 360 * (a.energy < 0.3 ? 1.5 : 1) * (winter ? (a.group && (gq?.cloth || 0) >= (gq?.members.length || 0) * 0.5 ? 1.05 : 1.25) : 0.9) * (1 + 1.6 * (gq?.dirty || 0))) dead.push([a, 'sick']);
   }
   for (const [a, why] of dead) removeAgent(S, a, why);
 }
