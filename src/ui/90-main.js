@@ -1,0 +1,89 @@
+function frame(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (ATL.on) { requestAnimationFrame(frame); return; }
+  if (EX.on) {
+    if (EX.playing && EX.A) {
+      EX.acc += dt * 12 * EX.speed / 1000;
+      const n = Math.min(Math.floor(EX.acc), 500); EX.acc -= n; if (EX.acc > 40) EX.acc = 0;
+      const t1 = performance.now(); for (let i = 0; i < n; i++) { SIM.step(EX.A); SIM.step(EX.B); if ((i & 7) === 7 && performance.now() - t1 > 14) { EX.acc = 0; break; } }
+    }
+    if (EX.A) { drawMini(EX.A, $('mA'), EX.tA); drawMini(EX.B, $('mB'), EX.tB); }
+    if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
+    requestAnimationFrame(frame); return;
+  }
+  const t0b = performance.now();
+  if (playing) {
+    acc += dt * 12 * speed / 1000;
+    let n = Math.min(Math.floor(acc), 900); acc -= n; if (acc > 60) acc = 0;
+    for (let i = 0; i < n; i++) {
+      SIM.step(S);
+      if (S.tick % 30 === 0) { checkStops(now); if (!playing) { acc = 0; break; } }
+      if ((i & 7) === 7 && performance.now() - t0b > 14) { acc = 0; break; }
+    }
+  }
+  if (V3.on && V3.ready) render3D(now); else draw(now);
+  if (now - lastUi > 350) { ui(); lastUi = now; }
+  requestAnimationFrame(frame);
+}
+
+$('play').addEventListener('click', () => { playing = !playing; if (playing && focusEv) closeFocus(); syncPlay(); });
+document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => { speed = +e.target.value; }));
+$('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
+$('back').addEventListener('click', () => {
+  if (!forkSnap) return;
+  const params = Object.assign({}, S.params);
+  S = SIM.restore(forkSnap); S.params = params;
+  if ($('fly').checked) S.rng = (Math.random() * 2147483647) | 0;
+  S.evId = (S.evId || 0) + 1;
+  S.events.unshift({ id: S.evId, t: S.tick, type: 'fork', text: $('fly').checked ? 'Возврат к развилке. Шум перемешан: история может пойти иначе' : 'Возврат к развилке. Шум тот же: расхождения дадут только ваши вводные' });
+  resetView();
+});
+$('reset').addEventListener('click', () => world((Math.random() * 99999) | 0));
+document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
+  SIM.shock(S, b.dataset.shock); seenEv = S.evId || 0; ui(true);
+  if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
+}));
+$('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
+document.querySelectorAll('.ptabs [data-p]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.ptabs [data-p]').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); $('p-' + x.dataset.p).hidden = !on; });
+  sizeCanvas(); portKey = ''; ui(true); if (b.dataset.p === 'fates') drawFates(true);
+}));
+$('cardx').addEventListener('click', () => { sel = null; follow = false; $('card').innerHTML = EMPTY; });
+$('card').addEventListener('click', e => { if (e.target.closest('#cfollow')) { follow = !follow; if (!follow) { vt.z = 1; } card(); } });
+$('ticker').addEventListener('click', () => { const ev = S.events[+$('ticker').dataset.i]; if (ev) focus(ev, true); });
+$('lf1').addEventListener('click', () => { logAll = false; $('lf1').classList.add('on'); $('lf2').classList.remove('on'); ui(true); });
+$('lf2').addEventListener('click', () => { logAll = true; $('lf2').classList.add('on'); $('lf1').classList.remove('on'); ui(true); });
+$('groups').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
+$('log').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const ev = S.events[+b.dataset.i]; if (ev) { focus(ev, true); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect(), dx = cv.width / r.width;
+  const x = ((e.clientX - r.left) * dx - T.ox) / T.k, y = ((e.clientY - r.top) * dx - T.oy) / T.k;
+  let best = null, bd = 32 / view.z;
+  for (const a of S.agents) { const d = D.get(a.id); if (!d) continue; const dd = Math.hypot(d.x - x, d.y - y); if (dd < bd) { bd = dd; best = a; } }
+  sel = best ? best.id : null;
+  if (!sel) $('card').innerHTML = EMPTY;
+  card();
+});
+new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+
+function intro() {
+  playing = false; syncPlay();
+  const box = $('focus'); box.style.setProperty('--c', C.slate);
+  box.innerHTML = `<em>Как смотреть</em><strong>Пустой остров посреди моря</strong><p>Год 0: к берегу пристают первые лодки, в каждой одна семья или род. Ещё несколько лодок приплывут в ближайшие десятилетия. Люди ищут воду и землю, женятся, рожают, оседают, ловят рыбу, пашут, торгуют и воюют. Уйти с острова можно только морем. Ничего не задано заранее.</p><p>Вращайте и приближайте мир пальцем или мышью. Нажмите на человека, чтобы увидеть его семью, славу и покровителя. Внизу на ленте — последнее важное событие. Хроника, общества и графики — во вкладках под картой.</p><div class="acts"><button class="main" id="go">Смотреть</button></div>`;
+  box.hidden = false;
+  $('go').onclick = () => { box.hidden = true; lastStop = performance.now() - 6000; playing = true; syncPlay(); };
+}
+function start(data) {
+  readColors(); sizeCanvas();
+  let restored = false;
+  if (data && data.w) { try { S = SIM.restore(data.w); resetView(); restored = true; } catch (e) { world(2026); } }
+  else world(2026);
+  if (data && data.fork) { forkSnap = data.fork; forkLabel = data.forkLabel || ''; $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; }
+  window.claude?.hot?.snapshot?.(() => ({ w: SIM.serialize(S), fork: forkSnap, forkLabel }));
+  if (!restored) intro();
+  set3D(true);
+  requestAnimationFrame(t => { last = t; frame(t); });
+}
+window.__lab = () => S; window.__v3 = () => V3;
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});

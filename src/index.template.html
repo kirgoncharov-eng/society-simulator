@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лаборатория обществ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<style>
+/* VOICE everyday lab instrument: calm, exact, dense
+   IDEA a microscope slide with a lab journal beside it: the world is the slide, the chronicle is the observer's log
+   PICTURE the live world: agents as dots, hierarchy as threads, territories whose edges tremble with entropy
+   COLOUR white ground, ink #121212, pale slide #e3ecf0, red #e3120b for conflict, slate #2e6f8e for alliances and controls; groups take their own hues; night #10191e
+   TYPE Source Serif 4 600 display + Inter
+   LAYOUT laptop: slide left, figures and journal right, inputs in a band below; phone: title, slide, controls, agent card, figures, journal, inputs */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#10191e);--ink:light-dark(#121212,#e8eef1);--muted:light-dark(#5a6670,#93a4ad);--plate:light-dark(#e3ecf0,#0a1216);--rule:light-dark(#cbd8de,#223239);--red:light-dark(#e3120b,#ff5c50);--slate:light-dark(#2e6f8e,#86bcd6);--panel:light-dark(#f2f6f8,#16232a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,-apple-system,Segoe UI,sans-serif;overflow-x:clip}
+.band{padding-block:clamp(18px,3vw,40px);padding-left:max(4vw,16px,env(safe-area-inset-left,0px));padding-right:max(4vw,16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1240px;margin:0 auto}
+.top{padding-bottom:0}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
+.tab{display:block;width:44px;height:6px;background:var(--red);margin-bottom:14px}
+h1{font:600 clamp(32px,4.4vw,48px)/1.05 "Source Serif 4",Georgia,serif;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.sub{margin:8px 0 0;color:var(--muted);max-width:62ch}
+.clock{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+.clock b{font:600 clamp(32px,4.4vw,48px)/1 "Source Serif 4",Georgia,serif;font-variant-numeric:tabular-nums}
+.clock span{color:var(--muted)}
+.lab{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px;align-items:start}
+.plate{position:relative;width:100%;aspect-ratio:1;max-width:calc(100svh - 150px);min-width:min(100%,320px);background:var(--plate);border-radius:4px;overflow:hidden;touch-action:manipulation;cursor:crosshair}
+.plate canvas{position:absolute;inset:0;width:100%;height:100%}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+button,.seg label{font:500 15px/1 Inter,system-ui,sans-serif;min-height:44px;padding:0 14px;border-radius:4px;border:1px solid var(--rule);background:var(--bg);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--slate)}
+button:focus-visible,.seg input:focus-visible+label,input[type=range]:focus-visible{outline:2px solid var(--slate);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+button.main{background:var(--ink);color:var(--bg);border-color:var(--ink);min-width:104px}
+.seg{display:flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{display:flex;align-items:center;border:0;border-radius:0;padding:0 12px;font-variant-numeric:tabular-nums}
+.seg input:checked+label{background:var(--slate);color:#fff}
+.chk{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px;color:var(--muted)}
+.chk input{width:18px;height:18px;accent-color:var(--slate)}
+.legend{font-size:13px;color:var(--muted);margin:10px 0 0;max-width:72ch}
+.card{margin-top:14px;background:var(--panel);border-radius:4px;padding:14px 16px;font-size:15px}
+.card h3{font:600 20px/1.2 "Source Serif 4",Georgia,serif;margin:0 0 2px}
+.card .role{color:var(--muted);margin:0 0 10px}
+.traits{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 18px}
+.tr{display:grid;grid-template-columns:7.5em minmax(0,1fr) 2.6em;align-items:center;gap:8px;font-size:13px}
+.tr em{font-style:normal;color:var(--muted)}
+.tr b{font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.meter{height:6px;background:var(--rule);border-radius:3px;overflow:hidden}
+.meter span{display:block;height:100%;background:var(--slate)}
+.meter.neg span{background:var(--red)}
+.rel{margin:10px 0 0;font-size:13px;color:var(--muted)}
+.empty{color:var(--muted);margin:0}
+.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.tile{background:var(--bg);padding:10px 12px 8px}
+.tile em{font-style:normal;font-size:13px;color:var(--muted)}
+.tile b{display:block;font:600 26px/1.1 "Source Serif 4",Georgia,serif;font-variant-numeric:tabular-nums;margin:2px 0 4px}
+.tile canvas{display:block;width:100%;height:34px}
+.tally{font-size:13px;color:var(--muted);margin:10px 0 0}
+h2{font:600 22px/1.2 "Source Serif 4",Georgia,serif;margin:22px 0 8px}
+.log{list-style:none;margin:0;padding:0;max-height:min(52svh,520px);overflow-y:auto;border-top:1px solid var(--rule)}
+.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px 36px;align-items:start}
+.lower h2{margin-top:6px}
+.grp{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:2px 10px;align-items:center;width:100%;text-align:left;padding:8px 0;min-height:44px;border:0;border-bottom:1px solid var(--rule);border-radius:0;background:none}
+.grp:hover{border-color:var(--rule);background:var(--panel)}
+.grp i{width:12px;height:12px;border-radius:50%}
+.grp strong{font-weight:600;font-size:15px}
+.grp small{grid-column:2/4;font-size:13px;color:var(--muted)}
+.grp .n{font-variant-numeric:tabular-nums;font-size:15px}
+.grp .meter{grid-column:2/4;margin:4px 0 2px}
+.grp .meter span{background:var(--red)}
+.ctl{margin:0 0 14px}
+.ctl label{display:flex;justify-content:space-between;gap:12px;font-weight:500;font-size:15px}
+.ctl label output{font-variant-numeric:tabular-nums;color:var(--slate)}
+.ctl p{margin:2px 0 4px;font-size:13px;color:var(--muted)}
+input[type=range]{width:100%;height:44px;margin:0;background:none;-webkit-appearance:none;appearance:none}
+input[type=range]::-webkit-slider-runnable-track{height:4px;background:var(--rule);border-radius:2px}
+input[type=range]::-moz-range-track{height:4px;background:var(--rule);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-9px;border-radius:50%;background:var(--slate);border:3px solid var(--bg);box-shadow:0 0 0 1px var(--slate)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--slate);border:3px solid var(--bg)}
+.shocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.shocks button{text-align:left;line-height:1.25;padding:10px 12px}
+.shocks button small{display:block;font-size:13px;color:var(--muted);font-weight:400;margin-top:3px}
+.note{font-size:13px;color:var(--muted);margin:12px 0 0}
+.foot{color:var(--muted);font-size:13px;padding-top:0}
+.v3c{position:absolute;inset:0;cursor:grab}
+.v3lab{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.v3lab[hidden]{display:none}
+.v3lab span{position:absolute;transform:translate(-50%,-100%);font:600 13px/1.2 Inter,system-ui,sans-serif;color:var(--ink);text-shadow:0 0 3px var(--plate),0 0 3px var(--plate),0 0 6px var(--plate);white-space:nowrap;text-align:center}
+.v3lab span small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.v3lab .l3s{font:600 18px/1.1 "Source Serif 4",Georgia,serif;color:var(--slate)}
+.v3msg{position:absolute;left:12px;top:12px;margin:0;background:var(--bg);padding:8px 12px;border-radius:4px;font-size:14px;max-width:calc(100% - 24px)}
+.v3msg[hidden]{display:none}
+.vt{display:flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.vt button{border:0;border-radius:0;min-width:54px}
+.vt button.on{background:var(--slate);color:#fff}
+.view{position:relative;max-width:calc(100svh - 150px)}
+.focus{position:absolute;left:10px;right:10px;bottom:10px;max-height:64%;overflow:auto;background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-left:5px solid var(--c,var(--ink));border-radius:4px;padding:12px 14px;font-size:15px;line-height:1.45;cursor:default}
+.focus[hidden]{display:none}
+.focus em{display:block;font-style:normal;font-size:13px;color:var(--muted)}
+.focus strong{display:block;font:600 19px/1.25 "Source Serif 4",Georgia,serif;margin:2px 0 6px;text-wrap:balance}
+.focus p{margin:0 0 8px}
+.focus p b{font-weight:600}
+.focus .who{font-size:13px;color:var(--muted)}
+.focus .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.ev{display:grid;grid-template-columns:10px minmax(0,1fr);gap:4px 10px;width:100%;text-align:left;padding:9px 0;border:0;border-bottom:1px solid var(--rule);border-radius:0;background:none;font:400 15px/1.4 Inter,system-ui,sans-serif;min-height:44px}
+.ev:hover{background:var(--panel)}
+.ev i{width:8px;height:8px;border-radius:50%;margin-top:6px}
+.ev.big i{width:10px;height:10px;margin-top:5px}
+.ev time{display:block;font-size:13px;color:var(--muted)}
+.ev small{display:block;font-size:13px;color:var(--muted);margin-top:3px}
+.soc{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:start;margin-top:12px}
+.socbox{position:relative;aspect-ratio:1/0.82;background:var(--panel);border-radius:4px;overflow:hidden;cursor:pointer}
+.socbox canvas{position:absolute;inset:0;width:100%;height:100%}
+.sts{margin-bottom:14px}
+.sts h3{font:600 20px/1.2 "Source Serif 4",Georgia,serif;margin:0 0 6px}
+.st{display:block;width:100%;text-align:left;padding:8px 0;border:0;border-bottom:1px solid var(--rule);border-radius:0;background:none;font:400 14px/1.45 Inter,system-ui,sans-serif;min-height:44px}
+.st .ph{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.st .ph i{width:12px;height:12px;border-radius:3px;align-self:center}
+.st .ph strong{font:600 17px/1.2 "Source Serif 4",Georgia,serif}
+.st .ph em{font-style:normal;color:var(--slate);font-weight:600}
+.st .pl{display:block;color:var(--muted)}
+.por{display:block;width:100%;text-align:left;padding:12px 0;border:0;border-bottom:1px solid var(--rule);border-radius:0;background:none;font:400 14px/1.45 Inter,system-ui,sans-serif;min-height:44px}
+.por:first-child{padding-top:0}
+.por:hover{background:var(--panel)}
+.por .ph{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:4px}
+.por .ph i{width:12px;height:12px;border-radius:50%;align-self:center}
+.por .ph strong{font:600 18px/1.2 "Source Serif 4",Georgia,serif}
+.por .ph em{font-style:normal;color:var(--slate);font-weight:600;font-size:14px}
+.por .pl{display:block;color:var(--muted)}
+.por .pl:nth-child(2){color:var(--ink)}
+.lf{display:flex;gap:6px;margin:0 0 8px}
+.lf button{min-height:36px;padding:0 12px;font-size:14px}
+.lf button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ev.era{background:var(--panel);padding-left:8px;padding-right:8px}
+.ev.era span{font-weight:600}
+.ev.era small{font-weight:400}
+@media(max-width:900px){.soc{grid-template-columns:minmax(0,1fr)}}
+.tabs{display:flex;gap:8px;margin-top:18px}
+.tabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.expo{display:none}
+body.exp .expo{display:block}
+body.exp .solo{display:none}
+.exctl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:8px 32px;align-items:start}
+.exctl .bar,.exctl .note{grid-column:1/-1}
+.xab{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
+select{font:16px Inter,system-ui,sans-serif;min-height:44px;width:100%;padding:0 10px;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink);margin-top:6px}
+.xsum{font:600 clamp(19px,2.2vw,24px)/1.35 "Source Serif 4",Georgia,serif;margin:22px 0 14px;max-width:70ch;text-wrap:pretty}
+.twin{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.twin figure{margin:0}
+.twin figcaption{font-size:14px;color:var(--muted);margin-bottom:6px}
+.twin figcaption b{font-weight:600}
+.mini{position:relative;aspect-ratio:1;background:var(--plate);border-radius:4px;overflow:hidden}
+.mini canvas{position:absolute;inset:0;width:100%;height:100%}
+.xrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:24px;margin-top:20px;align-items:start}
+#xstats table{width:100%;border-collapse:collapse;font-size:14px}
+#xstats th,#xstats td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:right;font-variant-numeric:tabular-nums}
+#xstats th:first-child,#xstats td:first-child{text-align:left;color:var(--muted)}
+.xcharts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.xc{background:var(--panel);border-radius:4px;padding:8px 10px}
+.xc em{font-style:normal;font-size:13px;color:var(--muted)}
+.xc .la{color:var(--slate)}
+.xc .lb{color:light-dark(#b5523b,#e08a6e)}
+.xc canvas{display:block;width:100%;height:80px;margin-top:4px}
+@media(max-width:700px){.exctl,.xrow{grid-template-columns:minmax(0,1fr)}.twin{gap:10px}}
+@media(max-width:480px){.twin{grid-template-columns:minmax(0,1fr)}}
+.rhead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 24px}
+.rhead h2{margin:0}
+.rhead p{margin:0;font-size:13px;color:var(--muted);max-width:80ch}
+.river{position:relative;height:300px;margin-top:12px;background:var(--panel);border-radius:4px;overflow:hidden;cursor:pointer}
+.river canvas{position:absolute;inset:0;width:100%;height:100%}
+.rtip{font-size:13px;color:var(--muted);margin:8px 0 0;min-height:1.5em}
+@media(max-width:900px){.lab{grid-template-columns:minmax(0,1fr)}.plate,.view{max-width:none}.log{max-height:420px}}
+@media(max-width:600px){.river{height:230px}.focus{position:static;margin-top:10px;max-height:none;padding:10px 12px}.focus strong{font-size:17px}.clock b{font-size:30px}.bar button{padding:0 11px}.metrics .tile b{font-size:22px}}
+
+.wrap.wide{max-width:1600px}
+.stageband{padding-top:12px}
+.view{position:relative;max-width:none}
+.plate{aspect-ratio:auto;max-width:none;height:clamp(380px,calc(100svh - 130px),960px)}
+.hud{position:absolute;z-index:2;background:color-mix(in srgb,var(--bg) 86%,transparent);border:1px solid var(--rule);border-radius:4px;pointer-events:none}
+.hud.tl{left:10px;top:10px;padding:6px 12px;display:flex;align-items:baseline;gap:8px}
+.hud.tl b{font:600 24px/1 "Source Serif 4",Georgia,serif;font-variant-numeric:tabular-nums}
+.hud.tl span{color:var(--muted);font-size:14px}
+.hud.tr{right:10px;top:10px;display:flex;gap:0;overflow:hidden}
+.hud.tr span{padding:5px 12px;border-left:1px solid var(--rule);display:flex;flex-direction:column}
+.hud.tr span:first-child{border-left:0}
+.hud.tr em{font-style:normal;font-size:12px;color:var(--muted)}
+.hud.tr b{font:600 18px/1.1 "Source Serif 4",Georgia,serif;font-variant-numeric:tabular-nums}
+.hud.tick{left:10px;bottom:10px;max-width:min(560px,calc(100% - 20px));pointer-events:auto;text-align:left;font:400 14px/1.35 Inter,system-ui,sans-serif;padding:8px 12px;min-height:40px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hud.tick time{color:var(--muted);margin-right:6px}
+.hud.tick[hidden]{display:none}
+.v3msg{top:62px;left:50%;transform:translateX(-50%)}
+.cardbox{position:absolute;z-index:3;right:10px;top:66px;width:min(340px,calc(100% - 20px));max-height:calc(100% - 140px);overflow:auto;border-radius:4px;box-shadow:0 2px 12px rgb(0 0 0 / .14)}
+.cardbox:has(.empty){display:none}
+.cardbox .card{margin:0;background:var(--bg);border:1px solid var(--rule)}
+.cx{position:absolute;right:4px;top:4px;min-height:36px;width:36px;padding:0;border:0;background:none;font-size:22px;color:var(--muted);z-index:1}
+.bar{margin-top:10px}
+.howto{margin-top:8px;font-size:14px;color:var(--muted);max-width:90ch}
+.howto summary{cursor:pointer;min-height:36px;display:flex;align-items:center;color:var(--ink);font-weight:500}
+.howto p{margin:6px 0 0}
+.top .clock{display:none}
+body.exp .top .clock{display:flex}
+.panes{padding-top:8px}
+.ptabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--rule);padding-bottom:10px;margin-bottom:6px}
+.ptabs button{min-height:40px}
+.ptabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.pane[hidden]{display:none}
+.pane>.rhead:first-child h2,.pane .lower h2{margin-top:10px}
+.chron{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:28px;align-items:start;margin-top:12px}
+.pane.lower{margin-top:8px}
+@media(max-width:900px){.chron{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){.plate{height:min(72svh,560px);min-height:340px}.cardbox{position:static;width:auto;max-height:none;margin-top:10px;box-shadow:none}.hud.tr .wide2{display:none}.hud.tl b{font-size:20px}.hud.tick{font-size:13px}}
+
+.top{padding-top:14px}
+.top .wrap{max-width:1600px}
+.top .tab{width:32px;height:4px;margin-bottom:8px}
+.top h1{font-size:clamp(24px,2.6vw,32px)}
+.top .head{display:inline-flex;vertical-align:bottom;margin-right:20px}
+.top .tabs{display:inline-flex;margin-top:10px;vertical-align:bottom}
+.top .tabs button{min-height:38px;font-size:14px}
+@media(max-width:700px){.bar{gap:6px}.bar button,.bar .seg label{min-height:40px;padding:0 10px;font-size:14px}.bar button.main{min-width:76px}.bar .chk{min-height:36px;font-size:14px}.ptabs button{min-height:38px;padding:0 11px;font-size:14px}}
+@media(max-width:700px){.cardbox{position:relative;top:auto;right:auto}body.flat .plate{height:auto;aspect-ratio:1;min-height:0}}
+
+.atlas{display:none}
+body.atl .atlas{display:block}
+body.atl .solo,body.atl .expo{display:none}
+body.atl .top .clock{display:none}
+.atlgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:28px;align-items:start;margin-top:14px}
+.atlbox{height:min(68svh,620px);min-height:340px;margin-top:10px}
+.atlbox canvas{width:100%;height:100%;display:block;cursor:pointer}
+.atlleg{display:flex;flex-wrap:wrap;gap:6px}
+.atlleg button{min-height:36px;font-size:13px;display:inline-flex;align-items:center;gap:7px;padding:0 10px}
+.atlleg button i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.atlleg button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#atlRand{margin-top:10px}
+.atlcard{border:1px solid var(--rule);border-radius:4px;padding:18px 20px}
+.atlcard .kick{margin:0;font-size:13px;font-weight:600;text-transform:none}
+.atlcard h3{margin:4px 0 6px;font:600 26px/1.15 "Source Serif 4",Georgia,serif}
+.atlcard .lead2{margin:0 0 12px;font-size:15px}
+.decs{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:4px}
+.decs li{display:grid;grid-template-columns:4.2em 1fr;gap:2px 10px;font-size:14px;border-top:1px solid var(--rule);padding-top:5px}
+.decs li span{color:var(--muted);font-variant-numeric:tabular-nums;grid-row:span 2}
+.decs li em{font-style:normal;color:var(--muted);font-size:13px}
+.psp{display:flex;align-items:flex-end;gap:4px;height:44px;margin:6px 0 10px}
+.psp i{flex:1;background:var(--slate);opacity:.55;border-radius:2px 2px 0 0}
+.atlcard .nums{font-size:13px;color:var(--muted);margin:0 0 14px}
+.atlnotes{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:28px}
+.atlnotes h3{font:600 20px/1.2 "Source Serif 4",Georgia,serif;margin:0 0 8px}
+.atlnotes ul{margin:0;padding-left:18px;display:grid;gap:8px;font-size:15px;max-width:68ch}
+@media(max-width:900px){.atlgrid,.atlnotes{grid-template-columns:minmax(0,1fr)}.atlbox{height:min(60svh,440px)}}
+.cmph{font:600 20px/1.2 "Source Serif 4",Georgia,serif;margin:28px 0 10px}
+.cmpwrap{overflow-x:auto}
+.cmp{border-collapse:collapse;font-size:14px;min-width:520px;width:100%;max-width:900px}
+.cmp th,.cmp td{text-align:left;padding:8px 12px 8px 0;border-top:1px solid var(--rule);vertical-align:top;font-variant-numeric:tabular-nums}
+.cmp thead th{font-weight:600;border-top:0}
+.cmp thead small{font-weight:400;color:var(--muted)}
+.cmp tbody th{font-weight:400;color:var(--muted)}
+.v3lab .l3 small.sick{color:#5a7a3a;font-weight:600}
+.atlrun{margin-top:16px;border-top:1px solid var(--rule);padding-top:12px}
+.atlrun-h{margin:0 0 8px;font-weight:600;font-size:15px}
+.atlrun-row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:8px;font-size:14px}
+.atlrun-row select{min-height:40px;font:inherit;margin-left:6px;padding:0 8px;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink)}
+.atlrun-row button{min-height:40px}
+.atlbar{height:4px;background:var(--rule);border-radius:2px;overflow:hidden;margin:4px 0 6px}
+.atlbar i{display:block;height:100%;width:0;background:var(--slate);transition:width .4s}
+.atlprog{margin:0;font-size:13px;color:var(--muted);min-height:1.3em}
+.fates{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:12px}
+.fate{border:1px solid var(--rule);border-radius:4px;padding:14px 16px}
+.fate.gone{background:var(--panel)}
+.fate .kick{margin:0;font-size:12px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.04em}
+.fate h3{margin:4px 0 8px;font:600 21px/1.2 "Source Serif 4",Georgia,serif}
+.fate h3 small{font:400 14px Inter,system-ui,sans-serif;color:var(--muted)}
+ol.life{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+ol.life li{display:grid;grid-template-columns:2.6em 1fr;gap:8px;font-size:14px;line-height:1.4}
+ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
+.famline{margin:8px 0 0;font-size:13px;color:var(--muted)}
+.fbtn{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.fbtn button{min-height:38px;font-size:14px}
+.chron1{margin-top:10px;font-size:14px}
+.chron1 summary{cursor:pointer;min-height:36px;display:flex;align-items:center;font-weight:500}
+.chron1 ol.life{max-height:260px;overflow:auto;margin-top:6px}
+</style>
+</head>
+<body>
+<header class="band top"><div class="wrap"><div class="head">
+  <div><span class="tab"></span><h1>Лаборатория обществ</h1></div>
+  <div class="clock" aria-live="off"><b id="year">Год 0</b><span id="season">зима</span></div>
+</div>
+<div class="tabs" role="group" aria-label="Режим"><button id="t1" class="on" aria-pressed="true">Один мир</button><button id="t2" aria-pressed="false">Два мира: эксперимент</button><button id="t3" aria-pressed="false">Атлас ста миров</button></div></div>
+</header>
+
+<section class="band atlas" id="atlas"><div class="wrap wide">
+  <div class="rhead"><h2>Атлас ста миров</h2><p>Сто миров с одинаковыми правилами и одинаковым стартом: остров, первые лодки с семьями, река, родники, лес и холмы. Различаются только случайность и расклад местности. Каждый мир прожил сто лет. Точка — мир в конце, её размер — население, цвет — строй, который в нём победил. Нажмите на точку, чтобы увидеть путь мира по десятилетиям и открыть его с нулевого года.</p></div>
+  <div class="atlgrid">
+    <div>
+      <div class="atlleg" id="atlLeg" role="group" aria-label="Фильтр по строю"></div>
+      <div class="socbox atlbox" id="atlbox"><canvas id="atl" aria-label="Сто миров на карте обществ"></canvas></div>
+      <button id="atlRand" class="ghost">Случайный мир</button>
+      <div class="atlrun">
+        <p class="atlrun-h">Пересчитать атлас на этом устройстве</p>
+        <div class="atlrun-row">
+          <label>Миров <select id="atlN"><option>10</option><option selected>20</option><option>50</option><option>100</option></select></label>
+          <label>Лет <select id="atlY"><option selected>60</option><option>100</option></select></label>
+          <label class="chk"><input type="checkbox" id="atlOwn"> с вводными моего мира</label>
+        </div>
+        <div class="atlrun-row"><button id="atlGo" class="main">Посчитать новые миры</button><button id="atlStop" hidden>Остановить</button><button id="atlReset">Вернуть готовый атлас</button></div>
+        <div class="atlbar"><i id="atlBar"></i></div>
+        <p class="atlprog" id="atlProg" aria-live="polite"></p>
+      </div>
+    </div>
+    <div class="atlcard" id="atlCard" aria-live="polite"></div>
+  </div>
+  <div class="atlnotes">
+    <div><h3>Что показал атлас</h3><ul id="atlFind"></ul></div>
+    <div><h3>Где модель пока однообразна</h3><ul id="atlWeak"></ul></div>
+  </div>
+  <h3 class="cmph">До и после: что изменили семьи, уход от правителя, слава, подражание и мор</h3>
+  <div class="cmpwrap"><table class="cmp" id="atlCmp"></table></div>
+</div></section>
+<section class="band expo" id="exp"><div class="wrap">
+  <div class="exctl">
+    <div class="ctl"><label for="xk">Что отличается у мира B</label>
+      <select id="xk"><option value="scarcity">Дефицит ресурсов</option><option value="ambition">Амбиции новичков</option><option value="inflow">Приток новичков</option><option value="synergy">Синергия</option><option value="memory">Память</option><option value="landPriv">Частная земля: разрешена или нет</option><option value="assembly">Вече: разрешено или нет</option><option value="coin">Монета: разрешена или нет</option><option value="usury">Проценты по займам: да или нет</option><option value="noise">Ничего, только случайность</option></select></div>
+    <div class="xab" id="xab">
+      <div class="ctl"><label for="xa">Мир A<output id="oxa">30%</output></label><input type="range" id="xa" min="0" max="1" step="0.05" value="0.3"></div>
+      <div class="ctl"><label for="xb">Мир B<output id="oxb">80%</output></label><input type="range" id="xb" min="0" max="1" step="0.05" value="0.8"></div>
+    </div>
+    <div class="bar">
+      <button class="main" id="xgo">Запустить заново</button>
+      <button id="xplay">Пауза</button>
+      <div class="seg" role="radiogroup" aria-label="Скорость эксперимента">
+        <input type="radio" name="xs" id="xs4" value="4"><label for="xs4">4×</label>
+        <input type="radio" name="xs" id="xs16" value="16" checked><label for="xs16">16×</label>
+        <input type="radio" name="xs" id="xs64" value="64"><label for="xs64">64×</label>
+      </div>
+      <button id="xmap">Другая карта</button>
+    </div>
+    <p class="note">Оба мира стартуют с одной карты и одних и тех же людей, а остальные вводные берутся из основной лаборатории. Отличается только то, что вы выбрали выше.</p>
+  </div>
+  <p class="xsum" id="xsum"></p>
+  <div class="twin">
+    <figure><figcaption id="capA"></figcaption><div class="mini"><canvas id="mA" aria-label="Мир A"></canvas></div></figure>
+    <figure><figcaption id="capB"></figcaption><div class="mini"><canvas id="mB" aria-label="Мир B"></canvas></div></figure>
+  </div>
+  <div class="xrow">
+    <div class="scroll" id="xstats"></div>
+    <div class="xcharts">
+      <div class="xc"><em>Население · <b class="la">A</b> и <b class="lb">B</b></em><canvas id="xc0"></canvas></div>
+      <div class="xc"><em>Число групп · <b class="la">A</b> и <b class="lb">B</b></em><canvas id="xc1"></canvas></div>
+      <div class="xc"><em>Энтропия · <b class="la">A</b> и <b class="lb">B</b></em><canvas id="xc2"></canvas></div>
+      <div class="xc"><em>Неравенство · <b class="la">A</b> и <b class="lb">B</b></em><canvas id="xc3"></canvas></div>
+    </div>
+  </div>
+  <h2>Какие общества сложились</h2>
+  <div class="twin">
+    <figure><figcaption>Мир A</figcaption><div class="socbox" id="sbA"><canvas id="sA" aria-label="Общества мира A"></canvas></div></figure>
+    <figure><figcaption>Мир B</figcaption><div class="socbox" id="sbB"><canvas id="sB" aria-label="Общества мира B"></canvas></div></figure>
+  </div>
+</div></section>
+
+<main class="band solo stageband"><div class="wrap wide">
+  <div class="view" id="view">
+    <div class="plate" id="plate"><canvas id="cv" aria-label="Мир симуляции"></canvas><div id="v3lab" class="v3lab" hidden></div><p id="v3msg" class="v3msg" hidden></p>
+      <div class="hud tl" aria-live="off"><b id="hYear">Год 0</b><span id="hSeason">зима</span></div>
+      <div class="hud tr"><span><em>люди</em><b id="hPop">0</b></span><span><em>групп</em><b id="hGroups">0</b></span><span class="wide2"><em>энтропия</em><b id="hEnt">0</b></span><span class="wide2"><em>Джини</em><b id="hGini">0</b></span></div>
+      <button class="hud tick" id="ticker" hidden></button>
+    </div>
+    <div class="cardbox" id="cardbox"><button class="cx" id="cardx" aria-label="Закрыть карточку">×</button><div class="card" id="card"><p class="empty">Нажмите на человека на карте, чтобы проследить за ним: роль, начальник, доверие к лидеру, груз и обиды.</p></div></div>
+    <div class="focus" id="focus" hidden aria-live="polite"></div>
+  </div>
+    <div class="bar">
+      <div class="vt" role="group" aria-label="Вид"><button id="v2d" class="on" aria-pressed="true">Карта</button><button id="v3d" aria-pressed="false">3D</button></div>
+      <button class="main" id="play">Пауза</button>
+      <div class="seg" role="radiogroup" aria-label="Скорость">
+        <input type="radio" name="sp" id="sp1" value="1" checked><label for="sp1">1×</label>
+        <input type="radio" name="sp" id="sp4" value="4"><label for="sp4">4×</label>
+        <input type="radio" name="sp" id="sp16" value="16"><label for="sp16">16×</label>
+        <input type="radio" name="sp" id="sp64" value="64"><label for="sp64">64×</label>
+      </div>
+      <button id="fork">Развилка</button>
+      <button id="back" disabled>Вернуться</button>
+      <label class="chk"><input type="checkbox" id="stops" checked>стоп-кадры</label>
+      <label class="chk"><input type="checkbox" id="fly" checked>эффект бабочки</label>
+      <button id="reset">Новый мир</button>
+    </div>
+  <details class="howto"><summary>Как читать мир</summary><p><b>Остров.</b> Мир — остров посреди моря. Первые люди приплывают на лодках в год 0, за ними ещё несколько лодок в первые десятилетия, а потом изредка новые переселенцы. У берега есть рыбные места (рыбки на карте): их ловят, как собирают ягоды, и их можно выловить. Когда рыба у берега кончается, деревни строят рыбацкие лодки и уходят в море: там рыбы больше, но в шторм лодки не возвращаются. При каждом доме есть огород, его кормят женщины, дети и старики. Ремесленники делают орудия (в мастерской), горшки и ткань из козьей шерсти (прямо дома): с посудой запасы хранятся дольше и воду носить легче, в тёплой одежде зимой болеют реже, а в деревне с мастерской дома и лодки обходятся дешевле. Первые лодки привезли коз: стада пасутся у деревень, дают молоко, в голод их режут, а при набеге угоняют. Уйти с острова можно только морем: когда в деревне тесно, голодно или нет воды, семья строит лодку и уплывает навсегда. В центре острова холмы, оттуда течёт река к морю.</p><p><b>Питьевая вода.</b> Людям нужно пить. Вода есть в реке, в родниках у подножия холмов (голубые круги) и в колодцах, которые деревни копают сами. Чем дальше вода, тем больше людей весь день носят её вёдрами (синие вёдра в руках) и не работают в поле. Колодец в низине у реки докапывается легко, на возвышенности часто впустую. В засушливый год малые родники и мелкие колодцы пересыхают, урожай падает, а деревни у одного родника ссорятся. В тесной деревне колодец загрязняется, а ниже по реке от большой деревни вода грязная: там чаще болеют, и оттуда чаще начинается мор. Где воды нет совсем, люди слабеют от жажды и уходят.</p><p><b>Земля и вода.</b> Люди ходят по рельефу: в обход холмов, медленнее через лес, быстрее по дорогам. Дороги не рисуются заранее: тропа появляется там, где часто ходят, а наезженная тропа становится дорогой. Реку можно перейти только по мосту, вброд (серые камни на воде) или зимой по льду. Брод и лёд опасны, особенно в весеннее половодье: люди тонут. Деревня, жители которой часто ходят на тот берег, строит мост. Новую деревню закладывают по плану: дома встают вдоль улицы, поля примыкают друг к другу. Брошенная деревня остаётся на земле руинами, и кочевники могут занять её и починить дома.</p><p><b>Судьбы.</b> Каждый житель помнит свою жизнь. За убитого в бою родича дети и супруг клянутся отомстить: давят на вождя, рвутся в поход и ликуют, когда обидчик падёт. Дети свергнутого вождя затаивают обиду на того, кто сверг отца, и иногда убивают его. Влюблённые из враждующих деревень бегут и заводят свой дом. Изгнанники возвращаются с чужим войском, ученики перенимают ремесло у мастеров. Всё это записывается в летопись жизни, а самые драматичные судьбы собраны во вкладке «Судьбы».</p><p><b>Люди.</b> У каждого есть пол, семья и слава. Взрослые женятся, чаще внутри своей деревни, а брак детей вождей мирит соседей и скрепляет союз. Дети растут 15 лет и едят из общих запасов; в голод и мор они умирают первыми. Наследство уходит детям, поэтому богатство и власть копятся в семьях. О человеке судят по слухам: щедрого и храброго встречают с доверием, лентяя и обманщика могут выгнать. В голодную зиму богатый кормит бедного и делает его своим клиентом, а богатый вождь держит дружину, и её почти невозможно свергнуть. Уйти от плохого вождя можно, только если вокруг есть свободная земля: в тесной долине вождь забирает себе всё больше. Новшества вроде монеты и веча редко изобретают, чаще перенимают у богатых соседей. Чем теснее живут и чем больше торгуют, тем вероятнее мор; после него рабочих рук мало, и простые люди требуют больших долей. Вожди ошибаются в оценке врага и иногда начинают войны, которые нельзя выиграть.</p><p>Шестьдесят кочевников на земле с рекой, лесом и холмами. Они сами решают, где осесть, что строить и производить, с кем торговать и воевать, во что верить, как делить урожай и кому подчиняться. Вы только меняете вводные.</p><p>В 3D видна вся жизнь: лесорубы несут брёвна, каменотёсы — глыбы, земледельцы — мешки с зерном к амбару; дома растут из лесов, поля зеленеют весной и желтеют осенью, на вырубке остаются пни, зимой из труб идёт дым, у угодий пасутся олени. Нажмите на деревню в списке или портрете, и камера полетит к ней. На карте: точка — человек, размер — статус, кольцо — лидер. Домики и поля окрашены в цвет группы. Широкий дом с трубой — мастерская (дымит, когда делает орудия), домик с острой крышей — амбар, груда камней у холмов — каменоломня. Серые постройки — руины. Телега рядом с человеком — купец с грузом, светло-коричневые линии — дороги: чем чаще ходят караваны, тем дорога шире. <span style="color:var(--red)">Красная стрелка — поход</span>, флаг — войско, копьё у точки — воин или стража, коричневое кольцо вокруг деревни — частокол, пунктир цвета хозяина — дорога дани. Острая башенка — святилище, корона у имени — династия, под именем деревни — её строй. Цветные клетки — владения деревни, сплошная линия — граница, <span style="color:var(--red)">красный пунктир — спорная межа</span>, где земли соседей соприкасаются. Толстая линия — рубеж государства, крупная надпись — его имя. Стража с копьями ходит вдоль границы. Золотой кружок у имени — у деревни есть монета, квадратик вокруг точки — человек в долговой кабале. <span style="color:var(--slate)">Пунктир — союз</span>, <span style="color:var(--red)">красное — вражда</span>, дрожащая граница — энтропия группы, кусты с ягодами в пунктирном круге — дикие угодья, где собирают и охотятся (процент показывает, сколько там осталось еды; выбранные угодья зарастают заново). Зимой карта белеет. В режиме 3D мир можно вращать пальцем или мышью, приближать колёсиком или щипком, а нажатие на человека открывает его карточку. При 1× год идёт полминуты, при 64× век проходит за минуту. Стоп-кадры останавливают мир на крупных событиях и объясняют их причину.</p></details>
+</div></main>
+
+<section class="band solo panes"><div class="wrap wide">
+  <div class="ptabs" role="tablist" aria-label="Панели">
+    <button role="tab" data-p="chron" class="on" aria-selected="true">Хроника</button><button role="tab" data-p="fates" aria-selected="false">Судьбы</button><button role="tab" data-p="soc" aria-selected="false">Общества</button><button role="tab" data-p="river" aria-selected="false">Река истории</button><button role="tab" data-p="market" aria-selected="false">Рынок</button><button role="tab" data-p="ctl" aria-selected="false">Группы и вводные</button>
+  </div>
+  <div class="pane" id="p-chron">
+    <div class="chron">
+      <div><div class="lf" role="group" aria-label="Фильтр хроники"><button id="lf1" class="on">Главное</button><button id="lf2">Все события</button></div>
+      <ol class="log" id="log"></ol></div>
+      <div>
+    <div class="metrics">
+      <div class="tile"><em>Население</em><b id="mPop">0</b><canvas id="sPop"></canvas></div>
+      <div class="tile"><em>Групп</em><b id="mGroups">0</b><canvas id="sGroups"></canvas></div>
+      <div class="tile"><em>Энтропия</em><b id="mEnt">0</b><canvas id="sEnt"></canvas></div>
+      <div class="tile"><em>Неравенство, Джини</em><b id="mGini">0</b><canvas id="sGini"></canvas></div>
+    </div>
+      <p class="tally" id="tally"></p></div>
+    </div>
+  </div>
+  <div class="pane" id="p-soc" hidden>
+  <div class="rhead"><h2>Какие общества сложились</h2><p>Каждый кружок — деревня, размер — население, хвост — куда её строй дрейфовал за последние годы. Пунктирное кольцо — у деревни есть вера. Тип строя движок определяет сам: по тому, у кого власть и на чём держится общество. Чтобы сравнить, как одна вводная меняет судьбу обществ, переключитесь наверху на «Два мира».</p></div>
+  <div class="soc">
+    <div class="socbox" id="socbox"><canvas id="soc" aria-label="Карта обществ"></canvas></div>
+    <div id="portraits"></div>
+  </div>
+</div>
+  <div class="pane" id="p-river" hidden>
+  <div class="rhead"><h2>Река истории</h2><p>Каждая полоса — группа, её толщина — число людей. Ответвление означает раскол или переворот, изгиб в чужую полосу — слияние. Серый поток — одиночки, точки — крупные события.</p></div>
+  <div class="river" id="river"><canvas id="rv" aria-label="Река истории групп"></canvas></div>
+  <p class="rtip" id="rtip"></p>
+</div>
+  <div class="pane" id="p-market" hidden>  <div class="rhead"><h2>Рынок</h2><p>Цены в мерах еды. Они складываются из настоящих сделок: чем сильнее нужда покупателя и избыток продавца, тем дальше цена уходит от обычной.</p></div>
+  <div class="river" id="market" style="height:220px;cursor:default"><canvas id="mk" aria-label="Цены на рынке"></canvas></div>
+  <p class="rtip" id="mtxt"></p>
+</div>
+  <div class="pane" id="p-fates" hidden>
+    <div class="rhead"><h2>Судьбы</h2><p>Каждый житель ведёт летопись своей жизни: рождение, брак, дети, клятвы мести, переходы, власть, изгнание, смерть. Здесь собраны самые драматичные жизни мира, живые и умершие. Их никто не писал: они сложились сами из законов мира. Нажмите «Следить», и камера пойдёт за человеком.</p></div>
+    <div class="fates" id="fates"></div>
+  </div>
+  <div class="pane lower" id="p-ctl" hidden>
+  <div><h2>Группы</h2><div id="groups"></div></div>
+  <div><h2>Вводные</h2><div id="ctls"></div></div>
+  <div><h2>Шоки</h2>
+    <div class="shocks">
+      <button data-shock="drought">Засуха<small>источники на год слабеют втрое</small></button>
+      <button data-shock="land">Новый источник<small>богатая земля в свободном месте</small></button>
+      <button data-shock="strangers">Волна чужаков<small>15 агентов с чужими нормами</small></button>
+      <button data-shock="decap">Убрать лидера<small>у крупнейшей группы</small></button>
+      <button data-shock="rumor">Слух о войне<small>между двумя крупнейшими</small></button>
+    </div>
+    <p class="note">Развилка запоминает мир целиком. Вернитесь к ней с эффектом бабочки, и та же история пойдёт иначе от одного лишь нового шума. Без него она повторится точь-в-точь, пока вы не тронете вводные или шоки.</p>
+  </div>
+</div>
+</div></section>
+
+
+
+<p class="band foot wrap solo" id="seedline"></p>
+
+<script>
+/*SIM*/
+</script>
+<script>
+/*UI*/
+</script>
+</body>
+</html>

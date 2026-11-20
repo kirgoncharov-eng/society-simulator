@@ -1,0 +1,145 @@
+function settle(S, g) {
+  const L = S._a.get(g.leader), o = { x: g.cx, y: g.cy };
+  let best = null, bv = -1e9, info = null;
+  for (const r of S.ruins || []) {
+    if (S.tick - r.t > 360 * 40 || !r.houses.length || Math.hypot(r.x - o.x, r.y - o.y) > 380) continue;
+    if (S.groups.some(h => h !== g && h.home && Math.hypot(h.home.x - r.x, h.home.y - r.y) < 130)) continue;
+    if (!reach(S, o.x, o.y, r.x, r.y)) continue;
+    const v = 18 + r.houses.length * 5 + r.fields.length * 2 - Math.hypot(r.x - o.x, r.y - o.y) / 40;
+    if (v > bv) { bv = v; best = r; }
+  }
+  if (best && rnd(S) < 0.85) {
+    const r = best; S.ruins = S.ruins.filter(x => x !== r);
+    g.home = { x: r.x, y: r.y }; g.cx = r.x; g.cy = r.y;
+    g.houses = r.houses.slice(0, 16).map(h => ({ x: h.x, y: h.y, ruined: true }));
+    for (const f of r.fields) { const c = cellAt(f.x, f.y); if (S.occ[c] || (S.own && S.own[c])) continue; S.occ[c] = g.id; g.fields.push({ x: f.x, y: f.y, c, fert: S.ter[c] === 'r' ? 0.9 : 0.55 }); }
+    if (r.plan) g.plan = Object.assign({}, r.plan);
+    claim(S, g, 20, 20); pickTarget(S, g);
+    S.settledOnce = true;
+    log(S, 'settle', `«${g.name}» занимает заброшенную деревню «${r.name}» и чинит дома`, r.x, r.y, g.hue, { why: sent([`деревня пустует ${yrs(Math.max(1, Math.round((S.tick - r.t) / 360)))}`, `там стоят ${g.houses.length} ${pl(g.houses.length, 'дом', 'дома', 'домов')} без крыш${g.fields.length ? ` и ${g.fields.length} ${pl(g.fields.length, 'заросшее поле', 'заросших поля', 'заросших полей')}` : ''}`, 'починить старый дом вдвое быстрее, чем построить новый', 'место уже проверено: здесь когда-то жили']), gs: [g.id] });
+    return;
+  }
+  best = null; bv = -1e9;
+  for (let t = 0; t < 140; t++) {
+    const x = clamp(o.x + gauss(S) * 260, 40, 960), y = clamp(o.y + gauss(S) * 260, 40, 960);
+    const c = cellAt(x, y), tt = S.ter[c]; if (tt === 'w' || tt === 'h' || tt === 's' || tt === 'b' || riverDist(S, x, y) < 45) continue;
+    let fert = 0, forest = 0, water = 0;
+    const ci = c % N, cj = Math.floor(c / N);
+    for (let dj = -6; dj <= 6; dj++) for (let di = -6; di <= 6; di++) {
+      const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= N || j >= N) continue;
+      const q = S.ter[j * N + i], dd = di * di + dj * dj;
+      if (dd <= 25 && q === 'r' && !S.occ[j * N + i]) fert++; if (dd <= 36 && q === 'f') forest++; if (dd <= 9 && q === 'w') water++;
+    }
+    let near = 1e9; for (const h of S.groups) if (h !== g && h.home) near = Math.min(near, Math.hypot(h.home.x - x, h.home.y - y));
+    let wd = riverDist(S, x, y) - 22; for (const sp of S.springs || []) wd = Math.min(wd, Math.hypot(sp.x - x, sp.y - y));
+    const v = fert * 1.6 + Math.min(forest, 20) * 0.8 + (water ? 8 : 0) - (near < 170 ? 40 : near < 260 ? 10 : 0) - Math.hypot(x - o.x, y - o.y) / 40 - Math.max(0, wd - 60) / 12;
+    if (v > bv) { bv = v; best = { x, y }; info = { fert, forest, water, near }; }
+  }
+  if (!best || !reach(S, o.x, o.y, best.x, best.y)) return;
+  g.home = best; g.cx = best.x; g.cy = best.y; planOf(S, g);
+  claim(S, g, 20, 20);
+  pickTarget(S, g);
+  const first = !S.settledOnce; S.settledOnce = true;
+  log(S, 'settle', first ? `Первое поселение в мире: «${g.name}» перестаёт кочевать${info.water ? ' и оседает у реки' : ''}` : `«${g.name}» основывает поселение${info.water ? ' у реки' : ''}`, best.x, best.y, g.hue, { first, why: sent([info.fert ? `рядом ${info.fert} клеток плодородной земли под поля` : 'плодородной земли мало, придётся жить собирательством', info.forest ? `лес в шаге: ${info.forest} клеток на брёвна` : 'леса рядом нет, брёвна носить издалека', info.water ? 'вода под боком' : '', info.near < 1e8 ? `ближайшие соседи в ${cells(info.near)}` : 'соседей поблизости нет']), who: [L.id], gs: [g.id] });
+}
+function houseSpot(S, g) {
+  const P = planOf(S, g);
+  for (let t = 0; t < 64; t++) { const p = plotPos(g, P.k); P.k++; if (P.k > 63) P.k = 0; if (plotOk(S, g, p)) return { kind: 'house', x: p.x, y: p.y, prog: 0, need: 50 }; }
+  const k = g.houses.length, p = dryRing(S, g.home.x, g.home.y, k * 2.39996 + 0.6, 18 + 10 * Math.sqrt(k));
+  return { kind: 'house', x: p.x, y: p.y, prog: 0, need: 50 };
+}
+function fieldSpot(S, g) {
+  const hc = cellAt(g.home.x, g.home.y), ci = hc % N, cj = Math.floor(hc / N);
+  let best = null, bv = -1e9;
+  for (let dj = -8; dj <= 8; dj++) for (let di = -8; di <= 8; di++) {
+    const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= N || j >= N) continue;
+    const c = j * N + i, t = S.ter[c]; if ((t !== 'r' && t !== 'g') || S.occ[c] || (S.own && S.own[c] && S.own[c] !== g.id)) continue;
+    const x = i * CS + 10, y = j * CS + 10, d = Math.hypot(x - g.home.x, y - g.home.y);
+    if (riverDist(S, x, y) < 28) continue;
+    if (d < 48 || d > 170) continue;
+    let adj = 0; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const q = c + ox + oy * N; if (S.occ[q] === g.id) adj++; }
+    const fert = t === 'r' ? 1 : 0.6, v = fert * 2 - d / 110 + adj * 0.45 - (S.road[c] ? 1 : 0);
+    if (v > bv) { bv = v; best = { kind: 'field', x, y, c, fert, prog: 0, need: 40 }; }
+  }
+  if (best) { S.occ[best.c] = g.id; if (S.own) S.own[best.c] = g.id; best.owner = g.land === 'private' ? g.leader : null; }
+  return best;
+}
+function finishSite(S, g) {
+  const st = g.site; g.site = null;
+  if (st.kind === 'house') {
+    g.houses.push({ x: st.x, y: st.y });
+    const k = g.houses.length;
+    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Каждый дом — это 6 брёвен из леса и месяцы работы строителей.`, gs: [g.id] });
+  } else if (st.kind === 'workshop') {
+    g.workshop = { x: st.x, y: st.y };
+    const first = !S.firstWorkshop; S.firstWorkshop = true;
+    log(S, 'tech', first ? `Первая мастерская в мире: «${g.name}» начинает делать орудия` : `«${g.name}» строит мастерскую`, st.x, st.y, g.hue, { first, why: `Камень с холмов и брёвна из леса превращаются в орудия. С орудием любая работа идёт на половину быстрее, но орудия изнашиваются, и камень с деревом нужны постоянно. Холмы у «${g.name}» в ${cells(g.stoneDist)} от поселения.`, gs: [g.id] });
+  } else if (st.kind === 'walls') {
+    g.walls = true;
+    log(S, 'tech', `«${g.name}» обносит поселение частоколом`, g.home.x, g.home.y, g.hue, { why: sent([`угроза от соседей ${P0(Math.min(1, g.threat || 0))}`, S.tick - g.raided < 720 ? 'недавно был набег' : '', 'частокол усиливает оборону в 1,7 раза, но стоит 12 брёвен и месяцы работы']), gs: [g.id] });
+  } else if (st.kind === 'shrine') {
+    g.shrine = { x: st.x, y: st.y };
+    S.faiths = S.faiths || {};
+    const partner = S.groups.find(o => o !== g && o.faith && o.home && (S.routes[key(o.id, g.id)] || (S.hostility[key(o.id, g.id)] || 0) < 0.2 && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300));
+    const why0 = sent([g.famY !== undefined ? 'голодные зимы' : '', g.warsLost ? 'проигранные битвы' : '', 'люди ищут смысл в бедах', 'святилище утешает: обиды копятся на треть медленнее, а лидер выглядит законнее', 'жрец кормится подношениями']);
+    if (!g.faith && partner && rnd(S) < 0.6) {
+      g.faith = partner.faith; const fn = S.faiths[g.faith];
+      log(S, 'faith', `«${g.name}» ставит святилище и принимает ${fn.name} от соседей из «${partner.name}»`, st.x, st.y, fn.hue, { why: why0, gs: [g.id, partner.id] });
+    } else if (!g.faith) {
+      const nearRiver = riverDist(S, g.home.x, g.home.y) < 120, h = nearestHill(S, g.home), fc = nearestForest(S, g.home);
+      const kind = nearRiver ? 'культ Реки' : h.d < 150 ? 'культ Горы' : fc !== null && Math.hypot((fc % N) * CS - g.home.x, Math.floor(fc / N) * CS - g.home.y) < 80 ? 'культ Леса' : (g.warsWon > g.warsLost ? 'культ Огня' : 'культ Предков');
+      const same = Object.values(S.faiths).filter(f => f.base === kind).length;
+      const id = 'f' + (Object.keys(S.faiths).length + 1);
+      S.faiths[id] = { name: same ? `${kind} (${['северный', 'новый', 'южный', 'истинный', 'старый'][same % 5]})` : kind, base: kind, hue: (g.hue + 180) % 360, founded: S.tick, by: g.id, usury: rnd(S) < 0.4 ? 'ban' : 'ok' };
+      g.faith = id;
+      const first = !S.firstFaith; S.firstFaith = true;
+      log(S, 'faith', first ? `Первая вера в мире: в «${g.name}» рождается ${S.faiths[id].name}` : `В «${g.name}» рождается ${S.faiths[id].name}`, st.x, st.y, S.faiths[id].hue, { first, why: why0 + ` Чему поклоняться, подсказывает место: ${nearRiver ? 'река рядом кормит и топит' : h.d < 150 ? 'над деревней нависают холмы' : 'деревню окружает лес'}.`, gs: [g.id] });
+    }
+  } else if (st.kind === 'bridge') {
+    for (const c of st.cells) S.bridge[c] = g.id; S.navV++; g.bridgeAt = S.tick;
+    const first = !S.firstBridge; S.firstBridge = true;
+    log(S, 'bridge', first ? `Первый мост в мире: «${g.name}» перекидывает мост через реку` : `«${g.name}» строит мост через реку`, st.x, st.y, g.hue, { first, why: sent([`за год жители ${g.cross12 || 0} ${pl(g.cross12 || 0, 'раз', 'раза', 'раз')} переходили реку вброд или по льду`, g.drowned ? `${g.drowned} ${pl(g.drowned, 'человек утонул', 'человека утонули', 'человек утонули')}` : 'брод опасен, особенно в половодье', 'мост — это брёвна и месяцы работы, зато по нему ходят без риска и вдвое быстрее', 'теперь по мосту пойдут и чужие: торговцы и войска']), gs: [g.id] });
+  } else if (st.kind === 'fboat') {
+    g.fboats = (g.fboats || 0) + 1;
+    if (!S.firstFboat) { S.firstFboat = true; log(S, 'tech', `Первая рыбацкая лодка: «${g.name}» выходит в море`, st.x, st.y, g.hue, { first: true, why: 'Рыба у берега быстро кончается, а в море её больше. На лодке двое рыбаков ловят за день столько, сколько с берега за неделю. Но море опасно: в шторм лодки не возвращаются.', gs: [g.id] }); }
+  } else if (st.kind === 'well') {
+    const ok = rnd(S) < wellOk(S, st.x, st.y);
+    if (ok) { g.well = { x: st.x, y: st.y, t: S.tick, depth: wellOk(S, st.x, st.y) > 0.9 ? 1 : 0.5, dry: false }; }
+    const first = ok && !S.firstWell; if (ok) S.firstWell = true;
+    log(S, 'well', ok ? (first ? `Первый колодец в мире: «${g.name}» копает свой колодец` : `«${g.name}» копает колодец`) : `«${g.name}» копает колодец, но до воды не докапывается`, st.x, st.y, g.hue, { first, why: sent([`до воды ${Math.round(g.wd || 0)} шагов: каждый день ${g.wNeed || 0} ${pl(g.wNeed || 0, 'человек', 'человека', 'человек')} только носят воду`, ok ? 'теперь вода прямо в деревне, и руки освобождаются для полей' : 'здесь глубоко до воды: в низине у реки копать легче', ok && wellOk(S, st.x, st.y) < 0.9 ? 'колодец неглубокий и в засуху может пересохнуть' : '']), gs: [g.id] });
+  } else if (st.kind === 'repair') {
+    const hh = g.houses[st.idx]; if (hh) hh.ruined = false;
+  } else if (st.kind === 'granary') {
+    g.granary = { x: st.x, y: st.y };
+    const first = !S.firstGranary; S.firstGranary = true;
+    log(S, 'tech', first ? `Первый амбар в мире: «${g.name}» учится хранить урожай` : `«${g.name}» строит амбар`, st.x, st.y, g.hue, { why: `Без амбара запасы гниют: полтора процента в месяц. В амбаре — в пять раз медленнее, и урожай доживает до весны. В «${g.name}» скопилось ${Math.round(g.treasury)} еды.`, gs: [g.id] });
+  } else g.fields.push({ x: st.x, y: st.y, c: st.c, fert: st.fert });
+}
+function nearestHill(S, p, g) {
+  let best = null, bd = 1e9;
+  for (let c = 0; c < S.ter.length; c++) { if (S.ter[c] !== 'h' || !usable(S, c, g)) continue; const d = Math.hypot((c % N) * CS + 10 - p.x, Math.floor(c / N) * CS + 10 - p.y); if (d < bd) { bd = d; best = c; } }
+  return bd < 360 ? { c: best, d: bd } : { c: null, d: bd };
+}
+function specialSpot(S, g, kind) {
+  const P = planOf(S, g), cand = kind === 'granary' ? [[0, 22], [0, -22], [8, 24]] : kind === 'workshop' ? [[0, -24], [0, 24], [-8, -26]] : [[1, 0], [-1, 0]];
+  for (const [a, b] of cand) {
+    const along = kind === 'shrine' ? a * (Math.max(2, Math.ceil(g.houses.length / 4)) * 17 + 14) : a, q = { x: g.home.x + P.ux * along - P.uy * b, y: g.home.y + P.uy * along + P.ux * b };
+    if (plotOk(S, g, q)) return { kind, x: q.x, y: q.y, prog: 0, need: kind === 'workshop' ? 70 : 60 };
+  }
+  const p = dryRing(S, g.home.x, g.home.y, kind === 'workshop' ? 2.4 : kind === 'shrine' ? 5.6 : 4.1, kind === 'shrine' ? 22 : 32 + 5 * Math.sqrt(g.houses.length));
+  return { kind, x: p.x, y: p.y, prog: 0, need: kind === 'workshop' ? 70 : 60 };
+}
+const HAUL = 2.5, CAP = { food: 4, wood: 3, stone: 2 };
+function load(m, k, v) { if (m.lk && m.lk !== k && m.load > 0) return; m.lk = k; m.load = (m.load || 0) + v; if (m.load >= CAP[k]) m.haul = true; }
+function storeOf(g, k) { return k === 'food' && g.granary ? g.granary : k === 'stone' && g.workshop ? g.workshop : g.home; }
+function deliver(S) {
+  for (const a of S.agents) {
+    if (!a.load) continue;
+    const g = a.group && S._g.get(a.group);
+    if (!g || !g.home) { a.load = 0; a.haul = false; a.lk = null; continue; }
+    const st = storeOf(g, a.lk);
+    if (a.haul && Math.hypot(a.x - st.x, a.y - st.y) < 16) { addStock(g, a.lk, a.load); a.load = 0; a.haul = false; a.lk = null; }
+    else if (!a.haul && seasonOf(S.tick) === 0 && a.lk === 'food' && a.job !== 'gather') a.haul = true;
+    else if (!a.haul && a.job !== ({ food: a.job === 'gather' ? 'gather' : 'farm', wood: 'wood', stone: 'stone' })[a.lk]) a.haul = true;
+  }
+}
