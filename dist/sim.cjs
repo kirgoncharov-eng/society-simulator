@@ -66,7 +66,7 @@ function homeEconomy(S, g, mem) {
   if (S.tick % 360 === 30 || g.landing === undefined) { const b = beachNear(S, g.home.x, g.home.y, 170); g.landing = b || null; }
   if (!g.pasture || S.tick % 1800 === 0) { let best = null, bv = -1e9; for (let t = 0; t < 14; t++) { const a = t * 0.45 + g.id, r = 50 + (t % 3) * 25, x = g.home.x + Math.cos(a) * r, y = g.home.y + Math.sin(a) * r, c = cellAt(x, y), tt = S.ter[c]; if (tt !== 'g' && tt !== 'r' && tt !== 'h') continue; if (S.occ[c]) continue; const v = (tt === 'g' ? 2 : 1) - r / 100; if (v > bv) { bv = v; best = { x, y }; } } g.pasture = best; }
   // gardens behind the houses: women, children and the old tend them
-  if (seas !== 0) { const hh = g.houses.filter(h => !h.ruined).length; g.treasury += hh * 0.6 * (dry ? 0.5 : 1); }
+  if (seas !== 0) { const hh = g.houses.filter(h => !h.ruined).length; g.treasury += hh * 0.45 * (dry ? 0.5 : 1); }
   // goats
   if (g.goats) {
     const cap = 6 + Math.round(40 * (g.room === undefined ? 0.5 : g.room)) + (g.pasture ? 6 : 0);
@@ -1445,7 +1445,7 @@ function families(S) {
     if (S.tick - (a.lastBirth || -1e9) < 450) continue;
     const h = S._a.get(a.spouse); if (!h) { a.spouse = null; continue; }
     const g = S._g.get(a.group), store = g ? g.treasury / Math.max(1, g.members.length) : 1;
-    const fert = clamp((a.wealth + h.wealth * 0.5 + store) / 8, 0.04, 1.6) * (a.wealth < 0.5 && store < 1 ? 0.4 : 1) * (g && g.home ? 1 : 0.55) * crowd * (g && g.sick ? 0.4 : 1);
+    const fert = clamp((a.wealth + h.wealth * 0.5 + store) / 8, 0.04, 1.6) * (a.wealth < 0.5 && store < 1 ? 0.25 : 1) * (g && g.home ? 1 : 0.55) * crowd * (g && g.sick ? 0.4 : 1);
     if (rnd(S) < 0.034 * fert) { const sx = rnd(S) < 0.5 ? 'f' : 'm'; S.kids.push({ t: S.tick, mo: a.id, fa: h.id, g: a.group, sex: sx, x: a.x, y: a.y }); a.lastBirth = S.tick; S.stats.births = (S.stats.births || 0) + 1; const tx = sx === 'f' ? 'Рождается дочь' : 'Рождается сын'; bio(S, a, 'child', tx); bio(S, h, 'child', tx); }
   }
   // children: cost, mortality, growing up
@@ -1926,14 +1926,14 @@ function monthly(S) {
     }
   }
   for (const a of S.agents) {
-    if (a.wealth > 1 || a.age < 15) continue;
+    if (a.wealth > 1 || a.age < 15 || a.war) continue;
     const g0 = a.group && S._g.get(a.group);
-    if (g0 && (g0.members.length > 4 || a.role === 'leader' || g0.treasury > g0.members.length * 2)) continue;
+    if (g0 && (a.role === 'leader' || g0.treasury > g0.members.length * (g0.members.length > 4 ? 1.2 : 2) || (g0.members.length > 4 && a.wealth > -0.4))) continue;
     let best = null, bv = -1e9;
-    for (const g of S.groups) { if (!g.home || g.dead || g === g0 || g.members.length < (g0 ? 5 : 3)) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d > (g0 ? 380 : 600)) continue; const v = g.treasury / Math.max(1, g.members.length) - d / 60 + (a.exiledFrom === g.id ? -50 : 0); if (v > bv) { bv = v; best = g; } }
+    for (const g of S.groups) { if (!g.home || g.dead || g === g0 || g.members.length < (g0 ? 5 : 3)) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d > (g0 ? 380 : 600)) continue; const fh = g.treasury / Math.max(1, g.members.length); if (g0 && fh < 2) continue; const v = fh - d / 60 + (a.exiledFrom === g.id ? -50 : 0); if (v > bv) { bv = v; best = g; } }
     if (!best || !reach(S, a.x, a.y, best.home.x, best.home.y)) continue;
     const L = S._a.get(best.leader); if (!L) continue;
-    if (rnd(S) < (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15)) { join(S, a, best, best.leader); bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`); }
+    if (rnd(S) < (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15)) { const sp = a.spouse && S._a.get(a.spouse); join(S, a, best, best.leader); bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`); if (sp && g0 && sp.group === g0.id && sp.role !== 'leader' && !sp.war && !g0.dead) { join(S, sp, best, best.leader); bio(S, sp, 'move', `Уходит с ${sp.sex === 'f' ? 'мужем' : 'женой'} в «${best.name}» за куском хлеба`); } }
   }
   for (const a of S.agents) { a.rep = (a.rep || 0) * 0.98; a.ref = Math.max((a.ref || 3) * 0.985, a.wealth); if (a.age > 55 && a.group) a.status += 0.05; }
   seaMonth(S);
