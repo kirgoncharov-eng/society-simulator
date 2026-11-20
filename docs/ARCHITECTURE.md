@@ -62,7 +62,7 @@ SIM.date(S), SIM.key(a,b), SIM.gini(arr), SIM.regime(S,g), SIM.landTop(S), SIM.p
 | 40-panels | правая панель, карточка человека (`card`) |
 | 50-experiment | режим «два мира» с разными вводными |
 | 60-view3d | 3D на three.js r128 (InstancedMesh, камера, полёт к деревне) |
-| 70-atlas / 71-atlas-runner | атлас 100 миров; пересчёт в Web Workers (`ATLW` — код воркера строкой; `MODEL_V` — версия модели для кэша в localStorage) |
+| 70-atlas / 71-atlas-runner | атлас 100 миров; пересчёт в Web Workers (`ATLW` — код воркера строкой; `MODEL_V` = `SIM.MODEL.v` — версия модели для кэша в localStorage) |
 | 80-fates | вкладка «Судьбы», слежение камерой |
 | 90-main | главный цикл `frame`, запуск |
 

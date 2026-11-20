@@ -1,3 +1,4 @@
+{ const M = SIM.MODEL, [y, m, d] = M.date.split('-'); $('ver').textContent = `модель ${M.v} · ${+d} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][m - 1]} ${y}`; $('ver').title = M.note; }
 function frame(now) {
   const dt = Math.min(100, now - last); last = now;
   if (ATL.on) { requestAnimationFrame(frame); return; }

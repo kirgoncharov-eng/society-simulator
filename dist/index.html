@@ -222,6 +222,7 @@ body.exp .top .clock{display:flex}
 .top .tab{width:32px;height:4px;margin-bottom:8px}
 .top h1{font-size:clamp(24px,2.6vw,32px)}
 .top .head{display:inline-flex;vertical-align:bottom;margin-right:20px}
+.ver{margin-top:4px;font-size:13px;line-height:1.3;color:var(--muted)}
 .top .tabs{display:inline-flex;margin-top:10px;vertical-align:bottom}
 .top .tabs button{min-height:38px;font-size:14px}
 @media(max-width:700px){.bar{gap:6px}.bar button,.bar .seg label{min-height:40px;padding:0 10px;font-size:14px}.bar button.main{min-width:76px}.bar .chk{min-height:36px;font-size:14px}.ptabs button{min-height:38px;padding:0 11px;font-size:14px}}
@@ -289,7 +290,7 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
 </head>
 <body>
 <header class="band top"><div class="wrap"><div class="head">
-  <div><span class="tab"></span><h1>Лаборатория обществ</h1></div>
+  <div><span class="tab"></span><h1>Лаборатория обществ</h1><div class="ver" id="ver"></div></div>
   <div class="clock" aria-live="off"><b id="year">Год 0</b><span id="season">зима</span></div>
 </div>
 <div class="tabs" role="group" aria-label="Режим"><button id="t1" class="on" aria-pressed="true">Один мир</button><button id="t2" aria-pressed="false">Два мира: эксперимент</button><button id="t3" aria-pressed="false">Атлас ста миров</button></div></div>
@@ -455,6 +456,8 @@ const SIM = (() => {
 const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан','ис','ор','ну','са','вел','ин','то','ри','ла','мэ','зор','ан','ви','лей','дар','ми','ту','ре','ол','фа','ям','бо','се','ха','ют'];
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
+// model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
+const MODEL = { v: 'm13', date: '2026-11-20', note: 'меньше ранних смертей взрослых: переговоры перед войной, безопасные броды, помощь в голод' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -2936,7 +2939,7 @@ function shock(S, kind) {
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
 function restore(str) { const S = JSON.parse(str); index(S); return S; }
 
-return { newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 })();
 if (typeof module !== 'undefined') module.exports = SIM;
@@ -4391,7 +4394,7 @@ function packWorld(seed, snaps, eras) {
     pl: st.plagues || 0, pd: st.plague || 0, mar: st.marriages || 0, bo: st.bonds || 0, tk: R2(L.take), e: eras.map(e => e.split(': ')[1] || '') };
 }`;
 const ATLRUN = { on: false, workers: [], queue: [], done: 0, total: 0, t0: 0, res: [], params: null, years: 60, fb: null };
-const MODEL_V = 'm13';
+const MODEL_V = SIM.MODEL.v;
 function atlSrc() { for (const s of document.scripts) { const t = s.textContent || ''; if (t.includes('const SIM = (() =>') && !t.includes('function atlSrc')) return t; } return null; }
 function atlStart() {
   const n = +$('atlN').value, years = +$('atlY').value, own = $('atlOwn').checked;
@@ -4526,6 +4529,7 @@ $('fates').addEventListener('click', e => {
 });
 let follow = false;
 
+{ const M = SIM.MODEL, [y, m, d] = M.date.split('-'); $('ver').textContent = `модель ${M.v} · ${+d} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][m - 1]} ${y}`; $('ver').title = M.note; }
 function frame(now) {
   const dt = Math.min(100, now - last); last = now;
   if (ATL.on) { requestAnimationFrame(frame); return; }

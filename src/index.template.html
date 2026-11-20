@@ -222,6 +222,7 @@ body.exp .top .clock{display:flex}
 .top .tab{width:32px;height:4px;margin-bottom:8px}
 .top h1{font-size:clamp(24px,2.6vw,32px)}
 .top .head{display:inline-flex;vertical-align:bottom;margin-right:20px}
+.ver{margin-top:4px;font-size:13px;line-height:1.3;color:var(--muted)}
 .top .tabs{display:inline-flex;margin-top:10px;vertical-align:bottom}
 .top .tabs button{min-height:38px;font-size:14px}
 @media(max-width:700px){.bar{gap:6px}.bar button,.bar .seg label{min-height:40px;padding:0 10px;font-size:14px}.bar button.main{min-width:76px}.bar .chk{min-height:36px;font-size:14px}.ptabs button{min-height:38px;padding:0 11px;font-size:14px}}
@@ -289,7 +290,7 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
 </head>
 <body>
 <header class="band top"><div class="wrap"><div class="head">
-  <div><span class="tab"></span><h1>Лаборатория обществ</h1></div>
+  <div><span class="tab"></span><h1>Лаборатория обществ</h1><div class="ver" id="ver"></div></div>
   <div class="clock" aria-live="off"><b id="year">Год 0</b><span id="season">зима</span></div>
 </div>
 <div class="tabs" role="group" aria-label="Режим"><button id="t1" class="on" aria-pressed="true">Один мир</button><button id="t2" aria-pressed="false">Два мира: эксперимент</button><button id="t3" aria-pressed="false">Атлас ста миров</button></div></div>
