@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm21', date: '2026-11-21', note: 'улицы, дворы, мосты и частокол привязаны к дорогам и рельефу' };
+const MODEL = { v: 'm21', date: '2026-11-20', note: 'тайны и слухи: тайная связь и кража расходятся по близким, муж или вождь действует, когда узнаёт' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -79,6 +79,7 @@ function archiveGC(S) {
     for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
   }
   for (const l of S.legends || []) refs(l.bio);
+  for (const id of S.secrets || []) keep.add(id);
   for (const g of S.groups) for (const k in g.customEv || {}) keep.add(g.customEv[k]);
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];

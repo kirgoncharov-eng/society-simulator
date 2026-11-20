@@ -28,7 +28,8 @@ function monthly(S) {
     }
     else if (a.coop < 0.45 && rnd(S) < 0.35) {
       rich.treasury -= 2; a.wealth += 2; S.stats.theft = (S.stats.theft || 0) + 1;
-      if (rnd(S) < 0.3) { a.rep = clamp((a.rep || 0) - 0.2, -1, 1); if (a.group) { const k = key(a.group, rich.id); S.hostility[k] = Math.min(2, (S.hostility[k] || 0) + 0.08); } if (!a.bioTheft || S.tick - a.bioTheft > 3600) { a.bioTheft = S.tick; bio(S, a, 'theft', `Голодая, крадёт зерно из амбара «${rich.name}» и попадается`); } }
+      // a theft is a secret: somebody from the robbed village may have seen it; the word travels, and the leader acts when it reaches him
+      if (rnd(S) < 0.3) { const ws = rich.members.map(id => S._a.get(id)).filter(Boolean), w = ws[Math.floor(rnd(S) * ws.length)]; if (w) { const tev = openSecret(S, 'theft', `${a.name} крадёт зерно из амбара «${rich.name}»`, a.x, a.y, rich.hue, [a], [a, w], { victimG: rich.id, amount: 2 }); if (concerns(S, tev, w)) react(S, tev, w, w); if (!a.bioTheft || S.tick - a.bioTheft > 3600) { a.bioTheft = S.tick; bio(S, a, 'theft', `Голодая, крадёт зерно из амбара «${rich.name}»; ${w.name} это ${fem(w, 'видел', 'видела')}`, tev.id); } } } else S.stats.theftUnseen = (S.stats.theftUnseen || 0) + 1;
     }
   }
   for (const a of S.agents) {
@@ -102,6 +103,8 @@ function monthly(S) {
   hamletsMonth(S);
   bondsMonth(S);
   householdsMonth(S);
+  affairsMonth(S);
+  gossipMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
