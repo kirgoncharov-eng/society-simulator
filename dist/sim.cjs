@@ -1287,7 +1287,7 @@ function absorb(S, big, sm, keepLand) {
     const keep = sm.fields.filter(f => Math.hypot(f.x - big.home.x, f.y - big.home.y) < 280);
     for (const f of keep) { S.occ[f.c] = big.id; if (S.own) S.own[f.c] = big.id; f.owner = null; big.fields.push(f); }
     sm.fields = sm.fields.filter(f => !keep.includes(f));
-    big.wood = (big.wood || 0) + sm.houses.length * 3;
+    big.wood = (big.wood || 0) + sm.houses.length * 3; sm.houses = []; // taken apart: no ruin is left to lure the next band
   }
   big.treasury += sm.treasury; sm.treasury = 0; sm.members = [];
   big.wood = (big.wood || 0) + (sm.wood || 0); big.stone = (big.stone || 0) + (sm.stone || 0); big.tools = (big.tools || 0) + (sm.tools || 0); big.goats = (big.goats || 0) + (sm.goats || 0);
