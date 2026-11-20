@@ -9,11 +9,12 @@ function bondOf(a, b) { return a && b && a.bonds ? a.bonds[b.id] || null : null;
 // a bond that only names an existing grudge (x[4]) is a record, not an extra push: trust already carries it
 function bondW(a, b) { const x = bondOf(a, b); return x && !x[4] ? BOND_W[x[0]] * Math.min(1, x[2] * 1.5) : 0; }
 const fem = (a, m, f) => a.sex === 'f' ? f : m;
-function bond(S, a, b, k, why, s, named) {
+// ref: id of the event behind the tie (same format as in the chronicle), kept at index 5
+function bond(S, a, b, k, why, s, named, ref) {
   if (!a || !b || a === b || !S._a.has(a.id) || !S._a.has(b.id)) return null;
   s = s === undefined ? 0.6 : s;
   const B = a.bonds || (a.bonds = {}), cur = B[b.id];
-  if (cur && cur[0] === k) { cur[2] = Math.min(1, cur[2] + s * 0.5); cur[1] = S.tick; if (why) cur[3] = why; if (!named) cur.length = 4; return cur; }
+  if (cur && cur[0] === k) { cur[2] = Math.min(1, cur[2] + s * 0.5); cur[1] = S.tick; if (why) cur[3] = why; if (!named) { cur.length = 4; if (ref) cur[4] = 0, cur[5] = cite(S, ref); } return cur; }
   let said = false;
   if (cur && BOND_W[cur[0]] > 0.3 && BOND_W[k] < 0 && cur[2] > 0.25) {
     said = true;
@@ -22,7 +23,9 @@ function bond(S, a, b, k, why, s, named) {
     S.stats.betrayals = (S.stats.betrayals || 0) + 1;
   }
   if (cur && BOND_W[cur[0]] < 0 && BOND_W[k] > 0.3 && cur[2] > 0.3) bio(S, a, 'reconcile', `Мирится с ${b.name}: ${why}`);
-  B[b.id] = named ? [k, S.tick, Math.min(1, s), why, 1] : [k, S.tick, Math.min(1, s), why];
+  B[b.id] = [k, S.tick, Math.min(1, s), why];
+  if (named) B[b.id][4] = 1;
+  if (ref) { B[b.id][4] = B[b.id][4] || 0; B[b.id][5] = cite(S, ref); }
   // enmities already have their own line in the chronicle (exile, coup, a kinsman killed); sworn brotherhood and love do not
   if (!said && (k === 'sworn' || k === 'love')) bio(S, a, k, k === 'sworn' ? `Братается с ${b.name}: ${why}` : `Любит ${b.name}: ${why}`);
   bump(a, b, BOND_W[k] * 0.4);

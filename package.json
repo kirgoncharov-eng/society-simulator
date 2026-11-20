@@ -9,7 +9,8 @@
     "test": "node tools/build.mjs && node tools/smoke.mjs 3 40",
     "audit": "node tools/build.mjs && node tools/audit.mjs 6 80",
     "atlas": "node tools/build.mjs && node tools/atlas.mjs 100 100",
-    "stories": "node tools/build.mjs && node tools/stories.mjs"
+    "stories": "node tools/build.mjs && node tools/stories.mjs",
+    "chain": "node tools/build.mjs && node tools/chain.mjs"
   },
   "engines": { "node": ">=18" }
 }
