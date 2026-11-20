@@ -4,6 +4,8 @@
 
 **Открыть:** https://kirgoncharov-eng.github.io/society-simulator/ (последняя принятая версия) или скачайте [`dist/index.html`](dist/index.html) и откройте в браузере (один файл, работает без сервера). Онлайн-версия: https://claude.ai/artifact/M3QAWrGEyimwpruzzKnPyw
 
+[Миссия проекта](docs/MISSION.md) описывает, каким мы хотим увидеть этот мир и почему важно показать, как решения людей меняют остров.
+
 ## Для разработчиков и ИИ-агентов
 Начните с [`AGENTS.md`](AGENTS.md) — правила работы для любой модели. Дальше:
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — как устроен код
