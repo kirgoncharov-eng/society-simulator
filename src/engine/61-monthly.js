@@ -22,7 +22,10 @@ function monthly(S) {
     for (const g of S.groups) { if (!g.home || g.id === a.group || g.treasury < g.members.length * 6) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d < rd) { rd = d; rich = g; } }
     if (!rich) continue;
     const L = S._a.get(rich.leader);
-    if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) { rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1; }
+    if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) {
+      if (a.wealth < 0) rememberGrain(S, a, L);
+      rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1;
+    }
     else if (a.coop < 0.45 && rnd(S) < 0.35) {
       rich.treasury -= 2; a.wealth += 2; S.stats.theft = (S.stats.theft || 0) + 1;
       if (rnd(S) < 0.3) { a.rep = clamp((a.rep || 0) - 0.2, -1, 1); if (a.group) { const k = key(a.group, rich.id); S.hostility[k] = Math.min(2, (S.hostility[k] || 0) + 0.08); } if (!a.bioTheft || S.tick - a.bioTheft > 3600) { a.bioTheft = S.tick; bio(S, a, 'theft', `Голодая, крадёт зерно из амбара «${rich.name}» и попадается`); } }
@@ -39,11 +42,50 @@ function monthly(S) {
     if (a.wealth > 1 || a.age < 15 || a.war) continue;
     const g0 = a.group && S._g.get(a.group);
     if (g0 && (a.role === 'leader' || g0.treasury > g0.members.length * (g0.members.length > 4 ? 1.2 : 2) || (g0.members.length > 4 && a.wealth > -0.4))) continue;
-    let best = null, bv = -1e9;
-    for (const g of S.groups) { if (!g.home || g.dead || g === g0 || g.members.length < (g0 ? 5 : 3)) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d > (g0 ? 380 : 600)) continue; const fh = g.treasury / Math.max(1, g.members.length); if (g0 && fh < 2) continue; const v = fh - d / 60 + (exiledBy(S, a, g.id) ? -50 : 0); if (v > bv) { bv = v; best = g; } }
+    let best = null, bv = -1e9, usual = null, usualScore = -1e9, memory = null;
+    for (const g of S.groups) {
+      if (!g.home || g.dead || g === g0 || g.members.length < (g0 ? 5 : 3)) continue;
+      const d = Math.hypot(g.home.x - a.x, g.home.y - a.y);
+      if (d > (g0 ? 380 : 600)) continue;
+      const fh = g.treasury / Math.max(1, g.members.length);
+      if (g0 && fh < 2) continue;
+      const base = fh - d / 60 + (exiledBy(S, a, g.id) ? -50 : 0);
+      if (base > usualScore) { usualScore = base; usual = g; }
+      const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
+      const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;
+      const score = base + (remembered ? 3 : 0);
+      if (score > bv) { bv = score; best = g; memory = remembered; }
+    }
     if (!best || !reach(S, a.x, a.y, best.home.x, best.home.y)) continue;
     const L = S._a.get(best.leader); if (!L) continue;
-    if (rnd(S) < (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15)) { const sp = a.spouse && S._a.get(a.spouse); join(S, a, best, best.leader); bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`); if (sp && g0 && sp.group === g0.id && sp.role !== 'leader' && !sp.war && !g0.dead) { join(S, sp, best, best.leader); bio(S, sp, 'move', `Уходит с ${sp.sex === 'f' ? 'мужем' : 'женой'} в «${best.name}» за куском хлеба`); } }
+    const chance = (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15);
+    const helper = memory?.helper;
+    const welcome = helper === L && !exiledBy(S, a, best.id) ? 0.15 : 0;
+    const sponsor = helper && helper !== L && !exiledBy(S, a, best.id) && helper.coop >= 0.35 && (L.trust[helper.id] || 0) >= 0.1;
+    const roll = rnd(S);
+    if (roll >= chance + welcome + (sponsor ? 0.18 : 0)) continue;
+    const sp = a.spouse && S._a.get(a.spouse);
+    join(S, a, best, best.leader);
+    if (memory && (best !== usual || roll >= chance)) {
+      const first = !S.stats.aidMemoryMoves;
+      S.stats.aidMemoryMoves = (S.stats.aidMemoryMoves || 0) + 1;
+      const sponsorDecided = sponsor && roll >= chance;
+      if (sponsorDecided) {
+        S.stats.aidSponsoredMoves = (S.stats.aidSponsoredMoves || 0) + 1;
+        bio(S, helper, 'sponsor', `Ручается перед вождём ${L.name} за переселенца ${a.name}`);
+      }
+      const why = `${a.name} помнит, как ${helper.name} ${helper.sex === 'f' ? 'помогла' : 'помог'} с зерном. ${sponsorDecided ? `${helper.name} ${helper.sex === 'f' ? 'поручилась' : 'поручился'} перед вождём ${L.name}, и в деревне дали работу за еду.` : 'Теперь в деревне предлагают работу за еду.'}`;
+      bio(S, a, 'move', `Уходит в «${best.name}», к тем, кто однажды помог зерном`);
+      log(S, 'aid', `${a.name} находит приют в «${best.name}»`, best.home.x, best.home.y, best.hue, {
+        first, why, who: sponsorDecided ? [a.id, helper.id, L.id] : [a.id, helper.id], gs: [best.id],
+      });
+    } else {
+      bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`);
+    }
+    if (sp && g0 && sp.group === g0.id && sp.role !== 'leader' && !sp.war && !g0.dead) {
+      join(S, sp, best, best.leader);
+      bio(S, sp, 'move', `Уходит с ${sp.sex === 'f' ? 'мужем' : 'женой'} в «${best.name}» за куском хлеба`);
+    }
   }
   for (const a of S.agents) { a.rep = (a.rep || 0) * 0.98; a.ref = Math.max((a.ref || 3) * 0.985, a.wealth); if (a.age > 55 && a.group) a.status += 0.05; }
   seaMonth(S);
@@ -72,25 +114,52 @@ function aidMonth(S) {
   for (const a of S.agents) { if (!a.group) continue; for (const pid of [a.mother, a.father]) { const p = pid && S._a.get(pid); if (p && p.group && p.group !== a.group) { const k = key(a.group, p.group); tie[k] = (tie[k] || 0) + 1; } } }
   for (const g of needy) {
     const LG = S._a.get(g.leader), n = g.members.length; if (!LG) continue;
-    let best = null, bv = 0;
+    let best = null, bv = 0, usualDonor = null, usualScore = 0;
     for (const o of S.groups) {
       if (o === g || !o.home || o.dead || o.treasury < o.members.length * 4) continue;
       const k = key(g.id, o.id), h = S.hostility[k] || 0, d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y);
       if (h > 0.6 || d > 420 || S.wars.some(w => (w.att === o.id && w.def === g.id) || (w.att === g.id && w.def === o.id))) continue;
       const LO = S._a.get(o.leader); if (!LO) continue;
       const t = tie[k] || 0, friend = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id || o.lord === g.id;
-      const p = clamp(0.25 + 0.35 * LO.coop + 0.12 * Math.min(4, t) + (friend ? 0.25 : 0) + 0.3 * ((LO.trust[LG.id] || 0)) - 0.4 * h, 0, 0.9);
-      const v = p * (o.treasury / o.members.length) / (1 + d / 250);
-      if (v > bv) { bv = v; best = { o, p, t, friend, LO, d }; }
+      const willingness = 0.25 + 0.35 * LO.coop + 0.12 * Math.min(4, t) + (friend ? 0.25 : 0) + 0.3 * (LO.trust[LG.id] || 0) - 0.4 * h;
+      const baseP = clamp(willingness, 0, 0.9);
+      const weight = (o.treasury / o.members.length) / (1 + d / 250);
+      const baseScore = baseP * weight;
+      if (baseScore > usualScore) { usualScore = baseScore; usualDonor = o; }
+      const obligation = grainObligation(S, o, LO, g);
+      const bonus = obligation ? (obligation.witness === LO ? 0.22 : 0.10) : 0;
+      const p = clamp(willingness + bonus, 0, 0.9);
+      const v = p * weight;
+      if (v > bv) { bv = v; best = { o, p, baseP, t, friend, LO, obligation }; }
     }
-    if (!best || rnd(S) > best.p || !reach(S, best.o.home.x, best.o.home.y, g.home.x, g.home.y)) continue;
-    const { o, t, friend, LO } = best, amt = Math.min((o.treasury - o.members.length * 3) * 0.4, n * 2);
+    if (!best) continue;
+    const roll = rnd(S);
+    if (roll > best.p || !reach(S, best.o.home.x, best.o.home.y, g.home.x, g.home.y)) continue;
+    const { o, t, friend, LO, obligation } = best, amt = Math.min((o.treasury - o.members.length * 3) * 0.4, n * 2);
     if (amt < 1) continue;
     o.treasury -= amt; g.treasury += amt; S.stats.aid = (S.stats.aid || 0) + 1; S.stats.aidFood = (S.stats.aidFood || 0) + amt;
     const k = key(g.id, o.id); S.hostility[k] = Math.max(0, (S.hostility[k] || 0) - 0.15);
     bump(LG, LO, 0.15); LO.rep = clamp((LO.rep || 0) + 0.03, -1, 1); LO.status += 0.3;
     g.aidFrom = g.aidFrom || {};
-    if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
+    if (obligation) {
+      repayGrain(S, o, obligation);
+      const first = !S.stats.aidReturned;
+      S.stats.aidReturned = (S.stats.aidReturned || 0) + 1;
+      if (o !== usualDonor || roll > best.baseP) S.stats.aidMemoryChanged = (S.stats.aidMemoryChanged || 0) + 1;
+      const { witness, helper, memory } = obligation;
+      const ago = yrs(Math.floor((S.tick - memory.tick) / 360));
+      log(S, 'aid', `«${o.name}» возвращает помощь «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, {
+        first,
+        why: `${witness.name} помнит, как ${ago} назад ${helper.name} ${helper.sex === 'f' ? 'прислала' : 'прислал'} зерно в разгар голода. Теперь деревня делится в ответ.`,
+        who: [...new Set([witness.id, helper.id, LO.id, LG.id])], gs: [o.id, g.id],
+      });
+    } else {
+      for (const id of g.members) {
+        const a = S._a.get(id);
+        if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO);
+      }
+      if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
+    }
     g.aidFrom[o.id] = S.tick;
   }
 }

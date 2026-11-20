@@ -1,8 +1,20 @@
 // Smoke test: runs a few island worlds and checks invariants. Exit code 1 on any failure.
 // Usage: node tools/smoke.mjs [worlds=3] [years=40]
+import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const SIM = require('../dist/sim.cjs');
+
+// A well-fed founder should regain some energy over a day.
+{
+  const S = SIM.newWorld(5000, {});
+  const founder = S.agents[0];
+  const tiredEnergy = 0.25;
+  founder.energy = tiredEnergy;
+  SIM.step(S);
+  assert.ok(founder.energy > tiredEnergy, 'A well-fed founder did not recover energy');
+}
+
 const W = +(process.argv[2] || 3), Y = +(process.argv[3] || 40);
 let fail = 0;
 const bad = (seed, msg) => { fail++; console.error(`FAIL seed ${seed}: ${msg}`); };
