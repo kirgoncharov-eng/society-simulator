@@ -95,8 +95,9 @@ function move(S) {
     if (nc !== a.lc) {
       if (S.ter[nc] === 'w' && !S.bridge[nc]) {
         const gg = a.group && S._g.get(a.group); if (gg) gg.cross = (gg.cross || 0) + 1;
-        const ss = seasonOf(S.tick), risk = S.frozen ? 0.0035 : ss === 1 ? 0.028 : 0.006;
-        if (rnd(S) < risk * (a.car ? 1.4 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
+        // a ford is dangerous in the spring flood and with a load on the back; thin ice at the start and end of winter
+        const dy = S.tick % 360, flood = dy >= 90 && dy < 150, risk = S.frozen ? (dy < 20 || dy >= 70 ? 0.002 : 0.0004) : flood ? 0.008 : 0.00025;
+        if (rnd(S) < risk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
       }
       a.lc = nc;
     }
@@ -252,8 +253,10 @@ function lifecycle(S) {
   for (const a of S.agents) {
     a.age += 1 / 360;
     a.wealth -= a.age < 18 ? 0.025 : 0.033;
-    if (a.wealth < 0) a.energy -= 0.0008; else a.energy += 0.003 * (1.05 - a.energy);
-    const gq = a.group && S._g.get(a.group); if (gq && gq.home) { if (gq.thirst) a.energy -= 0.004; else if (gq.wShort > 1) a.energy -= 0.0012; }
+    // light hunger wears one down slowly, deep hunger fast; the deficit is not a debt that grows without end
+    if (a.wealth < -1.5) a.wealth = -1.5;
+    if (a.wealth < 0) a.energy -= 0.0004 + 0.0004 * Math.min(1, -a.wealth / 1.5); else a.energy += 0.003 * (1.05 - a.energy);
+    const gq = a.group && S._g.get(a.group); if (gq && gq.home) { if (gq.thirst) a.energy -= 0.0016; else if (gq.wShort > 1) a.energy -= 0.0012; }
     if (winter) { if (a.shel && a.group) a.energy += 0.0004; else a.energy -= 0.0008; }
     a.energy = clamp(a.energy, 0, 1);
     if (a.age > a.life) dead.push([a, 'death']);

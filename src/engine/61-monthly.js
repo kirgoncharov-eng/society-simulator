@@ -8,13 +8,13 @@ function monthly(S) {
     if (!a.group) { a.status += a.eff * 0.03; a.eff = 0; }
   }
   // the hungry scrape by: roots, shellfish, birds; and food flows from the rich
-  const seas = seasonOf(S.tick), dry = S.tick < (S.drought || 0), hungryAll = S.agents.filter(a => a.wealth < 0.6);
+  const seas = seasonOf(S.tick), dry = S.tick < (S.drought || 0), hungryAll = S.agents.filter(a => a.wealth < 1);
   const crowdAt = {}; for (const a of hungryAll) { const k = (Math.floor(a.x / 100)) + ':' + Math.floor(a.y / 100); crowdAt[k] = (crowdAt[k] || 0) + 1; }
   for (const a of hungryAll) {
     const c = cellAt(a.x, a.y), t = S.ter[c], ci = c % N, cj = (c / N) | 0; let shore = false;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) { const x = ci + dx, y = cj + dy; if (x >= 0 && y >= 0 && x < N && y < N) { const q = S.ter[y * N + x]; if (q === 's' || q === 'b') shore = true; } }
     let f = shore ? 1.2 : t === 'f' ? 0.95 : t === 'r' || t === 'w' ? 0.85 : t === 'h' ? 0.5 : 0.75;
-    f *= (seas === 0 ? (shore ? 0.8 : 0.45) : 1) * (dry ? 0.5 : 1) / (1 + (crowdAt[(Math.floor(a.x / 100)) + ':' + Math.floor(a.y / 100)] || 1) / 14);
+    f *= (seas === 0 ? (shore ? 0.8 : 0.45) : 1) * (dry ? 0.5 : 1) * 1.25 / (1 + (crowdAt[(Math.floor(a.x / 100)) + ':' + Math.floor(a.y / 100)] || 1) / 20);
     a.wealth += f; S.stats.foraged = (S.stats.foraged || 0) + f;
     if (a.wealth > 0.5) continue;
     // alms or theft at a rich village nearby
@@ -36,14 +36,14 @@ function monthly(S) {
     }
   }
   for (const a of S.agents) {
-    if (a.wealth > 1 || a.age < 15) continue;
+    if (a.wealth > 1 || a.age < 15 || a.war) continue;
     const g0 = a.group && S._g.get(a.group);
-    if (g0 && (g0.members.length > 4 || a.role === 'leader' || g0.treasury > g0.members.length * 2)) continue;
+    if (g0 && (a.role === 'leader' || g0.treasury > g0.members.length * (g0.members.length > 4 ? 1.2 : 2) || (g0.members.length > 4 && a.wealth > -0.4))) continue;
     let best = null, bv = -1e9;
-    for (const g of S.groups) { if (!g.home || g.dead || g === g0 || g.members.length < 5) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d > 380) continue; const v = g.treasury / Math.max(1, g.members.length) - d / 60 + (a.exiledFrom === g.id ? -50 : 0); if (v > bv) { bv = v; best = g; } }
+    for (const g of S.groups) { if (!g.home || g.dead || g === g0 || g.members.length < (g0 ? 5 : 3)) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d > (g0 ? 380 : 600)) continue; const fh = g.treasury / Math.max(1, g.members.length); if (g0 && fh < 2) continue; const v = fh - d / 60 + (a.exiledFrom === g.id ? -50 : 0); if (v > bv) { bv = v; best = g; } }
     if (!best || !reach(S, a.x, a.y, best.home.x, best.home.y)) continue;
     const L = S._a.get(best.leader); if (!L) continue;
-    if (rnd(S) < (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : 0.2)) { join(S, a, best, best.leader); bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`); }
+    if (rnd(S) < (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15)) { const sp = a.spouse && S._a.get(a.spouse); join(S, a, best, best.leader); bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`); if (sp && g0 && sp.group === g0.id && sp.role !== 'leader' && !sp.war && !g0.dead) { join(S, sp, best, best.leader); bio(S, sp, 'move', `Уходит с ${sp.sex === 'f' ? 'мужем' : 'женой'} в «${best.name}» за куском хлеба`); } }
   }
   for (const a of S.agents) { a.rep = (a.rep || 0) * 0.98; a.ref = Math.max((a.ref || 3) * 0.985, a.wealth); if (a.age > 55 && a.group) a.status += 0.05; }
   seaMonth(S);
@@ -54,6 +54,7 @@ function monthly(S) {
   for (let c = 0; c < S.wood.length; c++) if (S.ter[c] === 'f' && S.wood[c] < 60) S.wood[c] = Math.min(60, S.wood[c] + 0.35);
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
   for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
+  aidMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -62,6 +63,36 @@ function monthly(S) {
   if (S.tick % 360 === 0) yearly(S);
 }
 
+// a hungry village asks its neighbours for grain; kin ties (parents and children living there) and friendly leaders make help likely
+function aidMonth(S) {
+  const needy = S.groups.filter(g => g.home && !g.dead && g.treasury < g.members.length * 1.2 && g.members.filter(id => { const m = S._a.get(id); return m && m.wealth < 0.3; }).length >= Math.max(2, g.members.length * 0.25));
+  if (!needy.length) return;
+  const tie = {};
+  for (const a of S.agents) { if (!a.group) continue; for (const pid of [a.mother, a.father]) { const p = pid && S._a.get(pid); if (p && p.group && p.group !== a.group) { const k = key(a.group, p.group); tie[k] = (tie[k] || 0) + 1; } } }
+  for (const g of needy) {
+    const LG = S._a.get(g.leader), n = g.members.length; if (!LG) continue;
+    let best = null, bv = 0;
+    for (const o of S.groups) {
+      if (o === g || !o.home || o.dead || o.treasury < o.members.length * 4) continue;
+      const k = key(g.id, o.id), h = S.hostility[k] || 0, d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y);
+      if (h > 0.6 || d > 420 || S.wars.some(w => (w.att === o.id && w.def === g.id) || (w.att === g.id && w.def === o.id))) continue;
+      const LO = S._a.get(o.leader); if (!LO) continue;
+      const t = tie[k] || 0, friend = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id || o.lord === g.id;
+      const p = clamp(0.25 + 0.35 * LO.coop + 0.12 * Math.min(4, t) + (friend ? 0.25 : 0) + 0.3 * ((LO.trust[LG.id] || 0)) - 0.4 * h, 0, 0.9);
+      const v = p * (o.treasury / o.members.length) / (1 + d / 250);
+      if (v > bv) { bv = v; best = { o, p, t, friend, LO, d }; }
+    }
+    if (!best || rnd(S) > best.p || !reach(S, best.o.home.x, best.o.home.y, g.home.x, g.home.y)) continue;
+    const { o, t, friend, LO } = best, amt = Math.min((o.treasury - o.members.length * 3) * 0.4, n * 2);
+    if (amt < 1) continue;
+    o.treasury -= amt; g.treasury += amt; S.stats.aid = (S.stats.aid || 0) + 1; S.stats.aidFood = (S.stats.aidFood || 0) + amt;
+    const k = key(g.id, o.id); S.hostility[k] = Math.max(0, (S.hostility[k] || 0) - 0.15);
+    bump(LG, LO, 0.15); LO.rep = clamp((LO.rep || 0) + 0.03, -1, 1); LO.status += 0.3;
+    g.aidFrom = g.aidFrom || {};
+    if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
+    g.aidFrom[o.id] = S.tick;
+  }
+}
 function groupMonth(S, g) {
   const P = S.params, L = S._a.get(g.leader);
   if (!L) return;
@@ -138,12 +169,13 @@ function groupMonth(S, g) {
   for (const m of mem) if (m.patron && m.patron !== L.id) { const pt = S._a.get(m.patron); if (!pt || pt.group !== g.id) { m.patron = null; continue; } if (m.wealth > 3) { const d = m.wealth * 0.05; m.wealth -= d; pt.wealth += d; } }
   if (g.home) homeEconomy(S, g, mem);
   if (g.home && n <= 5 && g.treasury < n * 1.5 && mem.filter(m => m.wealth < 0).length >= Math.min(2, n - 1)) g.hungryM = (g.hungryM || 0) + 1; else if (g.hungryM) g.hungryM = Math.max(0, g.hungryM - 1);
-  if (g.home && n <= 5 && (g.hungryM || 0) >= 5 && S.tick - g.founded > 720) {
+  const dry0 = g.home && n <= 8 && (g.thirst || 0) >= 4;
+  if (g.home && (dry0 || (n <= 5 && (g.hungryM || 0) >= 5 && S.tick - g.founded > 720))) {
     let best = null, bv = -1e9;
-    for (const o of S.groups) { if (o === g || !o.home || o.dead) continue; const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y), h = S.hostility[key(o.id, g.id)] || 0; if (d > 450 || h > 0.6) continue; const v = o.members.length * 0.3 + o.treasury / Math.max(1, o.members.length) - d / 40 - h * 10 + ((S.kinTies || {})[key(o.id, g.id)] ? 4 : 0); if (v > bv) { bv = v; best = o; } }
+    for (const o of S.groups) { if (o === g || !o.home || o.dead) continue; const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y), h = S.hostility[key(o.id, g.id)] || 0; if (d > 450 || h > 0.6 || (dry0 && o.thirst) || !reach(S, g.home.x, g.home.y, o.home.x, o.home.y)) continue; const v = o.members.length * 0.3 + o.treasury / Math.max(1, o.members.length) - d / 40 - h * 10 + ((S.kinTies || {})[key(o.id, g.id)] ? 4 : 0); if (v > bv) { bv = v; best = o; } }
     if (best) {
       const all = g.members.map(id => S._a.get(id)).filter(Boolean), nm = g.name;
-      log(S, 'abandon', `Жители «${nm}» бросают голодную деревню и уходят в «${best.name}»`, g.home.x, g.home.y, g.hue, { why: sent([`в «${nm}» осталось ${all.length} ${pl(all.length, 'человек', 'человека', 'человек')}, запасов нет`, 'маленькой деревне не прокормиться: некому одновременно пахать, строить и рубить лес', `«${best.name}» рядом, ${best.members.length} ${pl(best.members.length, 'человек', 'человека', 'человек')} и есть еда`]), gs: [g.id, best.id] });
+      log(S, 'abandon', `Жители «${nm}» бросают ${dry0 ? 'деревню без воды' : 'голодную деревню'} и уходят в «${best.name}»`, g.home.x, g.home.y, g.hue, { why: sent(dry0 ? [`в «${nm}» ${g.thirst} ${pl(g.thirst, 'месяц', 'месяца', 'месяцев')} нет воды поблизости`, 'носить воду издалека больше нет сил', `у «${best.name}» вода есть, туда и уходят`] : [`в «${nm}» осталось ${all.length} ${pl(all.length, 'человек', 'человека', 'человек')}, запасов нет`, 'маленькой деревне не прокормиться: некому одновременно пахать, строить и рубить лес', `«${best.name}» рядом, ${best.members.length} ${pl(best.members.length, 'человек', 'человека', 'человек')} и есть еда`]), gs: [g.id, best.id] });
       for (const m of all) { join(S, m, best, best.leader); m.x = best.home.x + gauss(S) * 15; m.y = best.home.y + gauss(S) * 15; }
       if (!g.dead) dissolve(S, g, true);
       return;
