@@ -50,6 +50,7 @@ function hamletsMonth(S) {
     if (a.group || a.age < 16 || rnd(S) > 0.35) continue;
     const h = hostFor(S, a.x, a.y, null, a, 3); if (!h) continue;
     const L = S._a.get(h.o.leader); if (!L) continue;
+    if (!h.k && h.o.treasury < h.o.members.length * 1.5) continue; // strangers are taken in only where there is bread to spare
     const p = (0.25 + 0.45 * L.coop + 0.2 * Math.min(2, h.k)) * ((a.rep || 0) < -0.3 ? 0.35 : 1);
     if (rnd(S) > p) continue;
     join(S, a, h.o, h.k ? h.o.members.map(id => S._a.get(id)).find(o => o && kin(o, a)).id : L.id);

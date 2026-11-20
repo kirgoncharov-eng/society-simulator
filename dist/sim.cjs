@@ -709,6 +709,9 @@ function jobs(S, g) {
   const needGR = !g.granary && g.treasury > n * 5 && n >= 4;
   const threat = threatOf(S, g); let bs = null;
   g.threat = threat;
+  // in a lean season the first thing to build is another field, not a house
+  const lean0 = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
+  if (!g.site && lean0 && g.fields.length < wantF) g.site = fieldSpot(S, g);
   if (!g.site) {
     if (threat > 0.6 && !g.walls && g.houses.length >= 3 && g.wood >= 12) { g.wood -= 12; g.site = { kind: 'walls', x: g.home.x, y: g.home.y, prog: 0, need: 90 }; }
     else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8) { g.wood -= 8; g.site = specialSpot(S, g, 'shrine'); }
@@ -725,7 +728,7 @@ function jobs(S, g) {
   if (L && n > 4) L.job = 'lead';
   const woodNeed = g.houses.length < wantH || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
   const stoneNeed = g.stoneCell !== null && ((needWS && g.stone < 4) || (g.workshop && g.stone < 6));
-  const lean = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
+  const lean = lean0;
   const quota = {
     build: g.site ? (lean && g.site.kind !== 'field' ? 0 : Math.max(1, Math.round(n * 0.2))) : 0,
     wood: g.woodCell === null || lean ? 0 : woodNeed ? Math.max(1, Math.round(n * 0.2)) : (season === 0 ? 1 : 0),
@@ -1317,6 +1320,7 @@ function hamletsMonth(S) {
     if (a.group || a.age < 16 || rnd(S) > 0.35) continue;
     const h = hostFor(S, a.x, a.y, null, a, 3); if (!h) continue;
     const L = S._a.get(h.o.leader); if (!L) continue;
+    if (!h.k && h.o.treasury < h.o.members.length * 1.5) continue; // strangers are taken in only where there is bread to spare
     const p = (0.25 + 0.45 * L.coop + 0.2 * Math.min(2, h.k)) * ((a.rep || 0) < -0.3 ? 0.35 : 1);
     if (rnd(S) > p) continue;
     join(S, a, h.o, h.k ? h.o.members.map(id => S._a.get(id)).find(o => o && kin(o, a)).id : L.id);
