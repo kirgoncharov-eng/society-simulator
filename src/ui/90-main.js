@@ -14,7 +14,7 @@ function frame(now) {
   }
   const t0b = performance.now();
   if (playing) {
-    acc += dt * 12 * speed / 1000;
+    acc += dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000);
     let n = Math.min(Math.floor(acc), 900); acc -= n; if (acc > 60) acc = 0;
     for (let i = 0; i < n; i++) {
       SIM.step(S);
@@ -22,13 +22,18 @@ function frame(now) {
       if ((i & 7) === 7 && performance.now() - t0b > 14) { acc = 0; break; }
     }
   }
+  updateDailyView();
   if (V3.on && V3.ready) render3D(now); else draw(now);
   if (now - lastUi > 350) { ui(); lastUi = now; }
   requestAnimationFrame(frame);
 }
 
 $('play').addEventListener('click', () => { playing = !playing; if (playing && focusEv) closeFocus(); syncPlay(); });
-document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => { speed = +e.target.value; }));
+document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
+  dayWatch = e.target.value === 'day';
+  if (!dayWatch) speed = +e.target.value;
+  acc = dayWatch ? dawnFraction() : 0;
+}));
 $('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
 $('back').addEventListener('click', () => {
   if (!forkSnap) return;
@@ -69,7 +74,7 @@ new MutationObserver(readColors).observe(document.documentElement, { attributes:
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
 
 function intro() {
-  playing = false; acc = 0; syncPlay();
+  playing = false; acc = dayWatch ? dawnFraction() : 0; syncPlay();
   const landing = firstLanding(S);
   if (landing) {
     vt = { x: landing.x1, y: landing.y1, z: 1.65 };

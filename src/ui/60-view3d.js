@@ -212,7 +212,6 @@ function rebuildStatic(W0, now) {
 }
 function render3D(now) {
   const W0 = S;
-  for (const a of W0.agents) { const d = pos(a); d.x += (a.x - d.x) * .25; d.y += (a.y - d.y) * .25; }
   rebuildStatic(W0, now);
   if (V3.fogKey !== C.plate) { V3.fogKey = C.plate; V3.scene.background = hexOf(C.plate).clone(); V3.scene.fog = new THREE.Fog(V3.scene.background.clone(), 1500, 3800); V3.hemi.intensity = C.dark ? 0.5 : 0.55; V3.sun.intensity = C.dark ? 0.5 : 0.6; }
   const n = Math.min(700, W0.agents.length); V3.ids = [];
@@ -263,7 +262,7 @@ function render3D(now) {
   }
   { let si2 = 0, wi = 0; for (const sp of W0.springs || []) if (!sp.dry && si2 < 20) setInst(V3.springM, si2++, sp.x, gh(sp.x, sp.y) + 0.6, sp.y, sp.big ? 1.25 : 1); for (const g of W0.groups) if (g.well && wi < 80) { const y0 = gh(g.well.x, g.well.y); setInst(V3.wellM, wi, g.well.x, y0 + 2, g.well.y); setInst(V3.wellW, wi, g.well.x, g.well.dry ? -60 : y0 + 2.1, g.well.y); wi++; } V3.springM.count = si2; V3.wellM.count = wi; V3.wellW.count = wi; for (const m of [V3.springM, V3.wellM, V3.wellW]) m.instanceMatrix.needsUpdate = true; }
   for (const [m, k] of [[V3.bucket, bk], [V3.cargoW, cw], [V3.cargoS, cs], [V3.cargoF, cf], [V3.smoke, sm], [V3.deer, dr], [V3.deerH, dr]]) { m.count = Math.min(k, m.instanceMatrix.count); m.instanceMatrix.needsUpdate = true; }
-  if (follow && sel && S._a.get(sel)) { const a = S._a.get(sel); V3.fly = { x: a.x, z: a.y }; }
+  if (follow && sel && S._a.get(sel)) { const a = D.get(sel); V3.fly = { x: a.x, z: a.y }; }
   if (V3.fly) { const tg = V3.ctl.target, dx = V3.fly.x - tg.x, dz = V3.fly.z - tg.z; tg.x += dx * 0.08; tg.z += dz * 0.08; V3.cam.position.x += dx * 0.08; V3.cam.position.z += dz * 0.08; if (Math.hypot(dx, dz) < 2) V3.fly = null; }
   for (const w of W0.wars || []) {
     if (f >= 20) break;
