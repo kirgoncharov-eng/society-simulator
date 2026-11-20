@@ -66,7 +66,7 @@ function homeEconomy(S, g, mem) {
   if (S.tick % 360 === 30 || g.landing === undefined) { const b = beachNear(S, g.home.x, g.home.y, 170); g.landing = b || null; }
   if (!g.pasture || S.tick % 1800 === 0) { let best = null, bv = -1e9; for (let t = 0; t < 14; t++) { const a = t * 0.45 + g.id, r = 50 + (t % 3) * 25, x = g.home.x + Math.cos(a) * r, y = g.home.y + Math.sin(a) * r, c = cellAt(x, y), tt = S.ter[c]; if (tt !== 'g' && tt !== 'r' && tt !== 'h') continue; if (S.occ[c]) continue; const v = (tt === 'g' ? 2 : 1) - r / 100; if (v > bv) { bv = v; best = { x, y }; } } g.pasture = best; }
   // gardens behind the houses: women, children and the old tend them
-  if (seas !== 0) { const hh = g.houses.filter(h => !h.ruined).length; g.treasury += hh * 0.45 * (dry ? 0.5 : 1); }
+  if (seas !== 0) { const hh = g.houses.filter(h => !h.ruined).length; g.treasury += hh * 0.6 * (dry ? 0.5 : 1); }
   // goats
   if (g.goats) {
     const cap = 6 + Math.round(40 * (g.room === undefined ? 0.5 : g.room)) + (g.pasture ? 6 : 0);

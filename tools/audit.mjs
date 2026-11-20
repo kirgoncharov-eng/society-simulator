@@ -20,7 +20,7 @@ for (let i = 0; i < W; i++) {
 tot.drown = Math.max(0, (tot.drown || 0) - (tot.lostAtSea || 0));
 const sum = Object.values(tot).reduce((s, x) => s + x, 0) || 1;
 console.log('\nadult deaths by cause: ' + causes.map(k => `${label[k]} ${Math.round(tot[k] / sum * 100)}%`).join(', '));
-const sh = (...ks) => Math.round(ks.reduce((q, k) => q + (tot[k] || 0), 0) / sum * 100);
+const sh = (...ks) => (ks.reduce((q, k) => q + (tot[k] || 0), 0) / sum * 100).toFixed(1);
 console.log(`groups: war ${sh('war')}%, water and sea ${sh('drown', 'lostAtSea')}%, hunger ${sh('burnout')}%, old age + sickness ${sh('death', 'sick')}%; lowest island population after year 10: ${minPop}`);
 console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
 console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out');
