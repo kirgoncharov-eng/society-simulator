@@ -62,10 +62,12 @@ function warMonth(S) {
 // talks before a war: the weaker side usually buys peace with a ransom instead of fighting
 function parley(S, A, B, LA, best, av) {
   const LB = S._a.get(B.leader);
-  if (!LB || B.treasury < 2) return false;
+  if (!LB || (B.treasury < B.members.length * 3 && (B.goats || 0) < 6 && (B.tools || 0) < 4)) return false;
   const p = (0.5 + 0.3 * LB.coop + 0.4 * Math.max(0, best.oddsR - 0.45) + (A.lord === B.id ? -0.25 : 0) + (B.gov === 'assembly' ? 0.1 : 0)) * (av >= 2 ? 0.35 : 1) * (1 - 0.35 * LA.ambition);
   if (rnd(S) > p) return false;
-  const rate = clamp(0.15 + 0.25 * best.oddsR, 0.15, 0.4), food = B.treasury * rate, tools = (B.tools || 0) * rate * 0.5, goats = B.goats > 4 ? Math.floor(B.goats * rate * 0.6) : 0;
+  const rate = clamp(0.15 + 0.25 * best.oddsR, 0.15, 0.4), food = Math.max(0, B.treasury - B.members.length * 2.5) * rate * 1.5, tools = (B.tools || 0) * rate * 0.5, goats = B.goats > 4 ? Math.floor(B.goats * rate * 0.8) : 0;
+  const paid = [food >= 1 ? qty(food, 'food') : '', tools >= 1 ? qty(tools, 'tools') : '', goats ? `${goats} ${pl(goats, 'коза', 'козы', 'коз')}` : ''].filter(Boolean);
+  if (!paid.length) return false;
   B.treasury -= food; B.tools = (B.tools || 0) - tools; A.treasury += food; A.tools = (A.tools || 0) + tools;
   if (goats) { B.goats -= goats; A.goats = (A.goats || 0) + goats; }
   const k = key(A.id, B.id);
@@ -73,7 +75,7 @@ function parley(S, A, B, LA, best, av) {
   S.stats.ransoms = (S.stats.ransoms || 0) + 1;
   LA.status += 1; LA.rep = clamp((LA.rep || 0) + 0.04, -1, 1); LB.rep = clamp((LB.rep || 0) - 0.03, -1, 1);
   for (const id of B.members) { const m = S._a.get(id); if (m && m.id !== B.leader) m.res = clamp(m.res + 0.05, 0, 1); }
-  log(S, 'ransom', `«${B.name}» откупается от войны с «${A.name}»: ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${goats ? `, ${goats} ${pl(goats, 'коза', 'козы', 'коз')}` : ''}`, B.home.x, B.home.y, A.hue, { why: sent([`${LA.name} собирает ${best.fighters.length} ${pl(best.fighters.length, 'воина', 'воинов', 'воинов')}, но сначала шлёт к «${B.name}» гонцов`, `${LB.name} видит, что шансы отбиться невелики (${P0(1 - best.oddsR)}), и предпочитает заплатить, а не хоронить своих`, LB.coop > 0.6 ? `${LB.name} миролюбив${LB.sex === 'f' ? 'а' : ''}` : '', 'на три года между деревнями мир, но в «' + B.name + '» многие недовольны откупом']), who: [LA.id, LB.id], gs: [A.id, B.id] });
+  log(S, 'ransom', `«${B.name}» откупается от войны с «${A.name}»: ${paid.join(', ')}`, B.home.x, B.home.y, A.hue, { why: sent([`${LA.name} собирает ${best.fighters.length} ${pl(best.fighters.length, 'воина', 'воинов', 'воинов')}, но сначала шлёт к «${B.name}» гонцов`, `${LB.name} видит, что шансы отбиться невелики (${P0(1 - best.oddsR)}), и предпочитает заплатить, а не хоронить своих`, LB.coop > 0.6 ? `${LB.name} миролюбив${LB.sex === 'f' ? 'а' : ''}` : '', 'на три года между деревнями мир, но в «' + B.name + '» многие недовольны откупом']), who: [LA.id, LB.id], gs: [A.id, B.id] });
   return true;
 }
 function warband(S, A) {

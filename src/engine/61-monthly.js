@@ -78,7 +78,7 @@ function aidMonth(S) {
       if (h > 0.6 || d > 420 || S.wars.some(w => (w.att === o.id && w.def === g.id) || (w.att === g.id && w.def === o.id))) continue;
       const LO = S._a.get(o.leader); if (!LO) continue;
       const t = tie[k] || 0, friend = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id || o.lord === g.id;
-      const p = clamp(0.1 + 0.35 * LO.coop + 0.12 * Math.min(4, t) + (friend ? 0.25 : 0) + 0.3 * ((LO.trust[LG.id] || 0)) - 0.4 * h, 0, 0.9);
+      const p = clamp(0.25 + 0.35 * LO.coop + 0.12 * Math.min(4, t) + (friend ? 0.25 : 0) + 0.3 * ((LO.trust[LG.id] || 0)) - 0.4 * h, 0, 0.9);
       const v = p * (o.treasury / o.members.length) / (1 + d / 250);
       if (v > bv) { bv = v; best = { o, p, t, friend, LO, d }; }
     }
