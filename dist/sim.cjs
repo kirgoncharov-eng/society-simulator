@@ -2183,11 +2183,13 @@ function inheritDispute(S, g, house, heir, ownerName, deathEv) {
    Returns true if the feud is settled and the killing does not happen. */
 function bloodOrWergild(S, g, avenger, killer) {
   const L = S._a.get(g.leader), custom = (g.customs || {}).blood === 'wergild';
-  const kinK = kinOf(S, killer).filter(o => o.group === g.id), price = 12;
-  // the killer's kin pay what they can; the community adds the rest from the common store (by custom it must)
+  const kinK = kinOf(S, killer).filter(o => o.group === g.id);
+  // blood money is a bargain: the killer's kin pay what they can, the community adds from the common store
+  // (by custom it must); by custom even a token price closes the feud, without one it must be a real price
   const kinPurse = Math.max(0, killer.wealth) + kinK.reduce((s, o) => s + Math.max(0, o.wealth - 2), 0);
-  const help = custom || (L && L.coop > 0.5) ? Math.min(Math.max(0, price - kinPurse), g.treasury * 0.25) : 0;
-  const p = kinPurse + help < price * 0.6 ? 0 : custom ? 0.8 : clamp(0.1 + 0.35 * elders(S, g) + 0.2 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
+  const help = custom || (L && L.coop > 0.5) ? Math.max(0, Math.min(12 - kinPurse, g.treasury * (custom ? 0.5 : 0.25))) : 0;
+  const price = Math.min(12, kinPurse + help);
+  const p = price < (custom ? 4 : 7) ? 0 : custom ? 0.8 : clamp(0.1 + 0.35 * elders(S, g) + 0.2 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
   if (rnd(S) > p) return false;
   // pay: the killer first, then the kin
   let due = price; const take = (o, cap) => { const x = Math.min(due, Math.max(0, cap)); o.wealth -= x; due -= x; };
