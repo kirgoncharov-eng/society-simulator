@@ -7,8 +7,9 @@ const W = +(process.argv[2] || 6), Y = +(process.argv[3] || 80);
 console.log(`model ${SIM.MODEL.v} (${SIM.MODEL.date}), ${W} islands x ${Y} years`);
 const causes = ['death', 'sick', 'burnout', 'war', 'plague', 'drown', 'lostAtSea', 'killed'];
 const label = { death: 'old age', sick: 'sickness', burnout: 'hunger', war: 'war', plague: 'plague', drown: 'drowning', lostAtSea: 'lost at sea', killed: 'murder' };
-let famN = 0, houseN = 0, villN = 0, roofN = 0, lodgerN = 0;
+let famN = 0, houseN = 0, villN = 0, roofN = 0, lodgerN = 0, customN = 0, customW = 0, customI = 0; const caseN = {};
 const tot = {}; let B = 0, CD = 0, minPop = Infinity, bondN = 0, adultN = 0, feuds = 0, feudsNamed = 0; const bondK = {}; const allV = [], vMed = [], vSmall = [];
+let st0;
 const med = a => { const x = a.slice().sort((p, q) => p - q); return x.length ? x[Math.floor((x.length - 1) / 2)] : 0; };
 let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
 const age = { deaths: 0, sum: 0, eligible: 0, reached: 0, left: 0 };
@@ -39,6 +40,8 @@ for (let i = 0; i < W; i++) {
   const villages = S.groups.filter(g => g.home).map(g => g.members.length).sort((a, b) => b - a);
   for (const a of S.agents) { if (a.age < 16) continue; adultN++; const bs = a.bonds || {}; for (const id in bs) { bondN++; bondK[bs[id][0]] = (bondK[bs[id][0]] || 0) + 1; } for (const id in a.trust) if (a.trust[id] < -0.3 && S._a.has(+id)) { feuds++; if (bs[id] && (bs[id][0] === 'enemy' || bs[id][0] === 'rival') && bs[id][3]) feudsNamed++; } }
   for (const g of S.groups) if (g.home) { famN += g.wantH || 0; houseN += g.houses.filter(h => !h.ruined).length; for (const id of g.members) { const a = S._a.get(id); villN++; if (a.shel) roofN++; if (a.lodger) lodgerN++; } }
+  for (const k in st0 = S.stats) if (k.startsWith('case_')) caseN[k] = (caseN[k] || 0) + st0[k];
+  customN += S.stats.customs || 0; for (const g of S.groups) { if ((g.customs || {}).blood) customW++; if ((g.customs || {}).inherit) customI++; }
   allV.push(...villages); vMed.push(med(villages)); vSmall.push(villages.filter(v => v < 5).length);
   console.log(`seed ${seed}: population by 20y ${pops.join('/')}, coups ${st.coups || 0}, wars ${st.wars || 0}, births/1000/yr ${cbr.toFixed(0)}, adults now ${adults.length}, villages ${villages.join(',')}`);
 }
@@ -48,6 +51,8 @@ const sh = (...ks) => (ks.reduce((q, k) => q + (tot[k] || 0), 0) / sum * 100).to
 console.log(`groups: war ${sh('war')}%, water and sea ${sh('drown', 'lostAtSea')}%, hunger ${sh('burnout')}%, old age + sickness ${sh('death', 'sick')}%; lowest island population after year 10: ${minPop}`);
 console.log(`villages (adults): median over all islands ${med(allV)}, median by island ${vMed.join(' ')}; villages under 5 adults by island ${vSmall.join(' ')}`);
 console.log(`households: living houses per family ${(houseN / Math.max(1, famN)).toFixed(2)} (${houseN} houses, ${famN} families); villagers under a roof ${Math.round(roofN / Math.max(1, villN) * 100)}%, living with kin or as hands ${Math.round(lodgerN / Math.max(1, villN) * 100)}%`);
+{ const cs = {}; let cust = 0, villages = 0; for (const k of Object.keys(caseN)) cs[k] = caseN[k];
+  console.log(`disputes: inheritance — house to the eldest ${cs.case_inherit_eldest || 0}, shared ${cs.case_inherit_share || 0}; blood — revenge ${cs.case_blood_revenge || 0}, blood money ${cs.case_blood_wergild || 0}; customs formed ${customN} (wergild ${customW}, inheritance ${customI})`); }
 console.log(`bonds: ${(bondN / Math.max(1, adultN)).toFixed(1)} per adult (${Object.entries(bondK).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}); enmities (trust < -0.3) with a named cause ${Math.round(feudsNamed / Math.max(1, feuds) * 100)}% of ${feuds}`);
 console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
 console.log(`grain memories: ${memoryMoves} moves changed (${sponsoredMoves} through sponsorship), ${aidReturned} gifts returned (${aidChanged} decisions changed)`);

@@ -75,6 +75,7 @@ function archiveGC(S) {
   for (const a of S.agents) {
     refs(a.bio);
     for (const m of a.grainMemories || []) if (m.ev) keep.add(m.ev);
+    if (a.feud && a.feud.ev && !a.feud.done) keep.add(a.feud.ev);
     for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
   }
   for (const l of S.legends || []) refs(l.bio);
