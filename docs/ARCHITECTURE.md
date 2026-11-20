@@ -52,6 +52,7 @@ SIM.date(S), SIM.key(a,b), SIM.gini(arr), SIM.regime(S,g), SIM.landTop(S), SIM.p
 | 54-households | семья и дом: `familiesOf`, `householdsMonth` (кто где живёт, наследство дома, ветшание), `houseOwnerDies`, `housemates` для карточки |
 | 55-customs | споры и обычаи: `ruling`, `setCustom`, спор наследников (`inheritDispute`), месть или вира (`bloodOrWergild`, `bloodShed`), распространение обычаев (`customsYear`) |
 | 55-daily-rhythm | длина светового дня, путь до дома или ночлега, положение человека в выбранный час |
+| 56-secrets | тайны и слухи: `openSecret`, `learn`, пересказ (`gossipMonth`), тайная связь (`affairsMonth`), реакция того, кого касается (`react`) |
 | 60-step | `step`, `move`, `interact`, `produce`, `lifecycle` (смерть по причинам), `removeAgent` |
 | 61-monthly | месяц деревни: еда, доли, переворот, обиды; помощь голодной деревне (`aidMonth`) |
 | 62-politics | власть, отношения, слияние, покровительство, государства, строй (`regime`) |
