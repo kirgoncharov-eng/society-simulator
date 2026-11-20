@@ -56,6 +56,7 @@ function move(S) {
         else { const ang = a.id * 1.7 + S.tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
+      else if (a.job === 'home') p = houseOf(g, a.house);
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
       tx = p.x + j * (a.job === 'gather' ? 3 : 1.2); ty = p.y + j2 * (a.job === 'gather' ? 3 : 1.2);
     } else if (a.group) {
@@ -271,6 +272,7 @@ function lifecycle(S) {
 
 function removeAgent(S, a, why) {
   if (!S._a.has(a.id)) return;
+  if (why !== 'move' && why !== 'emigr') houseOwnerDies(S, a);
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
   if (why === 'emigr') legend(S, a, 'emigr');

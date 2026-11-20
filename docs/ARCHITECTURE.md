@@ -49,6 +49,7 @@ SIM.date(S), SIM.key(a,b), SIM.gini(arr), SIM.regime(S,g), SIM.landTop(S), SIM.p
 | 51-fates | летопись `bio`, вес драмы `BW`, месть, побег влюблённых, легенды |
 | 52-people | родство, браки, дети, взросление, мор, теснота, подражание |
 | 53-bonds | личные связи с причиной: `bond`, `bondW`, затухание и дружба (`bondsMonth`), наследование (`inheritBonds`), побратимы, друзья детства, рыбаки одной лодки |
+| 54-households | семья и дом: `familiesOf`, `householdsMonth` (кто где живёт, наследство дома, ветшание), `houseOwnerDies`, `housemates` для карточки |
 | 60-step | `step`, `move`, `interact`, `produce`, `lifecycle` (смерть по причинам), `removeAgent` |
 | 61-monthly | месяц деревни: еда, доли, переворот, обиды; помощь голодной деревне (`aidMonth`) |
 | 62-politics | власть, отношения, слияние, покровительство, государства, строй (`regime`) |

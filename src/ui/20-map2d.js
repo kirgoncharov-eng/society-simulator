@@ -352,6 +352,15 @@ function draw(now) {
     ctx.strokeStyle = hueC(g.hue, fgs && !fgs.has(g.id) ? .1 : g.home ? .16 : .45); ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.stroke();
   }
   const base = Math.max(2, Math.min(3.4, Math.min(plate.clientWidth, plate.clientHeight) / 220)) * Math.sqrt(view.z);
+  // small children play by their parents' house
+  for (const k of S.kids || []) {
+    const c = S._a.get(k.mo) || S._a.get(k.fa), g = c && c.group && S._g.get(c.group);
+    const h = g && g.home && c.house && g.houses.find(x => x.id === c.house); if (!h) continue;
+    const s = (k.t * 7 + (k.mo || 0)) % 17, ox = (s % 9) - 4, oy = 7 + (s % 4);
+    ctx.globalAlpha = who ? .3 : .9; ctx.fillStyle = hueC(g.hue, 1, 12);
+    ctx.beginPath(); ctx.arc(h.x + ox, h.y + oy, px(base * .55), 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
   const selA = sel && S._a.get(sel);
   if (selA) {
     const d = D.get(selA.id), rel = Object.entries(selA.trust).filter(([id]) => D.has(+id)).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).slice(0, 8);

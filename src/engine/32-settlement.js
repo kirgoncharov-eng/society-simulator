@@ -67,7 +67,7 @@ function fieldSpot(S, g) {
 function finishSite(S, g) {
   const st = g.site; g.site = null;
   if (st.kind === 'house') {
-    g.houses.push({ x: st.x, y: st.y });
+    g.houses.push(st.earth ? { x: st.x, y: st.y, earth: true } : { x: st.x, y: st.y });
     const k = g.houses.length;
     if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Каждый дом — это 6 брёвен из леса и месяцы работы строителей.`, gs: [g.id] });
   } else if (st.kind === 'workshop') {
