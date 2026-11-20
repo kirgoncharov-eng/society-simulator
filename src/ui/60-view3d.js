@@ -86,6 +86,7 @@ function init3D() {
   V3.smoke = mk(new T.SphereGeometry(2.3, 7, 5), new T.MeshLambertMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.5, depthWrite: false }), 360);
   V3.bucket = mk(new T.CylinderGeometry(1.6, 1.3, 2.6, 8), lam(0x3d86c6), 200); V3.springM = mk(new T.CylinderGeometry(7, 7, 0.8, 16), lam(0x5aa8dc), 20); V3.wellM = mk(new T.CylinderGeometry(4.5, 4.5, 4, 12), lam(0x8a867c), 80); V3.wellW = mk(new T.CylinderGeometry(3.4, 3.4, 4.2, 12), lam(0x4a90c8), 80);
   V3.hull = mk(new T.BoxGeometry(26, 5, 10), lam(0x7a5530), 80); V3.sail = mk(new T.BoxGeometry(1, 18, 12), lam(0xf4efe4), 80); V3.goat = mk(new T.BoxGeometry(3.4, 2.6, 2), lam(0xf2efe6), 400); V3.garden = mk(new T.BoxGeometry(8, 0.8, 6), lam(0x7fae5a), 900);
+  V3.wreckWood = mk(new T.BoxGeometry(14, 2.4, 3.6), lam(0x946641), 3);
   V3.deer = mk(new T.BoxGeometry(2.8, 3, 6.5), lam(0x9a6a3e), 80); V3.deerH = mk(new T.BoxGeometry(1.8, 2.4, 2.2), lam(0x8a5a32), 80);
   V3.dummy = new T.Object3D(); V3.col = new T.Color();
   const white = new T.Color(1, 1, 1);
@@ -105,7 +106,9 @@ function init3D() {
   new ResizeObserver(size3D).observe(plate);
   size3D();
   const big = S.groups.filter(g => g.home).sort((a, b) => b.members.length - a.members.length)[0];
-  if (big) fly3D(big.home.x, big.home.y, true);
+  const landing = S.tick === 0 && firstLanding(S);
+  if (landing) fly3D(landing.x1, landing.y1, true);
+  else if (big) fly3D(big.home.x, big.home.y, true);
 }
 function fly3D(x, z, now) {
   if (!V3.ctl) return;
@@ -234,9 +237,24 @@ function render3D(now) {
     if (g.workshop && g.members.some(id => { const m = W0._a.get(id); return m && m.job === 'craft'; })) chimneys.push([g.workshop.x + 5, gh(g.workshop.x, g.workshop.y) + 18, g.workshop.y, 1.2]);
     for (const [x, y, z, k] of chimneys) for (let i = 0; i < 3 && sm < 360; i++) { const p = (tt + i / 3 + x * 0.013) % 1; setInst(V3.smoke, sm++, x + p * 5, y + p * 20, z + p * 2, k * (0.5 + p * 1.3)); }
   }
-  { let hb = 0, sl = 0; for (const b of W0.boats || []) { const p = boatPos(b, W0.tick); if (!p || hb >= 30) continue; const bob = reduce ? 0 : Math.sin(now / 500 + b.t) * 0.6; setInst(V3.hull, hb++, p.x, (p.beached ? gh(p.x, p.y) : -2) + 1.5 + bob, p.y, p.fade, -p.a); if (!p.beached) setInst(V3.sail, sl++, p.x, -2 + 12 + bob, p.y, p.fade, -p.a); } for (const b of fishBoats(W0, now)) { if (hb >= 80) break; setInst(V3.hull, hb++, b.x, -2 + (reduce ? 0 : Math.sin(now / 600 + b.x) * 0.5), b.y, 0.6, -b.a + 1.57); }
+  { let hb = 0, sl = 0;
+    for (const b of W0.boats || []) {
+      const p = boatPos(b, W0.tick); if (!p || hb >= 30) continue;
+      const bob = p.beached || reduce ? 0 : Math.sin(now / 500 + b.t) * 0.6;
+      const afloat = -2 + bob;
+      const hullY = p.beached ? Math.max(-2, gh(p.x, p.y)) : afloat;
+      setInst(V3.hull, hb++, p.x, hullY + 1.5, p.y, p.fade, -p.a);
+      if (!p.beached) setInst(V3.sail, sl++, p.x, afloat + 12, p.y, p.fade, -p.a);
+    }
+    for (const b of fishBoats(W0, now)) { if (hb >= 80) break; setInst(V3.hull, hb++, b.x, -2 + (reduce ? 0 : Math.sin(now / 600 + b.x) * 0.5), b.y, 0.6, -b.a + 1.57); }
     { let gi = 0, gd = 0; for (const g of W0.groups) { if (g.goats && g.pasture) { const k = Math.min(g.goats, 24); for (let i = 0; i < k && gi < 400; i++) { const a = i * 2.4 + g.id, r = 6 + (i * 7) % 22, gx = g.pasture.x + Math.cos(a + now / 9000) * r, gz = g.pasture.y + Math.sin(a + now / 9000) * r * 0.7; setInst(V3.goat, gi++, gx, gh(gx, gz) + 2, gz, 1, a); } } if (g.home) { const P = g.plan; for (const h of g.houses) { if (h.ruined || gd >= 900) continue; let ox = 0, oz = 7; if (P) { const side = Math.sign((h.x - g.home.x) * -P.uy + (h.y - g.home.y) * P.ux) || 1; ox = -P.uy * side * 9; oz = P.ux * side * 9; } setInst(V3.garden, gd++, h.x + ox, gh(h.x + ox, h.y + oz) + 0.6, h.y + oz); } } } V3.goat.count = gi; V3.garden.count = gd; V3.goat.instanceMatrix.needsUpdate = true; V3.garden.instanceMatrix.needsUpdate = true; }
     V3.hull.count = hb; V3.sail.count = sl; V3.hull.instanceMatrix.needsUpdate = true; V3.sail.instanceMatrix.needsUpdate = true; }
+  const landing = firstLanding(W0);
+  let wreckCount = 0;
+  if (landing) for (const plank of wreckTimbers(landing)) {
+    setInst(V3.wreckWood, wreckCount++, plank.x, Math.max(-2, gh(plank.x, plank.y)) + 1, plank.y, 1, -plank.angle);
+  }
+  V3.wreckWood.count = wreckCount; V3.wreckWood.instanceMatrix.needsUpdate = true;
   let dr = 0;
   for (const nd of W0.nodes) {
     if (nd.kind === 'fish') continue;
@@ -263,6 +281,8 @@ function labels3D(W0) {
   const el = $('v3lab'), w = plate.clientWidth, h = plate.clientHeight, v = new THREE.Vector3(), out = [];
   const put = (x, y, z, html, cls) => { v.set(x, y, z).project(V3.cam); if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) return; out.push(`<span class="${cls}" style="left:${((v.x + 1) / 2 * w).toFixed(0)}px;top:${((1 - v.y) / 2 * h).toFixed(0)}px">${html}</span>`); };
   if (!V3.sc || performance.now() - V3.scAt > 2000) { V3.sc = stateCenters(W0); V3.scAt = performance.now(); }
+  const landing = firstLanding(W0);
+  if (landing) put(landing.x1, Math.max(0, gh(landing.x1, landing.y1)) + 22, landing.y1, LANDING_LABEL, 'l3landing');
   for (const c of V3.sc) put(c.x, gh(c.x, c.y) + 30, c.y, esc(c.st.name), 'l3s');
   for (const g of W0.groups.filter(g => g.home && (g.members.length >= 4 || g.sick > 0)).sort((a, b) => (b.sick > 0) - (a.sick > 0) || b.members.length - a.members.length).slice(0, 9)) {
     const r = RC.get(g.id); put(g.home.x, gh(g.home.x, g.home.y) + 26, g.home.y, `${esc(g.name)}${g.sick > 0 ? '<small class="sick">мор</small>' : r && g.members.length >= 5 ? `<small>${esc(SHORT[r.type] || '')}</small>` : ''}`, 'l3');
