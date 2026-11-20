@@ -23,7 +23,7 @@ function monthly(S) {
     if (!rich) continue;
     const L = S._a.get(rich.leader);
     if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) {
-      if (a.wealth < 0) rememberGrain(S, a, L);
+      if (a.wealth < 0) rememberGrain(S, a, L, note(S, 'aid', `${L.name} из «${rich.name}» даёт зерно голодному ${a.name}`, a.x, a.y, rich.hue, { who: [L.id, a.id], gs: [rich.id] }).id);
       rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1;
     }
     else if (a.coop < 0.45 && rnd(S) < 0.35) {
@@ -76,9 +76,10 @@ function monthly(S) {
         bio(S, helper, 'sponsor', `Ручается перед вождём ${L.name} за переселенца ${a.name}`);
       }
       const why = `${a.name} помнит, как ${helper.name} ${helper.sex === 'f' ? 'помогла' : 'помог'} с зерном. ${sponsorDecided ? `${helper.name} ${helper.sex === 'f' ? 'поручилась' : 'поручился'} перед вождём ${L.name}, и в деревне дали работу за еду.` : 'Теперь в деревне предлагают работу за еду.'}`;
-      bio(S, a, 'move', `Уходит в «${best.name}», к тем, кто однажды помог зерном`);
+      const src = memory.memory && memory.memory.ev;
+      bio(S, a, 'move', `Уходит в «${best.name}», к тем, кто однажды помог зерном`, src);
       log(S, 'aid', `${a.name} находит приют в «${best.name}»`, best.home.x, best.home.y, best.hue, {
-        first, why, who: sponsorDecided ? [a.id, helper.id, L.id] : [a.id, helper.id], gs: [best.id],
+        first, why, who: sponsorDecided ? [a.id, helper.id, L.id] : [a.id, helper.id], gs: [best.id], causes: src ? [src] : undefined,
       });
     } else {
       bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`);
@@ -153,14 +154,15 @@ function aidMonth(S) {
       log(S, 'aid', `«${o.name}» возвращает помощь «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, {
         first,
         why: `${witness.name} помнит, как ${ago} назад ${helper.name} ${helper.sex === 'f' ? 'прислала' : 'прислал'} зерно в разгар голода. Теперь деревня делится в ответ.`,
-        who: [...new Set([witness.id, helper.id, LO.id, LG.id])], gs: [o.id, g.id],
+        who: [...new Set([witness.id, helper.id, LO.id, LG.id])], gs: [o.id, g.id], causes: memory.ev ? [memory.ev] : undefined,
       });
     } else {
+      const shown = !g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5;
+      const aidEv = (shown ? log : note)(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
       for (const id of g.members) {
         const a = S._a.get(id);
-        if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO);
+        if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO, aidEv.id);
       }
-      if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
     }
     g.aidFrom[o.id] = S.tick;
   }

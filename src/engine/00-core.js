@@ -35,11 +35,51 @@ function index(S) {
   S._a = new Map(S.agents.map(a => [a.id, a]));
   S._g = new Map(S.groups.map(g => [g.id, g]));
 }
+// ex.causes: ids of the events that led to this one (a linked chronicle); returns the event
 function log(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1; S.evc = S.evc || {}; S.evc[type] = (S.evc[type] || 0) + 1;
-  S.events.unshift(Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {}));
+  const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
+  S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
+  if (ev.causes) for (const c of ev.causes) cite(S, c);
   if (x !== undefined) S.flashes.push({ id: S.flashId++, t: S.tick, type, x, y, hue });
   if (S.flashes.length > 60) S.flashes.splice(0, S.flashes.length - 60);
+  return ev;
 }
 
+
+/* ---------- linked chronicle: events that something refers to outlive the 250-entry feed ---------- */
+// a quiet event: it gets an id and can be cited, but does not appear in the feed (small, frequent deeds)
+function note(S, type, text, x, y, hue, ex) {
+  S.evId = (S.evId || 0) + 1;
+  const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
+  (S.evArch || (S.evArch = {}))[ev.id] = ev;
+  return ev;
+}
+function eventById(S, id) {
+  if (!id) return null;
+  for (const e of S.events) if (e.id === id) return e;
+  return (S.evArch && S.evArch[id]) || null;
+}
+// someone now refers to event id: keep it in the archive even after it falls out of the feed
+function cite(S, id) {
+  if (!id) return id;
+  const A = S.evArch || (S.evArch = {});
+  if (!A[id]) { const e = eventById(S, id); if (e) A[id] = e; }
+  return id;
+}
+// once a year: drop archived events nobody refers to any more (people, ties, legends, other events)
+function archiveGC(S) {
+  const A = S.evArch; if (!A) return;
+  const keep = new Set(), refs = b => { for (const x of b || []) if (x[3]) keep.add(x[3]); };
+  for (const a of S.agents) {
+    refs(a.bio);
+    for (const m of a.grainMemories || []) if (m.ev) keep.add(m.ev);
+    for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
+  }
+  for (const l of S.legends || []) refs(l.bio);
+  for (const e of S.events) for (const c of e.causes || []) keep.add(c);
+  const stack = [...keep];
+  while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
+  for (const id in A) if (!keep.has(+id)) delete A[id];
+}

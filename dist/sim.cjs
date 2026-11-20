@@ -36,14 +36,54 @@ function index(S) {
   S._a = new Map(S.agents.map(a => [a.id, a]));
   S._g = new Map(S.groups.map(g => [g.id, g]));
 }
+// ex.causes: ids of the events that led to this one (a linked chronicle); returns the event
 function log(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1; S.evc = S.evc || {}; S.evc[type] = (S.evc[type] || 0) + 1;
-  S.events.unshift(Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {}));
+  const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
+  S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
+  if (ev.causes) for (const c of ev.causes) cite(S, c);
   if (x !== undefined) S.flashes.push({ id: S.flashId++, t: S.tick, type, x, y, hue });
   if (S.flashes.length > 60) S.flashes.splice(0, S.flashes.length - 60);
+  return ev;
 }
 
+
+/* ---------- linked chronicle: events that something refers to outlive the 250-entry feed ---------- */
+// a quiet event: it gets an id and can be cited, but does not appear in the feed (small, frequent deeds)
+function note(S, type, text, x, y, hue, ex) {
+  S.evId = (S.evId || 0) + 1;
+  const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
+  (S.evArch || (S.evArch = {}))[ev.id] = ev;
+  return ev;
+}
+function eventById(S, id) {
+  if (!id) return null;
+  for (const e of S.events) if (e.id === id) return e;
+  return (S.evArch && S.evArch[id]) || null;
+}
+// someone now refers to event id: keep it in the archive even after it falls out of the feed
+function cite(S, id) {
+  if (!id) return id;
+  const A = S.evArch || (S.evArch = {});
+  if (!A[id]) { const e = eventById(S, id); if (e) A[id] = e; }
+  return id;
+}
+// once a year: drop archived events nobody refers to any more (people, ties, legends, other events)
+function archiveGC(S) {
+  const A = S.evArch; if (!A) return;
+  const keep = new Set(), refs = b => { for (const x of b || []) if (x[3]) keep.add(x[3]); };
+  for (const a of S.agents) {
+    refs(a.bio);
+    for (const m of a.grainMemories || []) if (m.ev) keep.add(m.ev);
+    for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
+  }
+  for (const l of S.legends || []) refs(l.bio);
+  for (const e of S.events) for (const c of e.causes || []) keep.add(c);
+  const stack = [...keep];
+  while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
+  for (const id in A) if (!keep.has(+id)) delete A[id];
+}
 function beachSpot(S, avoid) {
   const B = []; for (let c = 0; c < N * N; c++) if (S.ter[c] === 'b') B.push(c);
   let best = null, bv = -1e9;
@@ -1525,24 +1565,26 @@ function droughtYear(S) {
 
 /* ---------- fates: life chronicle, memory, motives ---------- */
 const BW = { theft: 1.5, quit: 1.5, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
-function bio(S, a, k, s) {
+// ref: id of the event this line refers to (see the linked chronicle in 00-core)
+function bio(S, a, k, s, ref) {
   if (!a) return;
   const b = a.bio || (a.bio = []);
   // the same turn of fate repeated within five years matters less each time
   let rep = 0; for (let i = b.length - 1; i >= 0 && S.tick - b[i][0] < 360 * 5; i--) if (b[i][1] === k) rep++;
-  b.push([S.tick, k, s]);
+  b.push(ref ? [S.tick, k, s, cite(S, ref)] : [S.tick, k, s]);
   if (b.length > 46) b.splice(6, b.length - 46);
   a.drama = (a.drama || 0) + (BW[k] || 1) / (1 + rep);
 }
 function groupName(S, id) { const g = S._g.get(id); return g ? g.name : (S.arch && S.arch[id] ? S.arch[id].name : 'исчезнувшей деревни'); }
 const AID_MEMORY_MIN = 2 * 360, AID_MEMORY_MAX = 15 * 360;
-function rememberGrain(S, a, helper) {
+// ev: the id of the event in which the grain was given; the memory, the chronicle line and the tie all point to it
+function rememberGrain(S, a, helper, ev) {
   const memories = (a.grainMemories || []).filter(m => S.tick - m.tick <= AID_MEMORY_MAX);
   if (memories.some(m => m.helper === helper.id)) return;
-  memories.push({ helper: helper.id, tick: S.tick });
+  memories.push(ev ? { helper: helper.id, tick: S.tick, ev: cite(S, ev) } : { helper: helper.id, tick: S.tick });
   a.grainMemories = memories.slice(-4);
-  bio(S, a, 'aidReceived', `В голод получает зерно. Помогает ${helper.name}`);
-  bond(S, a, helper, 'debt', `${fem(helper, 'прислал', 'прислала')} зерно в голод`, 0.6);
+  bio(S, a, 'aidReceived', `В голод получает зерно. Помогает ${helper.name}`, ev);
+  bond(S, a, helper, 'debt', `${fem(helper, 'прислал', 'прислала')} зерно в голод`, 0.6, false, ev);
 }
 function rememberedGrain(S, witness, villageId, minAge) {
   for (const memory of witness.grainMemories || []) {
@@ -1568,8 +1610,8 @@ function repayGrain(S, village, obligation) {
     const a = S._a.get(id);
     if (a.grainMemories) a.grainMemories = a.grainMemories.filter(m => m.helper !== obligation.helper.id);
   }
-  const { witness, helper } = obligation;
-  bio(S, witness, 'aidReturned', `Деревня делится зерном в ответ на давнюю помощь. Тогда зерно присылает ${helper.name}`);
+  const { witness, helper, memory } = obligation;
+  bio(S, witness, 'aidReturned', `Деревня делится зерном в ответ на давнюю помощь. Тогда зерно присылает ${helper.name}`, memory && memory.ev);
 }
 function kinOf(S, a) { return S.agents.filter(o => o !== a && kin(o, a) && o.spouse !== a.id || o.id === a.spouse); }
 function legend(S, a, why) {
@@ -1848,11 +1890,12 @@ function bondOf(a, b) { return a && b && a.bonds ? a.bonds[b.id] || null : null;
 // a bond that only names an existing grudge (x[4]) is a record, not an extra push: trust already carries it
 function bondW(a, b) { const x = bondOf(a, b); return x && !x[4] ? BOND_W[x[0]] * Math.min(1, x[2] * 1.5) : 0; }
 const fem = (a, m, f) => a.sex === 'f' ? f : m;
-function bond(S, a, b, k, why, s, named) {
+// ref: id of the event behind the tie (same format as in the chronicle), kept at index 5
+function bond(S, a, b, k, why, s, named, ref) {
   if (!a || !b || a === b || !S._a.has(a.id) || !S._a.has(b.id)) return null;
   s = s === undefined ? 0.6 : s;
   const B = a.bonds || (a.bonds = {}), cur = B[b.id];
-  if (cur && cur[0] === k) { cur[2] = Math.min(1, cur[2] + s * 0.5); cur[1] = S.tick; if (why) cur[3] = why; if (!named) cur.length = 4; return cur; }
+  if (cur && cur[0] === k) { cur[2] = Math.min(1, cur[2] + s * 0.5); cur[1] = S.tick; if (why) cur[3] = why; if (!named) { cur.length = 4; if (ref) cur[4] = 0, cur[5] = cite(S, ref); } return cur; }
   let said = false;
   if (cur && BOND_W[cur[0]] > 0.3 && BOND_W[k] < 0 && cur[2] > 0.25) {
     said = true;
@@ -1861,7 +1904,9 @@ function bond(S, a, b, k, why, s, named) {
     S.stats.betrayals = (S.stats.betrayals || 0) + 1;
   }
   if (cur && BOND_W[cur[0]] < 0 && BOND_W[k] > 0.3 && cur[2] > 0.3) bio(S, a, 'reconcile', `Мирится с ${b.name}: ${why}`);
-  B[b.id] = named ? [k, S.tick, Math.min(1, s), why, 1] : [k, S.tick, Math.min(1, s), why];
+  B[b.id] = [k, S.tick, Math.min(1, s), why];
+  if (named) B[b.id][4] = 1;
+  if (ref) { B[b.id][4] = B[b.id][4] || 0; B[b.id][5] = cite(S, ref); }
   // enmities already have their own line in the chronicle (exile, coup, a kinsman killed); sworn brotherhood and love do not
   if (!said && (k === 'sworn' || k === 'love')) bio(S, a, k, k === 'sworn' ? `Братается с ${b.name}: ${why}` : `Любит ${b.name}: ${why}`);
   bump(a, b, BOND_W[k] * 0.4);
@@ -2271,7 +2316,7 @@ function monthly(S) {
     if (!rich) continue;
     const L = S._a.get(rich.leader);
     if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) {
-      if (a.wealth < 0) rememberGrain(S, a, L);
+      if (a.wealth < 0) rememberGrain(S, a, L, note(S, 'aid', `${L.name} из «${rich.name}» даёт зерно голодному ${a.name}`, a.x, a.y, rich.hue, { who: [L.id, a.id], gs: [rich.id] }).id);
       rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1;
     }
     else if (a.coop < 0.45 && rnd(S) < 0.35) {
@@ -2324,9 +2369,10 @@ function monthly(S) {
         bio(S, helper, 'sponsor', `Ручается перед вождём ${L.name} за переселенца ${a.name}`);
       }
       const why = `${a.name} помнит, как ${helper.name} ${helper.sex === 'f' ? 'помогла' : 'помог'} с зерном. ${sponsorDecided ? `${helper.name} ${helper.sex === 'f' ? 'поручилась' : 'поручился'} перед вождём ${L.name}, и в деревне дали работу за еду.` : 'Теперь в деревне предлагают работу за еду.'}`;
-      bio(S, a, 'move', `Уходит в «${best.name}», к тем, кто однажды помог зерном`);
+      const src = memory.memory && memory.memory.ev;
+      bio(S, a, 'move', `Уходит в «${best.name}», к тем, кто однажды помог зерном`, src);
       log(S, 'aid', `${a.name} находит приют в «${best.name}»`, best.home.x, best.home.y, best.hue, {
-        first, why, who: sponsorDecided ? [a.id, helper.id, L.id] : [a.id, helper.id], gs: [best.id],
+        first, why, who: sponsorDecided ? [a.id, helper.id, L.id] : [a.id, helper.id], gs: [best.id], causes: src ? [src] : undefined,
       });
     } else {
       bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`);
@@ -2401,14 +2447,15 @@ function aidMonth(S) {
       log(S, 'aid', `«${o.name}» возвращает помощь «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, {
         first,
         why: `${witness.name} помнит, как ${ago} назад ${helper.name} ${helper.sex === 'f' ? 'прислала' : 'прислал'} зерно в разгар голода. Теперь деревня делится в ответ.`,
-        who: [...new Set([witness.id, helper.id, LO.id, LG.id])], gs: [o.id, g.id],
+        who: [...new Set([witness.id, helper.id, LO.id, LG.id])], gs: [o.id, g.id], causes: memory.ev ? [memory.ev] : undefined,
       });
     } else {
+      const shown = !g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5;
+      const aidEv = (shown ? log : note)(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
       for (const id of g.members) {
         const a = S._a.get(id);
-        if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO);
+        if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO, aidEv.id);
       }
-      if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
     }
     g.aidFrom[o.id] = S.tick;
   }
@@ -2831,6 +2878,7 @@ function regime(S, g) {
   return { type, c, b, gi, vass, merchantRule, why };
 }
 function yearly(S) {
+  archiveGC(S);
   droughtYear(S);
   roadsYear(S);
   for (const g of S.groups) { g.cross12 = g.cross || 0; g.cross = 0; }
@@ -2919,7 +2967,7 @@ function shock(S, kind) {
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
 function restore(str) { const S = JSON.parse(str); index(S); return S; }
 
-return { MODEL, bondLabel, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, bondLabel, eventById, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {

@@ -33,7 +33,7 @@ SIM.date(S), SIM.key(a,b), SIM.gini(arr), SIM.regime(S,g), SIM.landTop(S), SIM.p
 ## Карта модулей движка
 | файл | что внутри |
 |---|---|
-| 00-core | имена, `rnd/gauss/pick`, `clamp`, `dist`, индекс, `log` (событие в ленту) |
+| 00-core | имена, `rnd/gauss/pick`, `clamp`, `dist`, индекс, `log` (событие в ленту); связанная летопись: `log` (с `causes`), `note`, `cite`, `eventById`, архив `S.evArch` и `archiveGC` |
 | 10-island | лодки (`landBoat`, `beachSpot`), рыбные сектора моря, `spawnBand` |
 | 20-world | `newWorld`, `spawn` (человек/ребёнок/переселенец), `join/leave`, группы, лидеры, наследование власти, `pickTarget` |
 | 30-terrain | сетка `N×N`, `genTerrain` (береговая линия, холмы, река, лес) |
