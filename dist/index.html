@@ -2299,13 +2299,14 @@ const BOND_DECAY = { friend: 0.997, sworn: 0.999, love: 0.99, rival: 0.995, enem
 const BOND_MAX = 8;
 function bondOf(a, b) { return a && b && a.bonds ? a.bonds[b.id] || null : null; }
 // how much a's bond to b pulls a towards b in a decision (negative: against)
-function bondW(a, b) { const x = bondOf(a, b); return x ? BOND_W[x[0]] * Math.min(1, x[2] * 1.5) : 0; }
+// a bond that only names an existing grudge (x[4]) is a record, not an extra push: trust already carries it
+function bondW(a, b) { const x = bondOf(a, b); return x && !x[4] ? BOND_W[x[0]] * Math.min(1, x[2] * 1.5) : 0; }
 const fem = (a, m, f) => a.sex === 'f' ? f : m;
-function bond(S, a, b, k, why, s) {
+function bond(S, a, b, k, why, s, named) {
   if (!a || !b || a === b || !S._a.has(a.id) || !S._a.has(b.id)) return null;
   s = s === undefined ? 0.6 : s;
   const B = a.bonds || (a.bonds = {}), cur = B[b.id];
-  if (cur && cur[0] === k) { cur[2] = Math.min(1, cur[2] + s * 0.5); cur[1] = S.tick; if (why) cur[3] = why; return cur; }
+  if (cur && cur[0] === k) { cur[2] = Math.min(1, cur[2] + s * 0.5); cur[1] = S.tick; if (why) cur[3] = why; if (!named) cur.length = 4; return cur; }
   let said = false;
   if (cur && BOND_W[cur[0]] > 0.3 && BOND_W[k] < 0 && cur[2] > 0.25) {
     said = true;
@@ -2314,7 +2315,7 @@ function bond(S, a, b, k, why, s) {
     S.stats.betrayals = (S.stats.betrayals || 0) + 1;
   }
   if (cur && BOND_W[cur[0]] < 0 && BOND_W[k] > 0.3 && cur[2] > 0.3) bio(S, a, 'reconcile', `Мирится с ${b.name}: ${why}`);
-  B[b.id] = [k, S.tick, Math.min(1, s), why];
+  B[b.id] = named ? [k, S.tick, Math.min(1, s), why, 1] : [k, S.tick, Math.min(1, s), why];
   // enmities already have their own line in the chronicle (exile, coup, a kinsman killed); sworn brotherhood and love do not
   if (!said && (k === 'sworn' || k === 'love')) bio(S, a, k, k === 'sworn' ? `Братается с ${b.name}: ${why}` : `Любит ${b.name}: ${why}`);
   bump(a, b, BOND_W[k] * 0.4);
@@ -2337,13 +2338,13 @@ function bondsMonth(S) {
     if (L0 && L0 !== a && (a.trust[L0.id] || 0) < -0.4 && !(a.bonds && a.bonds[L0.id])) {
       const nepo = g0.members.filter(id => { const m = S._a.get(id); return m && m !== L0 && kin(m, L0); }).length >= 2 && !kin(a, L0);
       const why = g0.take > 0.2 ? `${fem(L0, 'забирает', 'забирает')} себе ${Math.round(g0.take * 100)}% общего` : nepo ? 'раздаёт лучшее своей родне' : a.wealth < 0 ? 'при дележе оставляет голодным' : 'делит общее не по совести';
-      bond(S, a, L0, 'rival', why, 0.4);
+      bond(S, a, L0, 'rival', why, 0.4, true);
     }
     for (const id in a.trust) {
       // enmity with someone from a hostile village: the reason is the feud between the villages
       if (a.trust[id] < -0.4 && !(a.bonds && a.bonds[id])) {
         const o = S._a.get(+id), go = o && o.group && S._g.get(o.group);
-        if (go && go.id !== a.group && (S.hostility[key(a.group, go.id)] || 0) > 0.4) bond(S, a, o, 'rival', `из враждебной «${go.name}»: стычки на промыслах`, 0.35);
+        if (go && go.id !== a.group && (S.hostility[key(a.group, go.id)] || 0) > 0.4) bond(S, a, o, 'rival', `из враждебной «${go.name}»: стычки на промыслах`, 0.35, true);
         continue;
       }
       if (a.trust[id] < 0.45 || (a.bonds && a.bonds[id])) continue;
