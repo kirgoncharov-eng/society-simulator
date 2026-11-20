@@ -99,7 +99,7 @@ function plagueMonth(S) {
   if (!sick.length) return;
   for (const g of sick) {
     let dead = 0;
-    for (const id of g.members.slice()) { const m = S._a.get(id); if (!m) continue; if (rnd(S) < 0.055 * (m.age > 50 ? 1.8 : 1) * (m.energy < 0.4 ? 1.4 : 1)) { removeAgent(S, m, 'plague'); dead++; } }
+    for (const id of g.members.slice()) { const m = S._a.get(id); if (!m) continue; if (rnd(S) < 0.04 * (m.age > 50 ? 1.8 : 1) * (m.energy < 0.4 ? 1.4 : 1)) { removeAgent(S, m, 'plague'); dead++; } }
     for (const n of S.agents) if (!n.group && Math.hypot(n.x - g.cx, n.y - g.cy) < 160 && rnd(S) < 0.03) { removeAgent(S, n, 'plague'); dead++; }
     g.plDead = (g.plDead || 0) + dead; S.plague.dead += dead;
     g.sick--;

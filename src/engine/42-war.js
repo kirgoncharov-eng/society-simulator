@@ -65,7 +65,7 @@ function parley(S, A, B, LA, best, av) {
   if (!LB || (B.treasury < B.members.length * 3 && (B.goats || 0) < 6 && (B.tools || 0) < 4)) return false;
   const p = (0.5 + 0.3 * LB.coop + 0.4 * Math.max(0, best.oddsR - 0.45) + (A.lord === B.id ? -0.25 : 0) + (B.gov === 'assembly' ? 0.1 : 0)) * (av >= 2 ? 0.35 : 1) * (1 - 0.35 * LA.ambition);
   if (rnd(S) > p) return false;
-  const rate = clamp(0.15 + 0.25 * best.oddsR, 0.15, 0.4), food = Math.max(0, B.treasury - B.members.length * 2.5) * rate * 1.5, tools = (B.tools || 0) * rate * 0.5, goats = B.goats > 4 ? Math.floor(B.goats * rate * 0.8) : 0;
+  const rate = clamp(0.15 + 0.25 * best.oddsR, 0.15, 0.4), food = Math.max(0, B.treasury - B.members.length * 1.5) * rate * 1.5, tools = (B.tools || 0) * rate * 0.5, goats = B.goats > 4 ? Math.floor(B.goats * rate * 0.8) : 0;
   const paid = [food >= 1 ? qty(food, 'food') : '', tools >= 1 ? qty(tools, 'tools') : '', goats ? `${goats} ${pl(goats, 'коза', 'козы', 'коз')}` : ''].filter(Boolean);
   if (!paid.length) return false;
   B.treasury -= food; B.tools = (B.tools || 0) - tools; A.treasury += food; A.tools = (A.tools || 0) + tools;
