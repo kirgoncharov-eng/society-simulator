@@ -1,7 +1,7 @@
 /* ---------- disputes and customs: a village remembers its cases, and a repeated ruling becomes a custom ---------- */
 // g.cases: last rulings [kind, outcome, tick, eventId]; g.customs[kind] = outcome the village now holds to.
 // Kinds: 'inherit' (heirs quarrel over a house: 'eldest' or 'share') and 'blood' (a killing: 'revenge' or 'wergild').
-const CASE_LABEL = { inherit: { eldest: 'дом старшему', share: 'поделиться с младшими' }, blood: { revenge: 'кровь за кровь', wergild: 'выкуп вместо мести' } };
+const CASE_LABEL = { inherit: { eldest: 'дом старшему', share: 'поделиться с младшими' }, blood: { revenge: 'кровь за кровь', wergild: 'выкуп вместо мести' }, theft: { fine: 'вор возвращает вдвое', ban: 'вору закрыты ворота' } };
 function elders(S, g) { return g.members.map(id => S._a.get(id)).filter(m => m && m.age > 55).length / Math.max(1, g.members.length); }
 // record a ruling; when the same ruling keeps coming back, it becomes the village's custom
 function ruling(S, g, kind, outcome, ev) {

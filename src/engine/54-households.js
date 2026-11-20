@@ -43,7 +43,8 @@ function householdsMonth(S) {
       const widow = inside.find(m => m.spouse === h.owner || (h.spouseOf && m.id === h.spouseOf));
       const heirs = inside.filter(m => m.mother === h.owner || m.father === h.owner).sort((a, b) => b.age - a.age);
       const next = widow || heirs[0] || inside.sort((a, b) => b.age - a.age)[0];
-      const ref = dead && h.deathEv ? h.deathEv : null;
+      const ref = dead && h.deathEv && eventById(S, h.deathEv) ? h.deathEv : null;
+      delete h.deathEv;
       if (next) {
         h.owner = next.id; h.oname = next.name; h.spouseOf = null;
         if (dead) bio(S, next, 'inheritHouse', next === widow ? `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме` : `Наследует дом ${oname}`, ref);

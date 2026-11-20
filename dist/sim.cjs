@@ -3,7 +3,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm21', date: '2026-11-21', note: 'улицы, дворы, мосты и частокол привязаны к дорогам и рельефу' };
+const MODEL = { v: 'm22', date: '2026-11-21', note: 'стройплощадки с доставкой и этапами, частокол по отдельным участкам' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -80,7 +80,11 @@ function archiveGC(S) {
     for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
   }
   for (const l of S.legends || []) refs(l.bio);
-  for (const g of S.groups) for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+  for (const id of S.secrets || []) keep.add(id);
+  for (const g of S.groups) {
+    for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+    for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
+  }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
@@ -279,7 +283,8 @@ function dissolve(S, g, silent) {
   if (S.arch && S.arch[g.id]) S.arch[g.id].end = S.tick;
   if (g.home) {
     S.ruins = S.ruins || [];
-    S.ruins.push({ name: g.name, t: S.tick, x: g.home.x, y: g.home.y, houses: g.houses.concat([g.workshop, g.granary].filter(Boolean)).map(h => ({ x: h.x, y: h.y })), fields: g.fields.map(f => ({ x: f.x, y: f.y })), plan: g.plan || null });
+    S.ruins.push({ name: g.name, t: S.tick, x: g.home.x, y: g.home.y, houses: g.houses.concat([g.workshop, g.granary].filter(Boolean)).map(({ x, y, angle, footprint, entrance, frontage, earth, built }) => ({ x, y, angle, footprint, entrance, frontage, earth, built })), fields: g.fields.map(f => ({ x: f.x, y: f.y })), plan: g.plan || null, fortifications: g.fortifications });
+    if (g.fortifications?.length) S.wallV = (S.wallV || 0) + 1;
     if (S.ruins.length > 14) S.ruins.shift();
     for (const f of g.fields) delete S.occ[f.c];
     if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === g.id) S.own[c] = 0;
@@ -604,6 +609,7 @@ function bridgeSpot(S, g) {
   for (let j = 0; j < N; j++) {
     const ws = []; for (let i = 0; i < N; i++) if (S.ter[j * N + i] === 'w') ws.push(j * N + i);
     if (!ws.length || ws.some(c => S.bridge[c])) continue;
+    if (S.groups.some(o => o !== g && o.site?.kind === 'bridge' && o.site.cells.some(c => ws.includes(c)))) continue;
     const y = j * CS + 10, x = (ws[0] % N) * CS + 10, d = Math.hypot(x - g.home.x, y - g.home.y);
     if (d > 320) continue;
     let near = false; for (const c in S.bridge) if (Math.abs(((+c / N) | 0) - j) < 6) near = true;
@@ -637,9 +643,16 @@ function planOf(S, g) {
   return g.plan;
 }
 function plotPos(g, k) {
-  const P = g.plan, street = k < 32 ? 0 : 1, kk = street ? k - 32 : k, slot = (kk >> 2) + 1, dir = (kk >> 1) & 1 ? -1 : 1, side = kk & 1 ? -1 : 1;
-  const ux = street ? -P.uy : P.ux, uy = street ? P.ux : P.uy, along = dir * (slot * 17 - 4) + (street ? 0 : 0), perp = side * 12, off = street ? 26 : 0;
-  return { x: g.home.x + ux * along - uy * perp + (street ? P.ux * off : 0), y: g.home.y + uy * along + ux * perp + (street ? P.uy * off : 0) };
+  const street = g.plan.street;
+  const side = k % 2 ? -1 : 1, row = (k >> 1) % 2 ? -1 : 1, slot = (k >> 2) + 1;
+  const variation = ((g.id * 17 + k * 31) % 11) - 5;
+  const frontage = alongStreet(g, row * (slot * 18 - 7) + variation);
+  if (distanceToSegment(frontage, street.a, street.b) > 1) return null;
+  const setback = 13 + ((g.id + k * 3) % 6);
+  const angle = Math.atan2(g.plan.uy, g.plan.ux);
+  const at = alongStreet(g, row * (slot * 18 - 7) + variation, side * setback);
+  const entrance = { x: at.x + side * g.plan.uy * 5, y: at.y - side * g.plan.ux * 5 };
+  return { ...at, angle, entrance, frontage };
 }
 function plotOk(S, g, p, radius = 6) {
   if (riverDist(S, p.x, p.y) < 24 || !streetClear(g, p, radius)) return false;
@@ -650,7 +663,7 @@ function plotOk(S, g, p, radius = 6) {
   if (!reach(S, g.home.x, g.home.y, p.x, p.y)) return false;
   for (const h of g.houses) if (dist(h, p) < radius + 5) return false;
   for (const b of [g.workshop, g.granary, g.shrine, g.well]) if (b && dist(b, p) < radius + 8) return false;
-  return !g.wallPlan || g.wallPlan.segments.every(({ a, b }) => distanceToSegment(p, a, b) >= radius + 2);
+  return !g.fortifications?.some(w => w.segments.some(({ a, b }) => distanceToSegment(p, a, b) < radius + 2));
 }
 
 function riverDist(S, x, y) { const r = S.river; if (!r) return 1e9; const k = clamp(Math.round((y + 20) / 20), 0, r.length - 1); return Math.abs(x - r[k][0]); }
@@ -680,6 +693,10 @@ function settle(S, g) {
     g.houses = r.houses.slice(0, 16).map(h => ({ ...h, ruined: true }));
     for (const f of r.fields) { const c = cellAt(f.x, f.y); if (S.occ[c] || (S.own && S.own[c])) continue; S.occ[c] = g.id; g.fields.push({ x: f.x, y: f.y, c, fert: S.ter[c] === 'r' ? 0.9 : 0.55 }); }
     if (r.plan) g.plan = Object.assign({}, r.plan);
+    if (r.fortifications?.length) {
+      g.fortifications = r.fortifications; g.walls = true;
+      S.wallV = (S.wallV || 0) + 1;
+    }
     claim(S, g, 20, 20); pickTarget(S, g);
     S.settledOnce = true;
     log(S, 'settle', `«${g.name}» занимает заброшенную деревню «${r.name}» и чинит дома`, r.x, r.y, g.hue, { why: sent([`деревня пустует ${yrs(Math.max(1, Math.round((S.tick - r.t) / 360)))}`, `там стоят ${g.houses.length} ${pl(g.houses.length, 'дом', 'дома', 'домов')} без крыш${g.fields.length ? ` и ${g.fields.length} ${pl(g.fields.length, 'заросшее поле', 'заросших поля', 'заросших полей')}` : ''}`, 'починить старый дом вдвое быстрее, чем построить новый', 'место уже проверено: здесь когда-то жили']), gs: [g.id] });
@@ -710,11 +727,13 @@ function settle(S, g) {
 }
 function houseSpot(S, g) {
   const plan = planOf(S, g);
-  const angle = Math.atan2(plan.uy, plan.ux);
-  for (let t = 0; t < 64; t++) {
+  for (let t = 0; t < 32; t++) {
     const p = plotPos(g, plan.k);
-    plan.k = (plan.k + 1) % 64;
-    if (plotOk(S, g, p)) return { kind: 'house', ...p, angle, prog: 0, need: 50 };
+    plan.k = (plan.k + 1) % 32;
+    if (p && plotOk(S, g, p) && lineOnLand(S, p.entrance, p.frontage)
+      && !g.fortifications?.some(w => w.segments.some(({ a, b }) => lineCrossing(p.entrance, p.frontage, a, b) !== null))) {
+      return { kind: 'house', ...p, prog: 0, need: 50 };
+    }
   }
   return specialSpot(S, g, 'house');
 }
@@ -729,7 +748,7 @@ function fieldSpot(S, g) {
     if (d < 48 || d > 170 || !streetClear(g, { x, y }, 10)) continue;
     if (g.houses.some(h => Math.abs(h.x - x) < 16 && Math.abs(h.y - y) < 16)
       || [g.well, g.workshop, g.granary, g.shrine].some(p => p && dist(p, { x, y }) < 17)) continue;
-    if (g.wallPlan?.segments.some(({ a, b }) => distanceToSegment({ x, y }, a, b) < 10)) continue;
+    if (g.fortifications?.some(w => w.segments.some(({ a, b }) => distanceToSegment({ x, y }, a, b) < 10))) continue;
     if (!reach(S, g.home.x, g.home.y, x, y)) continue;
     let adj = 0; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const q = c + ox + oy * N; if (S.occ[q] === g.id) adj++; }
     const fert = t === 'r' ? 1 : 0.6, v = fert * 2 - d / 110 + adj * 0.45 - (S.road[c] ? 1 : 0);
@@ -741,21 +760,23 @@ function fieldSpot(S, g) {
 function finishSite(S, g) {
   const st = g.site; g.site = null;
   if (st.kind === 'house') {
-    g.houses.push({ ...placedSite(st), ...(st.earth ? { earth: true } : {}) });
+    g.houses.push({ ...placedSite(st), built: S.tick, ...(st.earth ? { earth: true } : {}) });
     const k = g.houses.length;
-    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Каждый дом — это 6 брёвен из леса и месяцы работы строителей.`, gs: [g.id] });
+    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Для последнего дома строители принесли ${st.materials?.wood ?? 6} заготовок дерева и отработали на площадке.`, gs: [g.id] });
   } else if (st.kind === 'workshop') {
-    g.workshop = placedSite(st);
+    g.workshop = { ...placedSite(st), built: S.tick };
     const first = !S.firstWorkshop; S.firstWorkshop = true;
     log(S, 'tech', first ? `Первая мастерская в мире: «${g.name}» начинает делать орудия` : `«${g.name}» строит мастерскую`, st.x, st.y, g.hue, { first, why: `Камень с холмов и брёвна из леса превращаются в орудия. С орудием любая работа идёт на половину быстрее, но орудия изнашиваются, и камень с деревом нужны постоянно. Холмы у «${g.name}» в ${cells(g.stoneDist)} от поселения.`, gs: [g.id] });
-  } else if (st.kind === 'walls') {
-    const expanded = g.walls;
+  } else if (st.kind === 'palisade') {
+    (g.fortifications ||= []).push({ id: st.id, kind: st.kind, ...st.layout, started: st.started, built: S.tick, materials: st.materials });
     g.walls = true;
-    g.wallPlan = st.layout || wallPlan(S, g);
-    if (g.wallPlan) g.wallPlan.built = S.tick;
-    log(S, 'tech', `«${g.name}» ${expanded ? 'расширяет частокол' : 'обносит жильё частоколом'}`, g.home.x, g.home.y, g.hue, { why: sent([`угроза от соседей ${P0(Math.min(1, g.threat || 0))}`, S.tick - g.raided < 720 ? 'недавно был набег' : '', g.wallPlan ? `ограда по жилой части деревни, ${Math.round(g.wallPlan.length)} шагов и ${st.wood} брёвен` : 'дома оградили частоколом']), gs: [g.id] });
+    S.wallV = (S.wallV || 0) + 1;
+    log(S, 'tech', `«${g.name}» заканчивает участок частокола`, st.x, st.y, g.hue, {
+      why: sent([`ограда прикрывает жилые дворы со стороны «${st.layout.threatName}»`, `${st.layout.posts} кольев из ${st.wood} заготовок дерева`, st.layout.gates.length ? 'на улице оставили проезд' : 'тропы остались открыты']),
+      gs: [g.id],
+    });
   } else if (st.kind === 'shrine') {
-    g.shrine = placedSite(st);
+    g.shrine = { ...placedSite(st), built: S.tick };
     S.faiths = S.faiths || {};
     const partner = S.groups.find(o => o !== g && o.faith && o.home && (S.routes[key(o.id, g.id)] || (S.hostility[key(o.id, g.id)] || 0) < 0.2 && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300));
     const why0 = sent([g.famY !== undefined ? 'голодные зимы' : '', g.warsLost ? 'проигранные битвы' : '', 'люди ищут смысл в бедах', 'святилище утешает: обиды копятся на треть медленнее, а лидер выглядит законнее', 'жрец кормится подношениями']);
@@ -774,7 +795,7 @@ function finishSite(S, g) {
     }
   } else if (st.kind === 'bridge') {
     for (const c of st.cells) S.bridge[c] = g.id; S.navV++; g.bridgeAt = S.tick;
-    if (st.approaches) (S.bridgePlans ||= []).push({ cells: st.cells, approaches: st.approaches });
+    if (st.approaches) (S.bridgePlans ||= []).push({ ...placedSite(st), cells: st.cells, approaches: st.approaches, built: S.tick });
     const first = !S.firstBridge; S.firstBridge = true;
     log(S, 'bridge', first ? `Первый мост в мире: «${g.name}» перекидывает мост через реку` : `«${g.name}» строит мост через реку`, st.x, st.y, g.hue, { first, why: sent([`за год жители ${g.cross12 || 0} ${pl(g.cross12 || 0, 'раз', 'раза', 'раз')} переходили реку вброд или по льду`, g.drowned ? `${g.drowned} ${pl(g.drowned, 'человек утонул', 'человека утонули', 'человек утонули')}` : 'брод опасен, особенно в половодье', 'мост — это брёвна и месяцы работы, зато по нему ходят без риска и вдвое быстрее', 'теперь по мосту пойдут и чужие: торговцы и войска']), gs: [g.id] });
   } else if (st.kind === 'fboat') {
@@ -782,13 +803,13 @@ function finishSite(S, g) {
     if (!S.firstFboat) { S.firstFboat = true; log(S, 'tech', `Первая рыбацкая лодка: «${g.name}» выходит в море`, st.x, st.y, g.hue, { first: true, why: 'Рыба у берега быстро кончается, а в море её больше. На лодке двое рыбаков ловят за день столько, сколько с берега за неделю. Но море опасно: в шторм лодки не возвращаются.', gs: [g.id] }); }
   } else if (st.kind === 'well') {
     const ok = rnd(S) < wellOk(S, st.x, st.y);
-    if (ok) { g.well = { x: st.x, y: st.y, t: S.tick, depth: wellOk(S, st.x, st.y) > 0.9 ? 1 : 0.5, dry: false }; }
+    if (ok) { g.well = { ...placedSite(st), t: S.tick, depth: wellOk(S, st.x, st.y) > 0.9 ? 1 : 0.5, dry: false }; }
     const first = ok && !S.firstWell; if (ok) S.firstWell = true;
     log(S, 'well', ok ? (first ? `Первый колодец в мире: «${g.name}» копает свой колодец` : `«${g.name}» копает колодец`) : `«${g.name}» копает колодец, но до воды не докапывается`, st.x, st.y, g.hue, { first, why: sent([`до воды ${Math.round(g.wd || 0)} шагов: каждый день ${g.wNeed || 0} ${pl(g.wNeed || 0, 'человек', 'человека', 'человек')} только носят воду`, ok ? 'теперь вода прямо в деревне, и руки освобождаются для полей' : 'здесь глубоко до воды: в низине у реки копать легче', ok && wellOk(S, st.x, st.y) < 0.9 ? 'колодец неглубокий и в засуху может пересохнуть' : '']), gs: [g.id] });
   } else if (st.kind === 'repair') {
     const hh = g.houses[st.idx]; if (hh) hh.ruined = false;
   } else if (st.kind === 'granary') {
-    g.granary = placedSite(st);
+    g.granary = { ...placedSite(st), built: S.tick };
     const first = !S.firstGranary; S.firstGranary = true;
     log(S, 'tech', first ? `Первый амбар в мире: «${g.name}» учится хранить урожай` : `«${g.name}» строит амбар`, st.x, st.y, g.hue, { why: `Без амбара запасы гниют: полтора процента в месяц. В амбаре — в пять раз медленнее, и урожай доживает до весны. В «${g.name}» скопилось ${Math.round(g.treasury)} еды.`, gs: [g.id] });
   } else g.fields.push({ x: st.x, y: st.y, c: st.c, fert: st.fert });
@@ -798,8 +819,8 @@ function nearestHill(S, p, g) {
   for (let c = 0; c < S.ter.length; c++) { if (S.ter[c] !== 'h' || !usable(S, c, g)) continue; const d = Math.hypot((c % N) * CS + 10 - p.x, Math.floor(c / N) * CS + 10 - p.y); if (d < bd) { bd = d; best = c; } }
   return bd < 360 ? { c: best, d: bd } : { c: null, d: bd };
 }
-function placedSite({ x, y, angle }) {
-  return { x, y, ...(angle === undefined ? {} : { angle }) };
+function placedSite({ x, y, angle, footprint, entrance, frontage, id, started, materials, approvedBy }) {
+  return { x, y, angle, footprint, entrance, frontage, id, started, materials, approvedBy };
 }
 function specialSpot(S, g, kind) {
   const plan = planOf(S, g);
@@ -912,55 +933,189 @@ function streetClear(g, p, width) {
   const street = g.plan?.street;
   return !street || distanceToSegment(p, street.a, street.b) >= street.width / 2 + width;
 }
-function wallPlan(S, g) {
-  planOf(S, g);
-  const point = (x, y) => alongStreet(g, x, y);
-  const buildings = g.houses.filter(h => !h.ruined);
-  buildings.sort((a, b) => dist(a, g.home) - dist(b, g.home));
-  if (g.granary) buildings.unshift(g.granary);
-  const occupied = buildings.concat([g.well, g.shrine, g.workshop].filter(Boolean));
-  // Draw one fixed perimeter around the occupied core, with gates where the street crosses it.
-  for (let count = Math.min(8, buildings.length); count >= Math.min(2, buildings.length); count--) {
-    let left = -17, right = 17, lower = -17, upper = 17;
-    for (const b of buildings.slice(0, count)) {
-      const dx = b.x - g.home.x, dy = b.y - g.home.y;
-      const along = dx * g.plan.ux + dy * g.plan.uy, across = -dx * g.plan.uy + dy * g.plan.ux;
-      left = Math.min(left, along - 9); right = Math.max(right, along + 9);
-      lower = Math.min(lower, across - 9); upper = Math.max(upper, across + 9);
+function lineCrossing(a, b, c, d) {
+  const x = b.x - a.x, y = b.y - a.y, u = d.x - c.x, v = d.y - c.y;
+  const den = x * v - y * u;
+  if (Math.abs(den) < 1e-8) return null;
+  const dx = c.x - a.x, dy = c.y - a.y;
+  const t = (dx * v - dy * u) / den, q = (dx * y - dy * x) / den;
+  return t > 0 && t < 1.000001 && q >= 0 && q <= 1 ? t : null;
+}
+
+function wallSite(S, g) {
+  const existing = g.fortifications || [];
+  if (existing.length && S.tick - existing[existing.length - 1].built < 360) return null;
+  const candidates = S.groups.filter(o => o !== g && o.home && !allied(S, g.id, o.id) && dist(g.home, o.home) < 460)
+    .map(o => ({ o, threat: S.wars.some(w => w.att === o.id && w.def === g.id) ? 2 : S.hostility[key(g.id, o.id)] || 0 }))
+    .filter(({ threat }) => threat > 0.6)
+    .sort((a, b) => b.threat - a.threat || dist(g.home, a.o.home) - dist(g.home, b.o.home));
+  if (!candidates.length) return null;
+  const street = planOf(S, g).street;
+  const core = g.houses.filter(h => !h.ruined && dist(h, g.home) < 50);
+  if (g.granary && dist(g.granary, g.home) < 65) core.push(g.granary);
+  const buildings = g.houses.concat([g.well, g.granary, g.workshop, g.shrine].filter(Boolean));
+  for (const { o } of candidates) {
+    const d = dist(g.home, o.home), ux = (o.home.x - g.home.x) / d, uy = (o.home.y - g.home.y) / d;
+    if (existing.some(w => w.facing && w.facing.x * ux + w.facing.y * uy > 0.7)) continue;
+    const forward = p => (p.x - g.home.x) * ux + (p.y - g.home.y) * uy;
+    const side = p => (p.y - g.home.y) * ux - (p.x - g.home.x) * uy;
+    const beyond = Math.max(15, ...core.map(forward)) + 9;
+    const center = core.length ? core.reduce((sum, p) => sum + side(p), 0) / core.length : 0;
+    let best = null, bestScore = -Infinity;
+    for (const extra of [0, 10, 20]) for (const offset of [0, -8, 8]) {
+      for (const bend of [0, -8, 8]) for (const half of [20, 27]) {
+        const point = (front, across) => ({ x: g.home.x + ux * front - uy * across, y: g.home.y + uy * front + ux * across });
+        const a = point(beyond + extra - bend, center + offset - half);
+        const b = point(beyond + extra + bend, center + offset + half);
+        const length = dist(a, b);
+        if (!lineOnLand(S, a, b)) continue;
+        const at = t => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        const crossing = lineCrossing(a, b, street.a, street.b);
+        const gap = 9 / length;
+        if (crossing !== null && (crossing < gap || crossing > 1 - gap)) continue;
+        const segments = crossing === null ? [{ a, b }] : [
+          { a, b: at(crossing - gap / 2) }, { a: at(crossing + gap / 2), b },
+        ];
+        const gates = crossing === null ? [] : [{ ...at(crossing), width: 9, angle: Math.atan2(b.y - a.y, b.x - a.x) }];
+        const work = gates[0] || at(0.5);
+        if (!usable(S, cellAt(work.x, work.y), g) || !reach(S, g.home.x, g.home.y, work.x, work.y)) continue;
+        if (buildings.some(p => distanceToSegment(p, a, b) < (p.footprint ? Math.hypot(p.footprint.width, p.footprint.depth) / 2 + 2 : 10))) continue;
+        if (g.fields.some(p => distanceToSegment(p, a, b) < 13)) continue;
+        if (existing.some(w => w.segments.some(p => lineCrossing(a, b, p.a, p.b) !== null ||
+          Math.min(distanceToSegment(p.a, a, b), distanceToSegment(p.b, a, b)) < 6))) continue;
+        let hardGround = 0, roadConflict = false;
+        for (const segment of segments) {
+          const steps = Math.ceil(dist(segment.a, segment.b) / 4);
+          for (let i = 0; i <= steps; i++) {
+            const f = i / steps, p = { x: segment.a.x + (segment.b.x - segment.a.x) * f, y: segment.a.y + (segment.b.y - segment.a.y) * f };
+            const cell = cellAt(p.x, p.y);
+            if (!usable(S, cell, g) || (S.road[cell] && distanceToSegment(p, street.a, street.b) > 10)) roadConflict = true;
+            if (S.ter[cell] === 'f') hardGround++;
+          }
+        }
+        if (roadConflict) continue;
+        const cover = core.filter(p => Math.abs(side(p) - center - offset) < half).length;
+        const score = cover * 12 - extra * 0.5 - Math.abs(offset) * 0.3 - Math.abs(bend) * 0.2 - length * 0.14 - hardGround;
+        if (score <= bestScore) continue;
+        bestScore = score;
+        const posts = segments.reduce((n, s) => n + Math.ceil(dist(s.a, s.b) / 1.55), 0);
+        const layout = { segments, gates, facing: { x: ux, y: uy }, posts, height: 11, threatId: o.id, threatName: o.name };
+        best = { kind: 'palisade', ...work, prog: 0, need: 22 + posts * 3, wood: Math.ceil(posts / 3) + (gates.length ? 2 : 0), layout };
+      }
     }
-    const points = [point(left, lower), point(right, lower), point(right, upper), point(left, upper)];
-    const edges = points.map((a, i) => ({ a, b: points[(i + 1) % points.length] }));
-    if (!edges.every(({ a, b }) => lineOnLand(S, a, b))) continue;
-    if (occupied.some(p => edges.some(({ a, b }) => distanceToSegment(p, a, b) < 7))) continue;
-    const street = g.plan.street;
-    const segments = [edges[0], edges[2]], gates = [];
-    for (const along of [left, right]) {
-      const at = point(along, 0);
-      if (distanceToSegment(at, street.a, street.b) < 1) {
-        gates.push({ ...at, width: 9 });
-        segments.push({ a: point(along, lower), b: point(along, -4.5) }, { a: point(along, 4.5), b: point(along, upper) });
-      } else segments.push({ a: point(along, lower), b: point(along, upper) });
-    }
-    if (!gates.length) continue;
-    return { points, segments, gates, bounds: { left, right, lower, upper }, length: segments.reduce((n, { a, b }) => n + dist(a, b), 0) };
+    if (best) return best;
   }
   return null;
 }
-function insideWall(g, wall, point) {
-  const dx = point.x - g.home.x, dy = point.y - g.home.y;
-  const x = dx * g.plan.ux + dy * g.plan.uy, y = -dx * g.plan.uy + dy * g.plan.ux;
-  const { left, right, lower, upper } = wall.bounds;
-  return x > left && x < right && y > lower && y < upper;
+
+function wallCover(g, from) {
+  if (!from || !g.home) return false;
+  return g.fortifications?.some(wall => wall.segments.some(({ a, b }) => lineCrossing(g.home, from, a, b) !== null));
 }
-function wallSite(S, g) {
-  const prior = g.wallPlan;
-  const outside = prior ? g.houses.filter(h => !h.ruined && !insideWall(g, prior, h)) : [];
-  if (g.walls && (!prior || outside.length < 3 || S.tick - prior.built < 360 * 6)) return null;
-  const layout = wallPlan(S, g);
-  if (!layout) return null;
-  if (prior && (layout.length <= prior.length || outside.filter(h => insideWall(g, layout, h)).length < 3)) return null;
-  return { kind: 'walls', ...g.home, prog: 0, need: Math.max(90, Math.round(layout.length * 0.5)),
-    wood: Math.max(8, Math.ceil(layout.length * 0.07)), layout };
+
+function wallCells(S) {
+  if (S._wallCells && S._wallV === S.wallV) return S._wallCells;
+  const cells = [];
+  for (const g of S.groups) for (const wall of g.fortifications || []) for (const segment of wall.segments) {
+    const { a, b } = segment;
+    const x0 = (cellAt(Math.min(a.x, b.x) - 6, 0) % N), x1 = (cellAt(Math.max(a.x, b.x) + 6, 0) % N);
+    const y0 = (cellAt(0, Math.min(a.y, b.y) - 6) / N) | 0, y1 = (cellAt(0, Math.max(a.y, b.y) + 6) / N) | 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) (cells[y * N + x] ||= []).push(segment);
+  }
+  S._wallV = S.wallV;
+  return S._wallCells = cells;
+}
+
+function wallWalk(a, to, goal, segments) {
+  const hit = segments.find(s => lineCrossing(a, to, s.a, s.b) !== null);
+  if (!hit) return to;
+  const { a: start, b: end } = hit, length = dist(start, end);
+  const from = dist(a, start) + dist(start, goal) < dist(a, end) + dist(end, goal) ? start : end;
+  const dir = from === start ? -1 : 1;
+  const target = { x: from.x + dir * (end.x - start.x) / length * 3, y: from.y + dir * (end.y - start.y) / length * 3 };
+  const d = dist(a, target) || 1, step = Math.min(d, dist(a, to));
+  const around = { x: a.x + (target.x - a.x) * step / d, y: a.y + (target.y - a.y) * step / d };
+  return segments.some(s => lineCrossing(a, around, s.a, s.b) !== null) ? a : around;
+}
+/* Building projects reserve stock, then require work and supplies at the plot. */
+const BUILD_FOOTPRINT = {
+  house: [10, 10], workshop: [18, 13], granary: [10, 10], shrine: [10, 10], well: [9, 9], fboat: [12, 5],
+};
+const BUILD_PHASES = {
+  house: [['ground', 0.22], ['frame', 0.65], ['roof', 1]],
+  workshop: [['ground', 0.25], ['frame', 0.72], ['roof', 1]],
+  granary: [['ground', 0.22], ['frame', 0.70], ['roof', 1]],
+  shrine: [['ground', 0.25], ['frame', 0.72], ['roof', 1]],
+  repair: [['clear', 0.25], ['frame', 0.65], ['roof', 1]],
+  well: [['dig', 0.68], ['lining', 0.92], ['finish', 1]],
+  bridge: [['ground', 0.22], ['supports', 0.68], ['deck', 1]],
+  palisade: [['dig', 0.32], ['posts', 0.88], ['finish', 1]],
+  fboat: [['ground', 0.16], ['frame', 0.70], ['finish', 1]],
+};
+function beginSite(S, g, site, wood = 0, stone = 0) {
+  if (!site || g.site || g.wood < wood || (g.stone || 0) < stone) return false;
+  if (wood) g.wood -= wood;
+  if (stone) g.stone -= stone;
+  const dims = BUILD_FOOTPRINT[site.kind];
+  if (dims) site.footprint = { width: dims[0], depth: dims[1] };
+  site.id = g.id + ':' + S.tick;
+  site.started = S.tick;
+  site.approvedBy = g.leader;
+  site.materials = { wood, stone };
+  site.delivered = { wood: 0, stone: 0 };
+  site.phase = BUILD_PHASES[site.kind]?.[0][0];
+  g.site = site;
+  return true;
+}
+function siteMaterial(site) {
+  if (!site.materials || site.prog < site.need * BUILD_PHASES[site.kind][0][1]) return null;
+  return site.delivered.wood < site.materials.wood ? 'wood' : site.delivered.stone < site.materials.stone ? 'stone' : null;
+}
+function nearSite(a, point, radius = 11) { return Math.hypot(a.x - point.x, a.y - point.y) < radius; }
+function siteTarget(g, worker) {
+  const site = g.site, material = siteMaterial(site);
+  if (!material) return site.kind === 'palisade' ? wallWorkPoint(site) : site;
+  return worker.siteTrip?.id === site.id && worker.siteTrip.kind === material ? site : storeOf(g, material);
+}
+function wallWorkPoint(site) {
+  const { segments } = site.layout;
+  const active = Math.min(segments.length - 1, Math.floor(site.prog / site.need * segments.length));
+  const { a, b } = segments[active];
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+function workSite(S, g, worker, effort) {
+  const site = g.site;
+  const material = siteMaterial(site);
+  if (material) {
+    if (worker.siteTrip?.id !== site.id || worker.siteTrip.kind !== material) {
+      if (!nearSite(worker, storeOf(g, material), 7)) return false;
+      worker.siteTrip = { id: site.id, kind: material };
+    } else {
+      if (!nearSite(worker, site, 7)) return false;
+      site.delivered[material] = Math.min(site.materials[material], site.delivered[material] + CAP[material]);
+      worker.siteTrip = null;
+      updateSitePhase(site);
+    }
+    return true;
+  }
+  if (!nearSite(worker, siteTarget(g, worker))) return false;
+  if (worker.siteTrip) worker.siteTrip = null;
+  const phases = BUILD_PHASES[site.kind];
+  if (!phases) { site.prog += effort; }
+  else {
+    const firstLimit = site.need * phases[0][1];
+    const next = Math.min(site.need, site.prog + effort);
+    site.prog = site.materials && site.prog < firstLimit ? Math.min(firstLimit, next) : next;
+    updateSitePhase(site);
+  }
+  if (site.prog >= site.need) finishSite(S, g);
+  return true;
+}
+
+function updateSitePhase(site) {
+  const phases = BUILD_PHASES[site.kind];
+  site.phase = siteMaterial(site) ? 'supply'
+    : phases.find(([, end]) => site.prog < site.need * end)?.[0] || phases[phases.length - 1][0];
 }
 /* ---------- weather and the agricultural year ---------- */
 const STORM_CHANCE = [0.09, 0.045, 0.02, 0.06];
@@ -1031,22 +1186,28 @@ function jobs(S, g) {
   const lean0 = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
   if (!g.site && lean0 && g.fields.length < wantF) g.site = fieldSpot(S, g);
   if (!g.site) {
-    if (threat > 0.6 && g.houses.length >= 3 && g.wood >= 8 && (site = wallSite(S, g)) && g.wood >= site.wood) { g.wood -= site.wood; g.site = site; }
-    else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8 && (site = specialSpot(S, g, 'shrine'))) { g.wood -= 8; g.site = site; }
-    else if (g.landing && (g.fboats || 0) < Math.ceil(n / 8) && g.houses.length >= 2 && g.wood >= 8 && n >= 4) { g.wood -= 8; g.site = { kind: 'fboat', x: g.landing.x, y: g.landing.y, prog: 0, need: 70 }; }
-    else if (g.houses.some(h => h.ruined) && livingHouses(g).length < wantH && g.wood >= 2) { const idx = g.houses.findIndex(h => h.ruined), hh = g.houses[idx]; g.wood -= 2; g.site = { kind: 'repair', idx, x: hh.x, y: hh.y, prog: 0, need: 20 }; }
-    else if (!g.bridgeAt && n >= 8 && g.houses.length >= 3 && g.wood >= 12 && ((g.cross12 || 0) >= 10 || (g.drowned || 0) >= 1) && (site = bridgeSpot(S, g)) && g.wood >= site.wood) { g.wood -= site.wood; g.site = site; g.bridgeAt = -1; }
-    else if (g.houses.length < wantH && g.wood >= (g.workshop ? 5 : 6) && (site = houseSpot(S, g))) { g.wood -= g.workshop ? 5 : 6; g.site = site; }
-    // no timber within reach: a family still gets a roof, an earth-and-wattle house that takes longer to raise
-    else if (g.wood < 6 && livingHouses(g).length < wantH && (g.woodCell === null || livingHouses(g).length <= wantH - 2) && (site = houseSpot(S, g))) { g.site = { ...site, need: 90, earth: true }; }
-    else if (g.fields.length < wantF && season !== 0 && (site = fieldSpot(S, g))) g.site = site;
-    else if (needGR && g.wood >= 8 && (site = specialSpot(S, g, 'granary'))) { g.wood -= 8; g.site = site; }
-    else if (needWS && g.wood >= 4 && g.stone >= 4 && (site = specialSpot(S, g, 'workshop'))) { g.wood -= 4; g.stone -= 4; g.site = site; }
+    if (threat > 0.6 && g.houses.length >= 3 && g.wood >= 8 && (site = wallSite(S, g)) && beginSite(S, g, site, site.wood)) {}
+    else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8 && (site = specialSpot(S, g, 'shrine'))) beginSite(S, g, site, 8);
+    else if (g.landing && (g.fboats || 0) < Math.ceil(n / 8) && g.houses.length >= 2 && g.wood >= 8 && n >= 4) {
+      beginSite(S, g, { kind: 'fboat', x: g.landing.x, y: g.landing.y, prog: 0, need: 70 }, 8);
+    } else if (g.houses.some(h => h.ruined) && livingHouses(g).length < wantH && g.wood >= 2) {
+      const idx = g.houses.findIndex(h => h.ruined), hh = g.houses[idx];
+      beginSite(S, g, { kind: 'repair', idx, x: hh.x, y: hh.y, angle: hh.angle, footprint: hh.footprint, prog: 0, need: 20 }, 2);
+    } else if (!g.bridgeAt && n >= 8 && g.houses.length >= 3 && g.wood >= 12 && ((g.cross12 || 0) >= 10 || (g.drowned || 0) >= 1)
+      && (site = bridgeSpot(S, g)) && beginSite(S, g, site, site.wood)) g.bridgeAt = -1;
+    else if (g.houses.length < wantH && g.wood >= (g.workshop ? 5 : 6) && (site = houseSpot(S, g))) beginSite(S, g, site, g.workshop ? 5 : 6);
+    // A wattle-and-earth house still needs a load of poles and longer work on site.
+    else if (g.wood >= 1 && g.wood < 6 && livingHouses(g).length < wantH
+      && (g.woodCell === null || livingHouses(g).length <= wantH - 2) && (site = houseSpot(S, g))) {
+      beginSite(S, g, { ...site, need: 90, earth: true }, 1);
+    } else if (g.fields.length < wantF && season !== 0 && (site = fieldSpot(S, g))) g.site = site;
+    else if (needGR && g.wood >= 8 && (site = specialSpot(S, g, 'granary'))) beginSite(S, g, site, 8);
+    else if (needWS && g.wood >= 4 && g.stone >= 4 && (site = specialSpot(S, g, 'workshop'))) beginSite(S, g, site, 4, 4);
   }
   const L = S._a.get(g.leader);
   const pool = mem.filter(m => !(m === L && n > 4) && !m.car && !m.war);
   if (L && n > 4) L.job = 'lead';
-  const woodNeed = g.houses.length < wantH || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
+  const woodNeed = g.houses.length < wantH || (threat > 0.6 && g.houses.length >= 3 && !g.walls && g.wood < 20) || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
   const stoneNeed = g.stoneCell !== null && ((needWS && g.stone < 4) || (g.workshop && g.stone < 6));
   const lean = lean0;
   const quota = {
@@ -1221,7 +1382,6 @@ function marketWatch(S) {
   }
 }
 
-const wallR = g => Math.max(26, ...g.houses.map(h => Math.hypot(h.x - g.home.x, h.y - g.home.y) + 12));
 function threatOf(S, g) {
   let t = 0;
   for (const o of S.groups) {
@@ -1234,10 +1394,10 @@ function threatOf(S, g) {
 }
 function toolCov(g) { return Math.min(1, (g.tools || 0) / Math.max(1, g.members.length * 0.6)); }
 function fightPow(m, g) { return m.skill * (0.3 + m.energy) * (1 + 0.5 * toolCov(g)) * (1 + 0.4 * Math.min(1, (m.xp && m.xp.guard) || 0)); }
-function defence(S, g) {
+function defence(S, g, approach) {
   let p = 0;
   for (const id of g.members) { const m = S._a.get(id); if (!m || m.car || m.war) continue; if (Math.hypot(m.x - g.home.x, m.y - g.home.y) > 160) continue; p += fightPow(m, g) * (m.job === 'guard' ? 1 : 0.45); }
-  return p * (g.walls ? 1.7 : 1);
+  return p * (wallCover(g, approach) ? 1.35 : 1);
 }
 function warTarget(S, a) {
   const w = S.wars.find(x => x.id === a.war);
@@ -1259,7 +1419,7 @@ function warMonth(S) {
       const d = Math.hypot(A.home.x - B.home.x, A.home.y - B.home.y); if (d > 460 || !reach(S, A.home.x, A.home.y, B.home.x, B.home.y)) continue;
       const fighters = warband(S, A);
       let pa = 0; for (const m of fighters) pa += fightPow(m, A);
-      const pdR = defence(S, B), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
+      const pdR = defence(S, B, A.home), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
       const prize = B.treasury + (B.tools || 0) * 4 + (A.lord === B.id ? 40 : 0);
       const v = odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
       if (odds > 0.42 && v > bv) { bv = v; best = { B, fighters, pa, pd: pdR, odds, oddsR, h, d, av }; }
@@ -1325,7 +1485,7 @@ function wars(S) {
 }
 function battle(S, w, A, B, band) {
   let pa = 0; for (const m of band) pa += fightPow(m, A);
-  let pd = defence(S, B);
+  let pd = defence(S, B, A.home);
   const st = B.state && (S.states || []).find(x => x.id === B.state);
   if (st && st.type === 'Конфедерация') for (const id of st.members) { const o = S._g.get(id); if (o && o !== B && o !== A && o.home && Math.hypot(o.home.x - B.home.x, o.home.y - B.home.y) < 420) pd += defence(S, o) * 0.35; }
   const win = rnd(S) < pa * pa / (pa * pa + pd * pd + 1e-6);
@@ -1360,14 +1520,14 @@ function battle(S, w, A, B, band) {
     for (const m of B.members.map(id => S._a.get(id))) if (m && m.id !== B.leader) { m.res = clamp(m.res + 0.12, 0, 1); if (LB) bump(m, LB, -0.1); }
     conquer = !B.lord && B.members.length < A.members.length && ratio > 1.3 && LA && LA.ambition > 0.5 && rnd(S) < 0.6;
     text = `Битва у «${B.name}»: войско «${A.name}» ${rout ? 'наголову разбивает защитников' : 'берёт верх'}, уносит ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${burnt ? ', один дом сожжён' : ''}${annexed ? `, отрезает ${annexed} ${pl(annexed, 'клетку', 'клетки', 'клеток')} земли` : ''}`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол не спас' : 'частокола у защитников не было', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
   } else {
     if (LA) { LA.status = Math.max(0, LA.status - 2); A.legit = Math.max(0.2, A.legit - 0.25); LA.rep = clamp((LA.rep || 0) - 0.12, -1, 1); }
     A.warsLost++; B.warsWon++; A.trauma++;
     for (const m of A.members.map(id => S._a.get(id))) if (m && m.id !== A.leader) { m.res = clamp(m.res + 0.15, 0, 1); if (LA) bump(m, LA, -0.12); }
     for (const m of defenders) { m.status += 0.4; m.xp.guard = (m.xp.guard || 0) + 0.25; }
     text = `Битва у «${B.name}»: защитники ${rout ? 'обращают в бегство' : 'отбивают'} войско «${A.name}»`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол удвоил оборону' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
   }
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
   const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
@@ -1762,7 +1922,7 @@ function waterMonth(S) {
     const L = S._a.get(g.leader);
     if (!g.site && !g.well && L && n >= 5 && g.wd > 110 && g.wood >= 4 && (g.wTry || 0) < S.tick && seasonOf(S.tick) !== 0) {
       const site = specialSpot(S, g, 'well');
-      if (site) { g.wood -= 4; g.wTry = S.tick + 360 * 4; g.site = site; }
+      if (beginSite(S, g, site, 4)) g.wTry = S.tick + 360 * 4;
     }
   }
   // drought conflicts over shared springs
@@ -1777,7 +1937,7 @@ function droughtYear(S) {
 }
 
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, quit: 1.5, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 // ref: id of the event this line refers to (see the linked chronicle in 00-core)
 function bio(S, a, k, s, ref) {
   if (!a) return;
@@ -2254,7 +2414,8 @@ function householdsMonth(S) {
       const widow = inside.find(m => m.spouse === h.owner || (h.spouseOf && m.id === h.spouseOf));
       const heirs = inside.filter(m => m.mother === h.owner || m.father === h.owner).sort((a, b) => b.age - a.age);
       const next = widow || heirs[0] || inside.sort((a, b) => b.age - a.age)[0];
-      const ref = dead && h.deathEv ? h.deathEv : null;
+      const ref = dead && h.deathEv && eventById(S, h.deathEv) ? h.deathEv : null;
+      delete h.deathEv;
       if (next) {
         h.owner = next.id; h.oname = next.name; h.spouseOf = null;
         if (dead) bio(S, next, 'inheritHouse', next === widow ? `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме` : `Наследует дом ${oname}`, ref);
@@ -2311,7 +2472,7 @@ function housemates(S, a) {
 /* ---------- disputes and customs: a village remembers its cases, and a repeated ruling becomes a custom ---------- */
 // g.cases: last rulings [kind, outcome, tick, eventId]; g.customs[kind] = outcome the village now holds to.
 // Kinds: 'inherit' (heirs quarrel over a house: 'eldest' or 'share') and 'blood' (a killing: 'revenge' or 'wergild').
-const CASE_LABEL = { inherit: { eldest: 'дом старшему', share: 'поделиться с младшими' }, blood: { revenge: 'кровь за кровь', wergild: 'выкуп вместо мести' } };
+const CASE_LABEL = { inherit: { eldest: 'дом старшему', share: 'поделиться с младшими' }, blood: { revenge: 'кровь за кровь', wergild: 'выкуп вместо мести' }, theft: { fine: 'вор возвращает вдвое', ban: 'вору закрыты ворота' } };
 function elders(S, g) { return g.members.map(id => S._a.get(id)).filter(m => m && m.age > 55).length / Math.max(1, g.members.length); }
 // record a ruling; when the same ruling keeps coming back, it becomes the village's custom
 function ruling(S, g, kind, outcome, ev) {
@@ -2478,6 +2639,134 @@ function routinePosition(routine, hour, light, position) {
   position.x = route[first].x + (next.x - route[first].x) * part;
   position.y = route[first].y + (next.y - route[first].y) * part;
 }
+/* ---------- secrets and rumours: an event not everybody knows, and people act on what they know ---------- */
+// A secret is a quiet event with ev.secret (kind), ev.guilty, ev.know (ids of those who know). S.secrets keeps the open ones.
+// Every month a knower may tell someone close; the one it concerns (a spouse, a village leader) acts when the news reaches them.
+const SECRET_LIFE = { affair: 360 * 12, theft: 360 * 4 };
+function openSecret(S, kind, text, x, y, hue, guilty, know, extra) {
+  const ev = note(S, 'secret', text, x, y, hue, Object.assign({ secret: kind, guilty: guilty.map(a => a.id), know: know.map(a => a.id), who: guilty.map(a => a.id) }, extra || {}));
+  (S.secrets || (S.secrets = [])).push(ev.id);
+  S.stats['secret_' + kind] = (S.stats['secret_' + kind] || 0) + 1;
+  return ev;
+}
+const knows = (ev, a) => ev.know.includes(a.id);
+// someone learns the secret from a teller; returns true if this was news to them
+function learn(S, ev, a, teller) {
+  if (!a || knows(ev, a)) return false;
+  ev.know.push(a.id);
+  S.stats.rumours = (S.stats.rumours || 0) + 1;
+  for (const id of ev.guilty) { const g = S._a.get(id); if (g && g !== a) bump(a, g, ev.secret === 'theft' ? -0.2 : -0.1); }
+  if (ev.secret === 'theft') { const th = S._a.get(ev.guilty[0]); if (th) th.rep = clamp((th.rep || 0) - 0.03, -1, 1); }
+  return true;
+}
+// who would a knower tell: people close to them (spouse, kin, friends, sworn); the guilty never tell, the guilty's enemies tell eagerly
+function listeners(S, k) {
+  const out = [];
+  const sp = k.spouse && S._a.get(k.spouse); if (sp) out.push(sp);
+  for (const id in k.bonds || {}) { const x = k.bonds[id]; if (x[0] === 'friend' || x[0] === 'sworn' || x[0] === 'love') { const o = S._a.get(+id); if (o) out.push(o); } }
+  for (const pid of [k.mother, k.father]) { const p = pid && S._a.get(pid); if (p) out.push(p); }
+  return out;
+}
+function gossipMonth(S) {
+  if (!S.secrets || !S.secrets.length) return;
+  const keep = [];
+  for (const id of S.secrets) {
+    const ev = S.evArch && S.evArch[id];
+    if (!ev || S.tick - ev.t > (SECRET_LIFE[ev.secret] || 360 * 5) || ev.closed) continue;
+    keep.push(id);
+    const guilty = ev.guilty.map(g => S._a.get(g)).filter(Boolean);
+    if (!guilty.length) { ev.closed = true; continue; }
+    for (const kid of ev.know.slice()) {
+      const k = S._a.get(kid); if (!k || ev.guilty.includes(kid)) continue;
+      const hate = guilty.some(g => bondW(k, g) < 0), love = guilty.some(g => bondW(k, g) > 0.3 || kin(k, g));
+      const talk = (0.03 + 0.06 * (1 - k.coop)) * (hate ? 2.5 : 1) * (love ? 0.3 : 1);
+      for (const l of listeners(S, k)) {
+        if (knows(ev, l) || ev.guilty.includes(l.id) || rnd(S) > talk) continue;
+        if (!learn(S, ev, l, k)) continue;
+        if (concerns(S, ev, l)) react(S, ev, l, k);
+        if (ev.closed) break;
+      }
+      if (ev.closed) break;
+    }
+  }
+  S.secrets = keep.filter(id => S.evArch[id] && !S.evArch[id].closed);
+}
+// does this secret concern the listener directly: a betrayed spouse, or the leader of the robbed village
+function concerns(S, ev, l) {
+  if (ev.secret === 'affair') return ev.betrayed && ev.betrayed.includes(l.id);
+  if (ev.secret === 'theft') { const g = S._g.get(ev.victimG); return !!(g && g.leader === l.id); }
+  return false;
+}
+// the spouse learns, the robbed village's leader learns: they act on it
+function react(S, ev, l, teller) {
+  const g = l.group && S._g.get(l.group);
+  if (ev.secret === 'affair') {
+    const partner = S._a.get(ev.guilty.find(id => S._a.get(id) && S._a.get(id).spouse === l.id) || ev.guilty[0]);
+    const lover = S._a.get(ev.guilty.find(id => id !== (partner && partner.id)));
+    if (!partner || !lover) { ev.closed = true; return; }
+    const pf = clamp(0.25 + 0.35 * l.coop + Math.max(0, bondW(l, partner)) - 0.2 * l.ambition, 0.05, 0.8), pl2 = 0.35, r = rnd(S);
+    let what, kill = false;
+    if (r < pf) { what = `${fem(l, 'прощает', 'прощает')} ${partner.name}`; bump(l, partner, -0.15); S.stats.affairForgiven = (S.stats.affairForgiven || 0) + 1; }
+    else if (r < pf + pl2 * (1 - pf)) {
+      what = `уходит от ${fem(partner, 'мужа', 'жены')}`; l.spouse = null; if (partner.spouse === l.id) partner.spouse = null; l.house = null; l.lodger = false;
+      S.stats.affairLeft = (S.stats.affairLeft || 0) + 1;
+    } else {
+      kill = l.ambition > 0.55 && rnd(S) < 0.15;
+      what = kill ? `в драке убивает ${lover.name}` : `избивает ${lover.name}`;
+      if (!kill) lover.energy = Math.max(0.1, lover.energy - 0.35);
+      S.stats[kill ? 'affairKilled' : 'affairFight'] = (S.stats[kill ? 'affairKilled' : 'affairFight'] || 0) + 1;
+    }
+    const e = log(S, 'rumor', `${l.name} узнаёт от ${teller.name} об измене ${fem(partner, 'мужа', 'жены')} с ${lover.name} и ${what}`, l.x, l.y, g ? g.hue : 0, {
+      why: sent([`${partner.name} и ${lover.name} ${yrs(Math.max(1, Math.round((S.tick - ev.t) / 360)))} ${fem(partner, 'встречались', 'встречались')} тайком`, `${teller.name} ${bondW(teller, partner) < 0 || bondW(teller, lover) < 0 ? 'не любит виноватых и рассказывает охотно' : 'не может смолчать'}`, kill ? 'ревность кончается кровью: у убитого найдутся мстители' : '']),
+      who: [l.id, teller.id, partner.id, lover.id], gs: g ? [g.id] : [], causes: [ev.id] });
+    bio(S, l, 'jealousy', `Узнаёт от ${teller.name} об измене ${partner.name} с ${lover.name} и ${what}`, e.id);
+    bio(S, partner, 'jealousy', `Тайная связь с ${lover.name} раскрыта: ${l.name} ${what}`, e.id);
+    bond(S, l, lover, 'enemy', `${fem(lover, 'увёл', 'увела')} ${fem(partner, 'мужа', 'жену')}`, 0.7, false, e.id);
+    if (kill) {
+      for (const o of kinOf(S, lover)) if (!o.feud || o.feud.done) { o.feud = { g: l.group || 0, gname: g ? g.name : '', L: l.id, Lname: l.name, t: S.tick, v: lover.name, rel: o.mother === lover.id || o.father === lover.id ? (lover.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: l.id, ev: cite(S, e.id) }; bio(S, o, 'feud', `${l.name} убивает ${lover.name} из ревности. ${o.name} клянётся отомстить`, e.id); }
+      bio(S, l, 'murder', `Из ревности убивает ${lover.name}`, e.id);
+      S.stats.murders = (S.stats.murders || 0) + 1;
+      removeAgent(S, lover, 'killed');
+    }
+    ev.closed = true;
+  } else if (ev.secret === 'theft') {
+    const th = S._a.get(ev.guilty[0]), vg = S._g.get(ev.victimG); if (!th || !vg || !vg.home) { ev.closed = true; return; }
+    const custom = (vg.customs || {}).theft, ban = custom ? custom === 'ban' : rnd(S) < 0.25 + 0.5 * (1 - l.coop);
+    const fine = Math.min(Math.max(0, th.wealth), ev.amount * 2);
+    if (!ban) { th.wealth -= fine; vg.treasury += fine; }
+    else (th.exiled = th.exiled || {})[vg.id] = S.tick;
+    if (th.group) { const k = key(th.group, vg.id); S.hostility[k] = Math.min(2, (S.hostility[k] || 0) + 0.08); }
+    th.rep = clamp((th.rep || 0) - 0.15, -1, 1);
+    const e = log(S, 'case', `Кража раскрыта: ${teller === l ? `${l.name} ${fem(l, 'сам', 'сама')} видит` : `${l.name} узнаёт от ${teller.name}`}, что амбар «${vg.name}» обокрал ${th.name}, и ${ban ? `запрещает ${fem(th, 'ему', 'ей')} показываться в деревне` : `требует вернуть вдвое (${qty(fine, 'food')})`}`, vg.home.x, vg.home.y, vg.hue, {
+      why: sent([`${th.name} ${fem(th, 'крал', 'крала')} от голода ${yrs(Math.max(1, Math.round((S.tick - ev.t) / 360)))} назад`, custom ? 'так здесь заведено' : `${l.name} ${ban ? 'строг' + fem(l, '', 'а') : 'предпочитает вернуть своё'}`]),
+      who: [l.id, teller.id, th.id], gs: [vg.id], causes: [ev.id] });
+    bio(S, th, 'theft', ban ? `Кража раскрыта: «${vg.name}» закрывает перед ${fem(th, 'ним', 'ней')} ворота` : `Кража раскрыта: приходится вернуть вдвое`, e.id);
+    ruling(S, vg, 'theft', ban ? 'ban' : 'fine', e.id);
+    ev.closed = true;
+  }
+}
+// a married person drifts into a secret affair: a love that was never answered, or a marriage gone cold and a close friend
+function affairsMonth(S) {
+  for (const a of S.agents) {
+    if (!a.spouse || a.age < 18 || a.age > 55 || !a.group || (a.id + Math.floor(S.tick / 30)) % 4) continue;
+    const sp = S._a.get(a.spouse); if (!sp) continue;
+    if ((a.trust[sp.id] || 0) > 0.15 && !Object.values(a.bonds || {}).some(x => x[0] === 'love' && x[2] > 0.3)) continue;
+    let o = null, best = 0;
+    for (const id in a.bonds || {}) {
+      const x = a.bonds[id], c = S._a.get(+id);
+      if (!c || c === sp || c.sex === a.sex || c.group !== a.group || c.age < 18 || kin(c, a) || (x[0] !== 'love' && x[0] !== 'friend')) continue;
+      const v = x[2] * (x[0] === 'love' ? 2 : 1) + (c.trust[a.id] || 0); if (v > best) { best = v; o = c; }
+    }
+    if (!o || best < 0.6 || rnd(S) > 0.04) continue;
+    const g = S._g.get(a.group), betrayed = [sp.id].concat(o.spouse ? [o.spouse] : []);
+    if ((S.secrets || []).some(id => { const e = S.evArch && S.evArch[id]; return e && e.secret === 'affair' && e.guilty.includes(a.id); })) continue;
+    const ev = openSecret(S, 'affair', `${a.name} и ${o.name} тайно сходятся в «${g.name}»`, a.x, a.y, g.hue, [a, o], [a, o], { betrayed });
+    bond(S, a, o, 'love', 'тайная связь', 0.7, false, ev.id); bond(S, o, a, 'love', 'тайная связь', 0.7, false, ev.id);
+    bio(S, a, 'affair', `Тайно сходится с ${o.name}`, ev.id); bio(S, o, 'affair', `Тайно сходится с ${a.name}`, ev.id);
+    // someone may have seen them: a neighbour now carries the secret
+    if (rnd(S) < 0.4) { const w = g.members.map(id => S._a.get(id)).filter(m => m && m !== a && m !== o && !betrayed.includes(m.id)); if (w.length) learn(S, ev, w[Math.floor(rnd(S) * w.length)], a); }
+  }
+}
 function step(S) {
   S.tick++;
   advanceWeather(S);
@@ -2509,7 +2798,7 @@ function nodeOf(S, id) { for (const n of S.nodes) if (n.id === id) return n; ret
 
 function move(S) {
   const A = S.agents;
-  const costs = navigationCosts(S), drag = S._moveDrag;
+  const costs = navigationCosts(S), drag = S._moveDrag, walls = wallCells(S);
   for (const a of A) {
     let tx, ty;
     const gH = a.group && S._g.get(a.group);
@@ -2523,7 +2812,7 @@ function move(S) {
       if (a.haul && a.load) p = storeOf(g, a.lk);
       else if (a.job === 'farm' && g.fields.length) p = g.fields[(a.slot || 0) % g.fields.length];
       else if (a.job === 'wood' && g.woodCell !== null) p = { x: (g.woodCell % 50) * 20 + 10, y: Math.floor(g.woodCell / 50) * 20 + 10 };
-      else if (a.job === 'build' && g.site) p = g.site;
+      else if (a.job === 'build' && g.site) p = siteTarget(g, a);
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
@@ -2533,17 +2822,17 @@ function move(S) {
       else if (a.job === 'guard') {
         const bc = g.bcells || [];
         if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + Math.floor(S.tick / 160)) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
-        else if (g.wallPlan) {
-          const segments = g.wallPlan.segments;
-          const { a: from, b: to } = segments[(a.id + Math.floor(S.tick / 120)) % segments.length];
-          p = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-        }
-        else { const ang = a.id * 1.7 + S.tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
+        else if (g.fortifications?.length) {
+          const wall = g.fortifications[(a.id + Math.floor(S.tick / 120)) % g.fortifications.length];
+          const { a: from, b: to } = wall.segments[a.id % wall.segments.length];
+          p = { x: (from.x + to.x) / 2 - (wall.facing?.x || 0) * 5, y: (from.y + to.y) / 2 - (wall.facing?.y || 0) * 5 };
+        } else { const ang = a.id * 1.7 + S.tick / 140; p = { x: g.home.x + Math.cos(ang) * 34, y: g.home.y + Math.sin(ang) * 34 }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
-      tx = p.x + j * (a.job === 'gather' ? 3 : 1.2); ty = p.y + j2 * (a.job === 'gather' ? 3 : 1.2);
+      const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
+      tx = p.x + j * spread; ty = p.y + j2 * spread;
     } else if (a.group) {
       const g = S._g.get(a.group);
       if (a.role === 'leader') {
@@ -2576,8 +2865,9 @@ function move(S) {
     const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
     const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
     let nx = a.x + dx / d * sp + gauss(S) * 0.5, ny = a.y + dy / d * sp + gauss(S) * 0.5;
-    const nc = cellAt(nx, ny);
-    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; }
+    if (walls[ca]) { const next = wallWalk(a, { x: nx, y: ny }, { x: tx, y: ty }, walls[ca]); nx = next.x; ny = next.y; }
+    let nc = cellAt(nx, ny);
+    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; nc = ca; }
     a.x = nx; a.y = ny;
     if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
     if (nc !== a.lc) {
@@ -2599,7 +2889,12 @@ function move(S) {
       if (dx > 55) break;
       if (dy > 55 || dy < -55) continue;
       const d2 = dx * dx + dy * dy;
-      if (d2 < 81) { const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d; a.x -= dx * f; a.y -= dy * f; b.x += dx * f; b.y += dy * f; }
+      if (d2 < 81) {
+        const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
+        const nearA = walls[cellAt(a.x, a.y)], nearB = walls[cellAt(b.x, b.y)];
+        if (!nearA?.some(w => lineCrossing(a, { x: a.x - dx * f, y: a.y - dy * f }, w.a, w.b) !== null)) { a.x -= dx * f; a.y -= dy * f; }
+        if (!nearB?.some(w => lineCrossing(b, { x: b.x + dx * f, y: b.y + dy * f }, w.a, w.b) !== null)) { b.x += dx * f; b.y += dy * f; }
+      }
       if (d2 < 3025 && rnd(S) < 0.02) interact(S, a, b);
     }
   }
@@ -2686,8 +2981,7 @@ function produce(S) {
         const c = g.woodCell;
         if (c !== null && S.wood[c] > 1 && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
       } else if (m.job === 'build') {
-        const st = g.site;
-        if (st && Math.hypot(m.x - st.x, m.y - st.y) < 26) { st.prog += e * syn; worked = true; if (st.prog >= st.need) finishSite(S, g); }
+        worked = !!g.site && workSite(S, g, m, e * syn);
       } else if (m.job === 'stone') {
         const c = g.stoneCell;
         if (c !== null && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }
@@ -2822,7 +3116,8 @@ function monthly(S) {
     }
     else if (a.coop < 0.45 && rnd(S) < 0.35) {
       rich.treasury -= 2; a.wealth += 2; S.stats.theft = (S.stats.theft || 0) + 1;
-      if (rnd(S) < 0.3) { a.rep = clamp((a.rep || 0) - 0.2, -1, 1); if (a.group) { const k = key(a.group, rich.id); S.hostility[k] = Math.min(2, (S.hostility[k] || 0) + 0.08); } if (!a.bioTheft || S.tick - a.bioTheft > 3600) { a.bioTheft = S.tick; bio(S, a, 'theft', `Голодая, крадёт зерно из амбара «${rich.name}» и попадается`); } }
+      // a theft is a secret: somebody from the robbed village may have seen it; the word travels, and the leader acts when it reaches him
+      if (rnd(S) < 0.3) { const ws = rich.members.map(id => S._a.get(id)).filter(Boolean), w = ws[Math.floor(rnd(S) * ws.length)]; if (w) { const tev = openSecret(S, 'theft', `${a.name} крадёт зерно из амбара «${rich.name}»`, a.x, a.y, rich.hue, [a], [a, w], { victimG: rich.id, amount: 2 }); if (concerns(S, tev, w)) react(S, tev, w, w); if (!a.bioTheft || S.tick - a.bioTheft > 3600) { a.bioTheft = S.tick; bio(S, a, 'theft', `Голодая, крадёт зерно из амбара «${rich.name}»; ${w.name} это ${fem(w, 'видел', 'видела')}`, tev.id); } } } else S.stats.theftUnseen = (S.stats.theftUnseen || 0) + 1;
     }
   }
   for (const a of S.agents) {
@@ -2896,6 +3191,8 @@ function monthly(S) {
   hamletsMonth(S);
   bondsMonth(S);
   householdsMonth(S);
+  affairsMonth(S);
+  gossipMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -3481,10 +3778,16 @@ function restore(str) {
   for (const g of S.groups) {
     if (!g.home) continue;
     if (g.plan && !g.plan.street) g.plan.street = streetFor(S, g);
-    if (g.walls && !g.wallPlan && g.plan) {
-      g.wallPlan = wallPlan(S, g);
-      if (g.wallPlan) g.wallPlan.built = S.tick;
+    if (g.wallPlan) {
+      const { segments, gates, built } = g.wallPlan;
+      if (segments.length) (g.fortifications ||= []).push({ id: 'old:' + g.id, kind: 'palisade', segments, gates, built, height: 5.5 });
+      delete g.wallPlan;
     }
+    if (g.site?.kind === 'walls') {
+      g.wood += g.site.wood || 0;
+      g.site = null;
+    }
+    g.walls = !!g.fortifications?.length;
   }
   return S;
 }

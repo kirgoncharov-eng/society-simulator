@@ -14,6 +14,10 @@ function settle(S, g) {
     g.houses = r.houses.slice(0, 16).map(h => ({ ...h, ruined: true }));
     for (const f of r.fields) { const c = cellAt(f.x, f.y); if (S.occ[c] || (S.own && S.own[c])) continue; S.occ[c] = g.id; g.fields.push({ x: f.x, y: f.y, c, fert: S.ter[c] === 'r' ? 0.9 : 0.55 }); }
     if (r.plan) g.plan = Object.assign({}, r.plan);
+    if (r.fortifications?.length) {
+      g.fortifications = r.fortifications; g.walls = true;
+      S.wallV = (S.wallV || 0) + 1;
+    }
     claim(S, g, 20, 20); pickTarget(S, g);
     S.settledOnce = true;
     log(S, 'settle', `«${g.name}» занимает заброшенную деревню «${r.name}» и чинит дома`, r.x, r.y, g.hue, { why: sent([`деревня пустует ${yrs(Math.max(1, Math.round((S.tick - r.t) / 360)))}`, `там стоят ${g.houses.length} ${pl(g.houses.length, 'дом', 'дома', 'домов')} без крыш${g.fields.length ? ` и ${g.fields.length} ${pl(g.fields.length, 'заросшее поле', 'заросших поля', 'заросших полей')}` : ''}`, 'починить старый дом вдвое быстрее, чем построить новый', 'место уже проверено: здесь когда-то жили']), gs: [g.id] });
@@ -44,11 +48,13 @@ function settle(S, g) {
 }
 function houseSpot(S, g) {
   const plan = planOf(S, g);
-  const angle = Math.atan2(plan.uy, plan.ux);
-  for (let t = 0; t < 64; t++) {
+  for (let t = 0; t < 32; t++) {
     const p = plotPos(g, plan.k);
-    plan.k = (plan.k + 1) % 64;
-    if (plotOk(S, g, p)) return { kind: 'house', ...p, angle, prog: 0, need: 50 };
+    plan.k = (plan.k + 1) % 32;
+    if (p && plotOk(S, g, p) && lineOnLand(S, p.entrance, p.frontage)
+      && !g.fortifications?.some(w => w.segments.some(({ a, b }) => lineCrossing(p.entrance, p.frontage, a, b) !== null))) {
+      return { kind: 'house', ...p, prog: 0, need: 50 };
+    }
   }
   return specialSpot(S, g, 'house');
 }
@@ -63,7 +69,7 @@ function fieldSpot(S, g) {
     if (d < 48 || d > 170 || !streetClear(g, { x, y }, 10)) continue;
     if (g.houses.some(h => Math.abs(h.x - x) < 16 && Math.abs(h.y - y) < 16)
       || [g.well, g.workshop, g.granary, g.shrine].some(p => p && dist(p, { x, y }) < 17)) continue;
-    if (g.wallPlan?.segments.some(({ a, b }) => distanceToSegment({ x, y }, a, b) < 10)) continue;
+    if (g.fortifications?.some(w => w.segments.some(({ a, b }) => distanceToSegment({ x, y }, a, b) < 10))) continue;
     if (!reach(S, g.home.x, g.home.y, x, y)) continue;
     let adj = 0; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const q = c + ox + oy * N; if (S.occ[q] === g.id) adj++; }
     const fert = t === 'r' ? 1 : 0.6, v = fert * 2 - d / 110 + adj * 0.45 - (S.road[c] ? 1 : 0);
@@ -75,21 +81,23 @@ function fieldSpot(S, g) {
 function finishSite(S, g) {
   const st = g.site; g.site = null;
   if (st.kind === 'house') {
-    g.houses.push({ ...placedSite(st), ...(st.earth ? { earth: true } : {}) });
+    g.houses.push({ ...placedSite(st), built: S.tick, ...(st.earth ? { earth: true } : {}) });
     const k = g.houses.length;
-    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Каждый дом — это 6 брёвен из леса и месяцы работы строителей.`, gs: [g.id] });
+    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Для последнего дома строители принесли ${st.materials?.wood ?? 6} заготовок дерева и отработали на площадке.`, gs: [g.id] });
   } else if (st.kind === 'workshop') {
-    g.workshop = placedSite(st);
+    g.workshop = { ...placedSite(st), built: S.tick };
     const first = !S.firstWorkshop; S.firstWorkshop = true;
     log(S, 'tech', first ? `Первая мастерская в мире: «${g.name}» начинает делать орудия` : `«${g.name}» строит мастерскую`, st.x, st.y, g.hue, { first, why: `Камень с холмов и брёвна из леса превращаются в орудия. С орудием любая работа идёт на половину быстрее, но орудия изнашиваются, и камень с деревом нужны постоянно. Холмы у «${g.name}» в ${cells(g.stoneDist)} от поселения.`, gs: [g.id] });
-  } else if (st.kind === 'walls') {
-    const expanded = g.walls;
+  } else if (st.kind === 'palisade') {
+    (g.fortifications ||= []).push({ id: st.id, kind: st.kind, ...st.layout, started: st.started, built: S.tick, materials: st.materials });
     g.walls = true;
-    g.wallPlan = st.layout || wallPlan(S, g);
-    if (g.wallPlan) g.wallPlan.built = S.tick;
-    log(S, 'tech', `«${g.name}» ${expanded ? 'расширяет частокол' : 'обносит жильё частоколом'}`, g.home.x, g.home.y, g.hue, { why: sent([`угроза от соседей ${P0(Math.min(1, g.threat || 0))}`, S.tick - g.raided < 720 ? 'недавно был набег' : '', g.wallPlan ? `ограда по жилой части деревни, ${Math.round(g.wallPlan.length)} шагов и ${st.wood} брёвен` : 'дома оградили частоколом']), gs: [g.id] });
+    S.wallV = (S.wallV || 0) + 1;
+    log(S, 'tech', `«${g.name}» заканчивает участок частокола`, st.x, st.y, g.hue, {
+      why: sent([`ограда прикрывает жилые дворы со стороны «${st.layout.threatName}»`, `${st.layout.posts} кольев из ${st.wood} заготовок дерева`, st.layout.gates.length ? 'на улице оставили проезд' : 'тропы остались открыты']),
+      gs: [g.id],
+    });
   } else if (st.kind === 'shrine') {
-    g.shrine = placedSite(st);
+    g.shrine = { ...placedSite(st), built: S.tick };
     S.faiths = S.faiths || {};
     const partner = S.groups.find(o => o !== g && o.faith && o.home && (S.routes[key(o.id, g.id)] || (S.hostility[key(o.id, g.id)] || 0) < 0.2 && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300));
     const why0 = sent([g.famY !== undefined ? 'голодные зимы' : '', g.warsLost ? 'проигранные битвы' : '', 'люди ищут смысл в бедах', 'святилище утешает: обиды копятся на треть медленнее, а лидер выглядит законнее', 'жрец кормится подношениями']);
@@ -108,7 +116,7 @@ function finishSite(S, g) {
     }
   } else if (st.kind === 'bridge') {
     for (const c of st.cells) S.bridge[c] = g.id; S.navV++; g.bridgeAt = S.tick;
-    if (st.approaches) (S.bridgePlans ||= []).push({ cells: st.cells, approaches: st.approaches });
+    if (st.approaches) (S.bridgePlans ||= []).push({ ...placedSite(st), cells: st.cells, approaches: st.approaches, built: S.tick });
     const first = !S.firstBridge; S.firstBridge = true;
     log(S, 'bridge', first ? `Первый мост в мире: «${g.name}» перекидывает мост через реку` : `«${g.name}» строит мост через реку`, st.x, st.y, g.hue, { first, why: sent([`за год жители ${g.cross12 || 0} ${pl(g.cross12 || 0, 'раз', 'раза', 'раз')} переходили реку вброд или по льду`, g.drowned ? `${g.drowned} ${pl(g.drowned, 'человек утонул', 'человека утонули', 'человек утонули')}` : 'брод опасен, особенно в половодье', 'мост — это брёвна и месяцы работы, зато по нему ходят без риска и вдвое быстрее', 'теперь по мосту пойдут и чужие: торговцы и войска']), gs: [g.id] });
   } else if (st.kind === 'fboat') {
@@ -116,13 +124,13 @@ function finishSite(S, g) {
     if (!S.firstFboat) { S.firstFboat = true; log(S, 'tech', `Первая рыбацкая лодка: «${g.name}» выходит в море`, st.x, st.y, g.hue, { first: true, why: 'Рыба у берега быстро кончается, а в море её больше. На лодке двое рыбаков ловят за день столько, сколько с берега за неделю. Но море опасно: в шторм лодки не возвращаются.', gs: [g.id] }); }
   } else if (st.kind === 'well') {
     const ok = rnd(S) < wellOk(S, st.x, st.y);
-    if (ok) { g.well = { x: st.x, y: st.y, t: S.tick, depth: wellOk(S, st.x, st.y) > 0.9 ? 1 : 0.5, dry: false }; }
+    if (ok) { g.well = { ...placedSite(st), t: S.tick, depth: wellOk(S, st.x, st.y) > 0.9 ? 1 : 0.5, dry: false }; }
     const first = ok && !S.firstWell; if (ok) S.firstWell = true;
     log(S, 'well', ok ? (first ? `Первый колодец в мире: «${g.name}» копает свой колодец` : `«${g.name}» копает колодец`) : `«${g.name}» копает колодец, но до воды не докапывается`, st.x, st.y, g.hue, { first, why: sent([`до воды ${Math.round(g.wd || 0)} шагов: каждый день ${g.wNeed || 0} ${pl(g.wNeed || 0, 'человек', 'человека', 'человек')} только носят воду`, ok ? 'теперь вода прямо в деревне, и руки освобождаются для полей' : 'здесь глубоко до воды: в низине у реки копать легче', ok && wellOk(S, st.x, st.y) < 0.9 ? 'колодец неглубокий и в засуху может пересохнуть' : '']), gs: [g.id] });
   } else if (st.kind === 'repair') {
     const hh = g.houses[st.idx]; if (hh) hh.ruined = false;
   } else if (st.kind === 'granary') {
-    g.granary = placedSite(st);
+    g.granary = { ...placedSite(st), built: S.tick };
     const first = !S.firstGranary; S.firstGranary = true;
     log(S, 'tech', first ? `Первый амбар в мире: «${g.name}» учится хранить урожай` : `«${g.name}» строит амбар`, st.x, st.y, g.hue, { why: `Без амбара запасы гниют: полтора процента в месяц. В амбаре — в пять раз медленнее, и урожай доживает до весны. В «${g.name}» скопилось ${Math.round(g.treasury)} еды.`, gs: [g.id] });
   } else g.fields.push({ x: st.x, y: st.y, c: st.c, fert: st.fert });
@@ -132,8 +140,8 @@ function nearestHill(S, p, g) {
   for (let c = 0; c < S.ter.length; c++) { if (S.ter[c] !== 'h' || !usable(S, c, g)) continue; const d = Math.hypot((c % N) * CS + 10 - p.x, Math.floor(c / N) * CS + 10 - p.y); if (d < bd) { bd = d; best = c; } }
   return bd < 360 ? { c: best, d: bd } : { c: null, d: bd };
 }
-function placedSite({ x, y, angle }) {
-  return { x, y, ...(angle === undefined ? {} : { angle }) };
+function placedSite({ x, y, angle, footprint, entrance, frontage, id, started, materials, approvedBy }) {
+  return { x, y, angle, footprint, entrance, frontage, id, started, materials, approvedBy };
 }
 function specialSpot(S, g, kind) {
   const plan = planOf(S, g);
