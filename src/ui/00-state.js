@@ -64,6 +64,7 @@ function world(seed) {
 }
 function resetView() {
   D = new Map(); F = []; sel = null; closeFocus(true);
+  acc = dayWatch ? dawnFraction() : 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
   seenEv = S.evId || 0; lastEvt = null; riverKey = ''; syncCtls(); ui(true);
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, распределение добычи, иерархия по охвату управления, энтропия от размера, уровней, обид и бюрократии.`;

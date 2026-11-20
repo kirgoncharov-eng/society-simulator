@@ -213,12 +213,11 @@ function fieldGlyph(f, col, edge, winter, px) {
   ctx.beginPath(); for (let i = -6; i <= 6; i += 3) { ctx.moveTo(f.x - 8, f.y + i); ctx.lineTo(f.x + 8, f.y + i); } ctx.stroke();
   if (edge) { ctx.strokeStyle = edge; ctx.lineWidth = px(1.2); ctx.strokeRect(f.x - 9, f.y - 7, 18, 14); }
 }
-function pos(a) { let d = D.get(a.id); if (!d) { d = { x: a.x, y: a.y }; D.set(a.id, d); } return d; }
 
 function draw(now) {
   const W = cv.width, H = cv.height, s = Math.min(W, H) / 1000, dpr = W / Math.max(1, plate.clientWidth);
   const t = reduce ? 0 : now, L = reduce ? 1 : 0.12;
-  if (follow && sel && S._a.get(sel)) { const fa = S._a.get(sel); vt.x = fa.x; vt.y = fa.y; vt.z = Math.max(vt.z, 2.2); }
+  if (follow && sel && S._a.get(sel)) { const fa = D.get(sel); vt.x = fa.x; vt.y = fa.y; vt.z = Math.max(vt.z, 2.2); }
   view.z += (vt.z - view.z) * L; view.x += (vt.x - view.x) * L; view.y += (vt.y - view.y) * L;
   const half = 500 / view.z; view.x = Math.max(half, Math.min(1000 - half, view.x)); view.y = Math.max(half, Math.min(1000 - half, view.y));
   const k = s * view.z, ox = W / 2 - view.x * k, oy = H / 2 - view.y * k; T = { k, ox, oy };
@@ -253,7 +252,7 @@ function draw(now) {
     if (g.site && g.site.kind === 'field') { ctx.setLineDash([px(3), px(2)]); ctx.strokeStyle = hueC(g.hue, .9); ctx.lineWidth = px(1.2); ctx.strokeRect(g.site.x - 9, g.site.y - 7, 18, 14); ctx.setLineDash([]); }
     ctx.globalAlpha = 1;
   }
-  for (const a of S.agents) { const d = pos(a); d.x += (a.x - d.x) * .25; d.y += (a.y - d.y) * .25; }
+  drawCampfires(px);
   const bush = C.dark ? '#2f5a3c' : '#6f9a5c', berry = C.dark ? '#e0607a' : '#c8264a';
   for (const n of S.nodes) {
     const full = n.amt / n.cap;
@@ -353,7 +352,7 @@ function draw(now) {
   }
   const base = Math.max(2, Math.min(3.4, Math.min(plate.clientWidth, plate.clientHeight) / 220)) * Math.sqrt(view.z);
   // small children play by their parents' house
-  for (const k of S.kids || []) {
+  for (const k of dailyNight > 0.85 ? [] : S.kids || []) {
     const c = S._a.get(k.mo) || S._a.get(k.fa), g = c && c.group && S._g.get(c.group);
     const h = g && g.home && c.house && g.houses.find(x => x.id === c.house); if (!h) continue;
     const s = (k.t * 7 + (k.mo || 0)) % 17, ox = (s % 9) - 4, oy = 7 + (s % 4);

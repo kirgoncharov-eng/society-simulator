@@ -32,6 +32,9 @@ h1{font:600 clamp(32px,4.4vw,48px)/1.05 "Source Serif 4",Georgia,serif;letter-sp
 .lab{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px;align-items:start}
 .plate{position:relative;width:100%;aspect-ratio:1;max-width:calc(100svh - 150px);min-width:min(100%,320px);background:var(--plate);border-radius:4px;overflow:hidden;touch-action:manipulation;cursor:crosshair}
 .plate canvas{position:absolute;inset:0;width:100%;height:100%}
+#nightShade{position:absolute;z-index:1;inset:0;background:#0c1733;pointer-events:none}
+.hud.tl #dayClock{font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:700px){.hud.tl:has(#dayClock:not([hidden])){flex-wrap:wrap;max-width:calc(100% - 145px);column-gap:6px;row-gap:4px}}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
 button,.seg label{font:500 15px/1 Inter,system-ui,sans-serif;min-height:44px;padding:0 14px;border-radius:4px;border:1px solid var(--rule);background:var(--bg);color:var(--ink);cursor:pointer}
 button:hover{border-color:var(--slate)}
@@ -369,8 +372,8 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
 
 <main class="band solo stageband"><div class="wrap wide">
   <div class="view" id="view">
-    <div class="plate" id="plate"><canvas id="cv" aria-label="Мир симуляции"></canvas><div id="v3lab" class="v3lab" hidden></div><p id="v3msg" class="v3msg" hidden></p>
-      <div class="hud tl" aria-live="off"><b id="hYear">Год 0</b><span id="hSeason">зима</span></div>
+    <div class="plate" id="plate"><canvas id="cv" aria-label="Мир симуляции"></canvas><div id="v3lab" class="v3lab" hidden></div><p id="v3msg" class="v3msg" hidden></p><div id="nightShade" hidden aria-hidden="true"></div>
+      <div class="hud tl" aria-live="off"><b id="hYear">Год 0</b><span id="hSeason">зима</span><span id="dayClock" hidden></span></div>
       <div class="hud tr"><span><em>люди</em><b id="hPop">0</b></span><span><em>групп</em><b id="hGroups">0</b></span><span class="wide2"><em>энтропия</em><b id="hEnt">0</b></span><span class="wide2"><em>Джини</em><b id="hGini">0</b></span></div>
       <button class="hud tick" id="ticker" hidden></button>
     </div>
@@ -381,6 +384,7 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
       <div class="vt" role="group" aria-label="Вид"><button id="v2d" class="on" aria-pressed="true">Карта</button><button id="v3d" aria-pressed="false">3D</button></div>
       <button class="main" id="play">Пауза</button>
       <div class="seg" role="radiogroup" aria-label="Скорость">
+        <input type="radio" name="sp" id="spDay" value="day"><label for="spDay" title="Около 16 секунд на день">Сутки</label>
         <input type="radio" name="sp" id="sp1" value="1" checked><label for="sp1">1×</label>
         <input type="radio" name="sp" id="sp4" value="4"><label for="sp4">4×</label>
         <input type="radio" name="sp" id="sp16" value="16"><label for="sp16">16×</label>
@@ -2576,6 +2580,60 @@ function housemates(S, a) {
   const owner = S._a.get(h.owner);
   return { house: h, owner, with: with_, kids };
 }
+/* ---------- daily routine for close observation ---------- */
+function daylightHours(tick) {
+  const halfDay = 6 - 2 * Math.cos((tick % 360 - 45) * Math.PI / 180);
+  return { sunrise: 12 - halfDay, sunset: 12 + halfDay };
+}
+
+function dailyRoutine(S, a) {
+  if (a.war || a.car || !a.group) return null;
+  const g = S._g.get(a.group);
+  if (!g) return null;
+  const house = houseOf(g, a.house);
+  const home = house && !house.ruined ? house : null;
+  const shelter = home || g.home || { x: g.cx, y: g.cy };
+  const start = cellAt(shelter.x, shelter.y), end = cellAt(a.x, a.y);
+  const costs = navigationCosts(S);
+  if (!costs[start] || !costs[end]) return null;
+  const path = getPath(S, start, end);
+  if (!path) return null;
+  const bed = { x: shelter.x, y: shelter.y };
+  if (home) {
+    const x = (start % N) * CS, y = Math.floor(start / N) * CS;
+    bed.x = clamp(bed.x + a.id % 7 - 3, x + 1, x + CS - 1);
+    bed.y = clamp(bed.y + Math.floor(a.id / 7) % 7 - 3, y + 1, y + CS - 1);
+  }
+  const route = [bed];
+  if (start !== end) {
+    for (const cell of path) {
+      route.push({ x: (cell % N) * CS + CS / 2, y: Math.floor(cell / N) * CS + CS / 2 });
+    }
+  }
+  route.push({ x: a.x, y: a.y });
+  return {
+    route, home: home?.id ?? null,
+    departure: (a.id % 11) * 0.035,
+    travel: Math.min(3, 0.35 + (path.length - 1) * 0.18),
+  };
+}
+
+function routinePosition(routine, hour, light, position) {
+  const { route, departure, travel } = routine;
+  const out = light.sunrise + departure;
+  const homeBy = light.sunset - departure;
+  if (hour <= out || hour >= homeBy) {
+    position.x = route[0].x;
+    position.y = route[0].y;
+    return;
+  }
+  const progress = Math.min(1, (hour - out) / travel, (homeBy - hour) / travel);
+  const index = progress * (route.length - 1);
+  const first = Math.floor(index), part = index - first;
+  const next = route[Math.min(first + 1, route.length - 1)];
+  position.x = route[first].x + (next.x - route[first].x) * part;
+  position.y = route[first].y + (next.y - route[first].y) * part;
+}
 function step(S) {
   S.tick++;
   advanceWeather(S);
@@ -3562,7 +3620,7 @@ function shock(S, kind) {
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
 function restore(str) { const S = JSON.parse(str); index(S); return S; }
 
-return { MODEL, bondLabel, eventById, housemates, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {
@@ -3648,6 +3706,7 @@ function world(seed) {
 }
 function resetView() {
   D = new Map(); F = []; sel = null; closeFocus(true);
+  acc = dayWatch ? dawnFraction() : 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
   seenEv = S.evId || 0; lastEvt = null; riverKey = ''; syncCtls(); ui(true);
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, распределение добычи, иерархия по охвату управления, энтропия от размера, уровней, обид и бюрократии.`;
@@ -3694,6 +3753,71 @@ function checkStops(now) {
   focus(e, true);
 }
 
+const OBSERVED_DAY_MS = 16000;
+const dayClock = $('dayClock'), nightShade = $('nightShade');
+const dailyRoutes = new Map(), campfires = new Map();
+let dayWatch = false, dailyNight = 0, routineWorld, routineTick;
+
+function dawnFraction() {
+  return (SIM.daylightHours(S.tick).sunrise - 0.75) / 24;
+}
+
+function updateDailyView() {
+  const hour = dayWatch ? 24 * acc : 12;
+  const light = dayWatch ? SIM.daylightHours(S.tick) : null;
+  dailyNight = 0;
+  if (light) {
+    const untilDawn = light.sunrise - hour;
+    const sinceDusk = hour - light.sunset;
+    dailyNight = Math.max(0, Math.min(1, Math.max(untilDawn, sinceDusk) + 0.5));
+    const minutes = Math.floor(hour * 60 / 5) * 5;
+    const time = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
+    const name = hour < light.sunrise - 0.75 || hour >= light.sunset + 0.75 ? 'Ночь'
+      : hour < light.sunrise + 2 ? 'Утро' : hour >= light.sunset - 2 ? 'Вечер' : 'День';
+    const label = `${time} · ${name}`;
+    if (dayClock.textContent !== label) dayClock.textContent = label;
+  }
+  if (dayClock.hidden === dayWatch) dayClock.hidden = !dayWatch;
+  const dark = dailyNight > 0;
+  if (nightShade.hidden === dark) nightShade.hidden = !dark;
+  if (dailyNight) nightShade.style.opacity = dailyNight * 0.48;
+  if (S !== routineWorld || S.tick !== routineTick) {
+    dailyRoutes.clear();
+    campfires.clear();
+    routineWorld = S;
+    routineTick = S.tick;
+  }
+  if (D.size > S.agents.length) for (const id of D.keys()) if (!S._a.has(id)) D.delete(id);
+  for (const a of S.agents) {
+    let p = D.get(a.id);
+    if (!p) { p = { x: a.x, y: a.y }; D.set(a.id, p); }
+    let route = null;
+    if (light) {
+      if (!dailyRoutes.has(a.id)) {
+        const plan = SIM.dailyRoutine(S, a);
+        dailyRoutes.set(a.id, plan);
+        if (plan && !plan.home) campfires.set(a.group, plan.route[0]);
+      }
+      route = dailyRoutes.get(a.id);
+    }
+    if (route) SIM.routinePosition(route, hour, light, p);
+    else {
+      const ease = dayWatch ? 1 : .25;
+      p.x += (a.x - p.x) * ease;
+      p.y += (a.y - p.y) * ease;
+    }
+  }
+}
+
+function drawCampfires(px) {
+  if (!dailyNight) return;
+  for (const { x, y } of campfires.values()) {
+    ctx.fillStyle = `rgba(243,140,48,${0.36 * dailyNight})`;
+    ctx.beginPath(); ctx.arc(x, y, px(8), 0, 7); ctx.fill();
+    ctx.fillStyle = `rgba(255,207,125,${dailyNight})`;
+    ctx.beginPath(); ctx.arc(x, y, px(2), 0, 7); ctx.fill();
+  }
+}
 /* ---------- world drawing ---------- */
 const tc = k => TC[k][C.dark ? 1 : 0];
 function paintTerrain(res, W0 = S, out = terr) {
@@ -3909,12 +4033,11 @@ function fieldGlyph(f, col, edge, winter, px) {
   ctx.beginPath(); for (let i = -6; i <= 6; i += 3) { ctx.moveTo(f.x - 8, f.y + i); ctx.lineTo(f.x + 8, f.y + i); } ctx.stroke();
   if (edge) { ctx.strokeStyle = edge; ctx.lineWidth = px(1.2); ctx.strokeRect(f.x - 9, f.y - 7, 18, 14); }
 }
-function pos(a) { let d = D.get(a.id); if (!d) { d = { x: a.x, y: a.y }; D.set(a.id, d); } return d; }
 
 function draw(now) {
   const W = cv.width, H = cv.height, s = Math.min(W, H) / 1000, dpr = W / Math.max(1, plate.clientWidth);
   const t = reduce ? 0 : now, L = reduce ? 1 : 0.12;
-  if (follow && sel && S._a.get(sel)) { const fa = S._a.get(sel); vt.x = fa.x; vt.y = fa.y; vt.z = Math.max(vt.z, 2.2); }
+  if (follow && sel && S._a.get(sel)) { const fa = D.get(sel); vt.x = fa.x; vt.y = fa.y; vt.z = Math.max(vt.z, 2.2); }
   view.z += (vt.z - view.z) * L; view.x += (vt.x - view.x) * L; view.y += (vt.y - view.y) * L;
   const half = 500 / view.z; view.x = Math.max(half, Math.min(1000 - half, view.x)); view.y = Math.max(half, Math.min(1000 - half, view.y));
   const k = s * view.z, ox = W / 2 - view.x * k, oy = H / 2 - view.y * k; T = { k, ox, oy };
@@ -3949,7 +4072,7 @@ function draw(now) {
     if (g.site && g.site.kind === 'field') { ctx.setLineDash([px(3), px(2)]); ctx.strokeStyle = hueC(g.hue, .9); ctx.lineWidth = px(1.2); ctx.strokeRect(g.site.x - 9, g.site.y - 7, 18, 14); ctx.setLineDash([]); }
     ctx.globalAlpha = 1;
   }
-  for (const a of S.agents) { const d = pos(a); d.x += (a.x - d.x) * .25; d.y += (a.y - d.y) * .25; }
+  drawCampfires(px);
   const bush = C.dark ? '#2f5a3c' : '#6f9a5c', berry = C.dark ? '#e0607a' : '#c8264a';
   for (const n of S.nodes) {
     const full = n.amt / n.cap;
@@ -4049,7 +4172,7 @@ function draw(now) {
   }
   const base = Math.max(2, Math.min(3.4, Math.min(plate.clientWidth, plate.clientHeight) / 220)) * Math.sqrt(view.z);
   // small children play by their parents' house
-  for (const k of S.kids || []) {
+  for (const k of dailyNight > 0.85 ? [] : S.kids || []) {
     const c = S._a.get(k.mo) || S._a.get(k.fa), g = c && c.group && S._g.get(c.group);
     const h = g && g.home && c.house && g.houses.find(x => x.id === c.house); if (!h) continue;
     const s = (k.t * 7 + (k.mo || 0)) % 17, ox = (s % 9) - 4, oy = 7 + (s % 4);
@@ -4893,7 +5016,6 @@ function rebuildStatic(W0, now) {
 }
 function render3D(now) {
   const W0 = S;
-  for (const a of W0.agents) { const d = pos(a); d.x += (a.x - d.x) * .25; d.y += (a.y - d.y) * .25; }
   rebuildStatic(W0, now);
   if (V3.fogKey !== C.plate) { V3.fogKey = C.plate; V3.scene.background = hexOf(C.plate).clone(); V3.scene.fog = new THREE.Fog(V3.scene.background.clone(), 1500, 3800); V3.hemi.intensity = C.dark ? 0.5 : 0.55; V3.sun.intensity = C.dark ? 0.5 : 0.6; }
   const n = Math.min(700, W0.agents.length); V3.ids = [];
@@ -4944,7 +5066,7 @@ function render3D(now) {
   }
   { let si2 = 0, wi = 0; for (const sp of W0.springs || []) if (!sp.dry && si2 < 20) setInst(V3.springM, si2++, sp.x, gh(sp.x, sp.y) + 0.6, sp.y, sp.big ? 1.25 : 1); for (const g of W0.groups) if (g.well && wi < 80) { const y0 = gh(g.well.x, g.well.y); setInst(V3.wellM, wi, g.well.x, y0 + 2, g.well.y); setInst(V3.wellW, wi, g.well.x, g.well.dry ? -60 : y0 + 2.1, g.well.y); wi++; } V3.springM.count = si2; V3.wellM.count = wi; V3.wellW.count = wi; for (const m of [V3.springM, V3.wellM, V3.wellW]) m.instanceMatrix.needsUpdate = true; }
   for (const [m, k] of [[V3.bucket, bk], [V3.cargoW, cw], [V3.cargoS, cs], [V3.cargoF, cf], [V3.smoke, sm], [V3.deer, dr], [V3.deerH, dr]]) { m.count = Math.min(k, m.instanceMatrix.count); m.instanceMatrix.needsUpdate = true; }
-  if (follow && sel && S._a.get(sel)) { const a = S._a.get(sel); V3.fly = { x: a.x, z: a.y }; }
+  if (follow && sel && S._a.get(sel)) { const a = D.get(sel); V3.fly = { x: a.x, z: a.y }; }
   if (V3.fly) { const tg = V3.ctl.target, dx = V3.fly.x - tg.x, dz = V3.fly.z - tg.z; tg.x += dx * 0.08; tg.z += dz * 0.08; V3.cam.position.x += dx * 0.08; V3.cam.position.z += dz * 0.08; if (Math.hypot(dx, dz) < 2) V3.fly = null; }
   for (const w of W0.wars || []) {
     if (f >= 20) break;
@@ -5283,7 +5405,7 @@ function frame(now) {
   }
   const t0b = performance.now();
   if (playing) {
-    acc += dt * 12 * speed / 1000;
+    acc += dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000);
     let n = Math.min(Math.floor(acc), 900); acc -= n; if (acc > 60) acc = 0;
     for (let i = 0; i < n; i++) {
       SIM.step(S);
@@ -5291,13 +5413,18 @@ function frame(now) {
       if ((i & 7) === 7 && performance.now() - t0b > 14) { acc = 0; break; }
     }
   }
+  updateDailyView();
   if (V3.on && V3.ready) render3D(now); else draw(now);
   if (now - lastUi > 350) { ui(); lastUi = now; }
   requestAnimationFrame(frame);
 }
 
 $('play').addEventListener('click', () => { playing = !playing; if (playing && focusEv) closeFocus(); syncPlay(); });
-document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => { speed = +e.target.value; }));
+document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
+  dayWatch = e.target.value === 'day';
+  if (!dayWatch) speed = +e.target.value;
+  acc = dayWatch ? dawnFraction() : 0;
+}));
 $('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
 $('back').addEventListener('click', () => {
   if (!forkSnap) return;
@@ -5338,7 +5465,7 @@ new MutationObserver(readColors).observe(document.documentElement, { attributes:
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
 
 function intro() {
-  playing = false; acc = 0; syncPlay();
+  playing = false; acc = dayWatch ? dawnFraction() : 0; syncPlay();
   const landing = firstLanding(S);
   if (landing) {
     vt = { x: landing.x1, y: landing.y1, z: 1.65 };
