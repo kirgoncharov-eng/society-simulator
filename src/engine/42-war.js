@@ -154,7 +154,7 @@ function battle(S, w, A, B, band) {
   const aliveA = band.filter(m => !deadA.includes(m)), aliveB = defenders.filter(m => !deadB.includes(m));
   for (const m of deadA) feudFor(S, m, B, `В походе на «${B.name}»`, aliveB.length ? aliveB[Math.floor(rnd(S) * aliveB.length)] : null, bev.id);
   for (const m of deadB) feudFor(S, m, A, `При набеге «${A.name}»`, aliveA.length ? aliveA[Math.floor(rnd(S) * aliveA.length)] : null, bev.id);
-  swornAfterBattle(S, win ? aliveA : aliveB, B.name);
+  swornAfterBattle(S, win ? aliveA : aliveB, B.name, bev.id);
   const killedL = deadB.find(m => m.id === B.leader) || deadA.find(m => m.id === A.leader);
   if (killedL) for (const o of S.agents) if (o.feud && !o.feud.done && o.feud.L === killedL.id && band.concat(defenders).includes(o)) revengeDone(S, o, `В битве гибнет ${killedL.name}, тот, кто вёл врагов`);
   for (const m of deadA.concat(deadB)) removeAgent(S, m, 'war');

@@ -237,7 +237,7 @@ function groupMonth(S, g) {
     if (rich.length) for (const m of mem) {
       if (m.wealth > 0.5 || m.patron) continue;
       const pt = rich.find(r => r !== m && r.wealth > 14); if (!pt) break;
-      pt.wealth -= 3; m.wealth += 3; m.patron = pt.id; bump(m, pt, 0.25); bond(S, m, pt, 'debt', `${fem(pt, 'кормил', 'кормила')} семью в голод`, 0.5); bio(S, m, 'client', `В голод ${pt.name} кормит ${m.sex === 'f' ? 'её' : 'его'} семью: теперь ${m.sex === 'f' ? 'она' : 'он'} клиент ${pt.name}`); pt.status += 0.15; pt.rep = clamp((pt.rep || 0) + 0.04, -1, 1);
+      pt.wealth -= 3; m.wealth += 3; m.patron = pt.id; bump(m, pt, 0.25); const pev = note(S, 'aid', `${pt.name} кормит семью ${m.name} в голод`, m.x, m.y, g.hue, { who: [pt.id, m.id], gs: [g.id] }).id; bond(S, m, pt, 'debt', `${fem(pt, 'кормил', 'кормила')} семью в голод`, 0.5, false, pev); bio(S, m, 'client', `В голод ${pt.name} кормит ${m.sex === 'f' ? 'её' : 'его'} семью: теперь ${m.sex === 'f' ? 'она' : 'он'} клиент ${pt.name}`, pev); pt.status += 0.15; pt.rep = clamp((pt.rep || 0) + 0.04, -1, 1);
       S.stats.clients = (S.stats.clients || 0) + 1;
     }
   }
@@ -307,7 +307,8 @@ function groupMonth(S, g) {
         }
         const ng = createGroup(S, ch, sup, g.id);
         S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); bond(S, L, ch, 'enemy', `${fem(ch, 'расколол', 'расколола')} «${g.name}» и ${fem(ch, 'увёл', 'увела')} людей`, 0.6); S.stats.schisms++;
-        log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
+        const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
+        refBond(S, L, ch, sev.id); refLast(S, ch, 'schism', sev.id);
         return;
       }
     }
@@ -317,10 +318,11 @@ function groupMonth(S, g) {
   for (const m of g.members.map(id => S._a.get(id))) {
     if (m.id === g.leader) continue;
     if (m.res > 0.7 && (m.trust[g.leader] || 0) < -0.15 && rnd(S) < 0.25 * (0.25 + 0.75 * room)) {
-      bio(S, m, 'quit', `Уходит из «${g.name}»: не ладит с вождём ${L.name}`); bond(S, m, L, 'rival', `не поладили в «${g.name}»`, 0.4); (m.quit = m.quit || {})[g.id] = S.tick;
+      const qev = note(S, 'quit', `${m.name} уходит из «${g.name}»: не ладит с вождём ${L.name}`, m.x, m.y, g.hue, { who: [m.id, L.id], gs: [g.id] }).id;
+      bio(S, m, 'quit', `Уходит из «${g.name}»: не ладит с вождём ${L.name}`, qev); bond(S, m, L, 'rival', `не поладили в «${g.name}»`, 0.4, false, qev); (m.quit = m.quit || {})[g.id] = S.tick;
       gone.push(m.id); leave(S, m, 'move'); exits++; if (g.dead) return;
-      const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { bio(S, sp, 'quit', `Уходит из «${g.name}» вслед за ${sp.sex === 'f' ? 'мужем' : 'женой'}`); (sp.quit = sp.quit || {})[g.id] = S.tick; leave(S, sp, 'move'); exits++; if (g.dead) return; }
-    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && bondW(L, m) < 0.2 && rnd(S) < 0.15) { bond(S, m, L, 'enemy', `${fem(L, 'изгнал', 'изгнала')} меня из «${g.name}»`, 0.5); bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
+      const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { bio(S, sp, 'quit', `Уходит из «${g.name}» вслед за ${sp.sex === 'f' ? 'мужем' : 'женой'}`, qev); (sp.quit = sp.quit || {})[g.id] = S.tick; leave(S, sp, 'move'); exits++; if (g.dead) return; }
+    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && bondW(L, m) < 0.2 && rnd(S) < 0.15) { const xev = note(S, 'exile', `${L.name} изгоняет ${m.name} из «${g.name}»: дурная слава`, m.x, m.y, g.hue, { who: [L.id, m.id], gs: [g.id] }).id; bond(S, m, L, 'enemy', `${fem(L, 'изгнал', 'изгнала')} меня из «${g.name}»`, 0.5, false, xev); bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`, xev); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
   }
   if (exits >= 3) log(S, 'exodus', `Из «${g.name}» разом уходят ${exits} недовольных`, g.cx, g.cy, g.hue, { why: `У каждого обида выше 70% и доверие к лидеру ниже нуля. Но лидера среди них нет, поэтому они расходятся поодиночке. Доля ${L.name} в добыче: ${P0(g.take)}.`, who: gone, gs: [g.id] });
   if (g.shrine) g.treasury *= 0.99;
@@ -345,6 +347,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   if (g.gov === 'assembly') { why += ' Вече разогнано: теперь решает один человек.'; g.gov = 'chief'; }
   g.coupCount = (g.coupCount || 0) + 1;
   g.priestRule = false;
+  const causes0 = recentCauses(S, g); let cev;
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.group === g.id && o.age >= 15 && (!o.feud || o.feud.done)) { o.feud = { g: g.id, gname: g.name, L: ch.id, Lname: ch.name, t: S.tick, v: L.name, rel: L.sex === 'f' ? 'мать' : 'отца', personal: true }; bio(S, o, 'feud', `${ch.name} свергает ${L.sex === 'f' ? 'мать' : 'отца'} ${L.name}. ${o.name} затаивает обиду`); }
   bond(S, L, ch, 'enemy', `${fem(ch, 'сверг', 'свергла')} меня с места вождя «${g.name}»`, 0.9);
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.group === g.id && o.age >= 15) bond(S, o, ch, 'enemy', `${fem(ch, 'сверг', 'свергла')} ${fem(L, 'отца', 'мать')}`, 0.6);
@@ -359,8 +362,13 @@ function coup(S, g, L, ch, sup, cur, why) {
   if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6 * Math.min(1, 0.3 + fissionP(S, g))) {
     const ng = createGroup(S, L, loyal, g.id);
     S.hostility[key(g.id, ng.id)] = 0.9;
-    log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
-  } else log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id] });
+    cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], causes: causes0.length ? causes0 : undefined });
+  } else cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id], causes: causes0.length ? causes0 : undefined });
+  // the deposed, his grown children and the usurper's chronicle and ties point to the coup
+  const id = cev.id;
+  refBond(S, L, ch, id); refLast(S, ch, 'coup', id); refLast(S, L, 'deposed', id); refLast(S, ch, 'leader', id);
+  for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.age >= 15) { refBond(S, o, ch, id); refLast(S, o, 'feud', id); if (o.feud && o.feud.L === ch.id && !o.feud.ev) o.feud.ev = cite(S, id); }
+  for (const m of sup) refBond(S, L, m, id);
 }
 
 function grievances(S, g, L, ch, sup, n) {
