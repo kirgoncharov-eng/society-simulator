@@ -9,16 +9,12 @@ function bio(S, a, k, s) {
 }
 function groupName(S, id) { const g = S._g.get(id); return g ? g.name : (S.arch && S.arch[id] ? S.arch[id].name : 'исчезнувшей деревни'); }
 const AID_MEMORY_MIN = 2 * 360, AID_MEMORY_MAX = 15 * 360;
-function rememberGrain(S, village, helper) {
-  for (const id of village.members) {
-    const a = S._a.get(id);
-    if (a.id !== village.leader && a.wealth >= 0.3) continue;
-    const memories = (a.grainMemories || []).filter(m => S.tick - m.tick <= AID_MEMORY_MAX);
-    if (memories.some(m => m.helper === helper.id)) continue;
-    memories.push({ helper: helper.id, tick: S.tick });
-    a.grainMemories = memories.slice(-4);
-    bio(S, a, 'aidReceived', `В голод получает зерно. Помощь присылает ${helper.name}`);
-  }
+function rememberGrain(S, a, helper) {
+  const memories = (a.grainMemories || []).filter(m => S.tick - m.tick <= AID_MEMORY_MAX);
+  if (memories.some(m => m.helper === helper.id)) return;
+  memories.push({ helper: helper.id, tick: S.tick });
+  a.grainMemories = memories.slice(-4);
+  bio(S, a, 'aidReceived', `В голод получает зерно. Помогает ${helper.name}`);
 }
 function rememberedGrain(S, witness, villageId, minAge) {
   for (const memory of witness.grainMemories || []) {

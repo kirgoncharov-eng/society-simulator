@@ -82,7 +82,7 @@ function warband(S, A) {
   const L = S._a.get(A.leader), n = A.members.length;
   const able = A.members.map(id => S._a.get(id)).filter(m => m && !m.car && m.age >= 17 && m.energy > 0.3);
   able.sort((a, b) => (b.job === 'guard') - (a.job === 'guard') || fightPow(b, A) - fightPow(a, A));
-  return able.filter(m => m !== L || n < 8).slice(0, Math.max(3, Math.round(n * 0.45)));
+  return able.filter(m => m !== L || n < 8).slice(0, Math.max(3, Math.min(Math.round(n * 0.45), 4 + Math.round(n * 0.25))));
 }
 function endWar(S, w) {
   for (const id of w.fighters) { const m = S._a.get(id); if (m && m.war === w.id) m.war = null; }
@@ -107,7 +107,9 @@ function battle(S, w, A, B, band) {
   if (st && st.type === 'Конфедерация') for (const id of st.members) { const o = S._g.get(id); if (o && o !== B && o !== A && o.home && Math.hypot(o.home.x - B.home.x, o.home.y - B.home.y) < 420) pd += defence(S, o) * 0.35; }
   const win = rnd(S) < pa * pa / (pa * pa + pd * pd + 1e-6);
   const LA = S._a.get(A.leader), LB = S._a.get(B.leader);
-  const defenders = B.members.map(id => S._a.get(id)).filter(m => m && !m.car && !m.war && Math.hypot(m.x - B.home.x, m.y - B.home.y) < 160);
+  // in the fight: the guard and those closest to the gate; the rest hide or run to the fields
+  const near = B.members.map(id => S._a.get(id)).filter(m => m && !m.car && !m.war && Math.hypot(m.x - B.home.x, m.y - B.home.y) < 160);
+  const defenders = near.filter(m => m.job === 'guard').concat(near.filter(m => m.job !== 'guard').sort((p, q) => Math.hypot(p.x - B.home.x, p.y - B.home.y) - Math.hypot(q.x - B.home.x, q.y - B.home.y)).slice(0, 8));
   // most clashes are skirmishes: a few wounded, 0-2 dead; a rout with heavy losses is rare and needs a clear edge
   const edge = win ? pa / Math.max(0.1, pd) : pd / Math.max(0.1, pa), rout = rnd(S) < clamp((edge - 1.2) * 0.12, 0, 0.3);
   const lossA = win ? (rout ? 0.06 : 0.045) : (rout ? 0.28 : 0.16), lossB = win ? (rout ? 0.26 : 0.14) : (rout ? 0.06 : 0.045);

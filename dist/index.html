@@ -457,7 +457,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm14', date: '2026-11-20', note: 'жители помнят, кто поделился зерном в голод, и спустя годы могут вернуть помощь' };
+const MODEL = { v: 'm15', date: '2026-11-20', note: 'жители помнят, кто поделился зерном в голод, а старый знакомый может поручиться за переселенца' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -712,6 +712,13 @@ function createGroup(S, L, others, parent) {
   S.groups.push(g); S._g.set(g.id, g); S.stats.founded++;
   S.arch = S.arch || {};
   S.arch[g.id] = { name: g.name, hue, founded: S.tick, end: null, parent: parent || null, into: null };
+  // those who split off take their share of the stores, tools and goats (at most half)
+  const P = parent && S._g.get(parent);
+  if (P && P.members.length) {
+    const fr = Math.min(0.5, (others.length + 1) / P.members.length);
+    for (const k of ['treasury', 'tools', 'wood', 'stone']) { const v = (P[k] || 0) * fr; P[k] = (P[k] || 0) - v; g[k] = (g[k] || 0) + v; }
+    if (P.goats > 3) { const k = Math.floor(P.goats * fr); P.goats -= k; g.goats = (g.goats || 0) + k; }
+  }
   const prevG = L.group;
   if (L.group) leave(S, L, 'move');
   L.group = g.id; L.role = 'leader'; L.boss = null; L.joined = S.tick; L.res = 0; g.members.push(L.id);
@@ -761,7 +768,7 @@ function succession(S, g, why, old) {
   const R = ranked[1];
   if (R && share < 0.5 && R.ambition > 0.5 && mem.length >= 6) {
     const sup = mem.filter(m => m !== W && m !== R && (m.trust[R.id] || 0) > (m.trust[W.id] || 0));
-    if (sup.length >= 4) {
+    if (sup.length >= 4 && rnd(S) < Math.min(1, 0.2 + fissionP(S, g))) {
       const ng = createGroup(S, R, sup, g.id);
       S.hostility[key(g.id, ng.id)] = 0.7; S.stats.schisms++;
       log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ним те, кто доверяет ему больше, чем новому лидеру`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
@@ -1163,6 +1170,9 @@ function jobs(S, g) {
   const needGR = !g.granary && g.treasury > n * 5 && n >= 4;
   const threat = threatOf(S, g); let bs = null;
   g.threat = threat;
+  // in a lean season the first thing to build is another field, not a house
+  const lean0 = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
+  if (!g.site && lean0 && g.fields.length < wantF) g.site = fieldSpot(S, g);
   if (!g.site) {
     if (threat > 0.6 && !g.walls && g.houses.length >= 3 && g.wood >= 12) { g.wood -= 12; g.site = { kind: 'walls', x: g.home.x, y: g.home.y, prog: 0, need: 90 }; }
     else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8) { g.wood -= 8; g.site = specialSpot(S, g, 'shrine'); }
@@ -1179,7 +1189,7 @@ function jobs(S, g) {
   if (L && n > 4) L.job = 'lead';
   const woodNeed = g.houses.length < wantH || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
   const stoneNeed = g.stoneCell !== null && ((needWS && g.stone < 4) || (g.workshop && g.stone < 6));
-  const lean = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
+  const lean = lean0;
   const quota = {
     build: g.site ? (lean && g.site.kind !== 'field' ? 0 : Math.max(1, Math.round(n * 0.2))) : 0,
     wood: g.woodCell === null || lean ? 0 : woodNeed ? Math.max(1, Math.round(n * 0.2)) : (season === 0 ? 1 : 0),
@@ -1432,7 +1442,7 @@ function warband(S, A) {
   const L = S._a.get(A.leader), n = A.members.length;
   const able = A.members.map(id => S._a.get(id)).filter(m => m && !m.car && m.age >= 17 && m.energy > 0.3);
   able.sort((a, b) => (b.job === 'guard') - (a.job === 'guard') || fightPow(b, A) - fightPow(a, A));
-  return able.filter(m => m !== L || n < 8).slice(0, Math.max(3, Math.round(n * 0.45)));
+  return able.filter(m => m !== L || n < 8).slice(0, Math.max(3, Math.min(Math.round(n * 0.45), 4 + Math.round(n * 0.25))));
 }
 function endWar(S, w) {
   for (const id of w.fighters) { const m = S._a.get(id); if (m && m.war === w.id) m.war = null; }
@@ -1457,7 +1467,9 @@ function battle(S, w, A, B, band) {
   if (st && st.type === 'Конфедерация') for (const id of st.members) { const o = S._g.get(id); if (o && o !== B && o !== A && o.home && Math.hypot(o.home.x - B.home.x, o.home.y - B.home.y) < 420) pd += defence(S, o) * 0.35; }
   const win = rnd(S) < pa * pa / (pa * pa + pd * pd + 1e-6);
   const LA = S._a.get(A.leader), LB = S._a.get(B.leader);
-  const defenders = B.members.map(id => S._a.get(id)).filter(m => m && !m.car && !m.war && Math.hypot(m.x - B.home.x, m.y - B.home.y) < 160);
+  // in the fight: the guard and those closest to the gate; the rest hide or run to the fields
+  const near = B.members.map(id => S._a.get(id)).filter(m => m && !m.car && !m.war && Math.hypot(m.x - B.home.x, m.y - B.home.y) < 160);
+  const defenders = near.filter(m => m.job === 'guard').concat(near.filter(m => m.job !== 'guard').sort((p, q) => Math.hypot(p.x - B.home.x, p.y - B.home.y) - Math.hypot(q.x - B.home.x, q.y - B.home.y)).slice(0, 8));
   // most clashes are skirmishes: a few wounded, 0-2 dead; a rout with heavy losses is rare and needs a clear edge
   const edge = win ? pa / Math.max(0.1, pd) : pd / Math.max(0.1, pa), rout = rnd(S) < clamp((edge - 1.2) * 0.12, 0, 0.3);
   const lossA = win ? (rout ? 0.06 : 0.045) : (rout ? 0.28 : 0.16), lossB = win ? (rout ? 0.26 : 0.14) : (rout ? 0.06 : 0.045);
@@ -1579,7 +1591,7 @@ function patrol(S) {
     if (a.war || a.car || !S._a.has(a.id)) continue;
     const o = S.own[cellAt(a.x, a.y)]; if (!o || o === a.group) continue;
     if (a.group && (allied(S, a.group, o) || !['gather', 'wood', 'stone'].includes(a.job))) continue;
-    const O = S._g.get(o); if (!O) continue;
+    const O = S._g.get(o); if (!O || !O.home) { S.own[cellAt(a.x, a.y)] = 0; continue; }
     const G = a.group && S._g.get(a.group);
     if (G && G.lord === o) continue;
     let guard = null;
@@ -1717,6 +1729,101 @@ function money(S, g, L) {
   }
 }
 
+/* ---------- hamlets: loners, small bands and tiny villages drift into real villages ---------- */
+// how many close kin (parents, children, siblings, spouse) of a live in village g
+function kinIn(S, a, g) {
+  let k = 0;
+  for (const id of g.members) { const o = S._a.get(id); if (o && kin(o, a)) k++; }
+  return k;
+}
+// a whole small group moves into a bigger village: people walk over, the old houses stand empty
+function absorb(S, big, sm, keepLand) {
+  const sL = S._a.get(sm.leader);
+  if (S.arch && S.arch[sm.id]) S.arch[sm.id].into = big.id;
+  if (keepLand && S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.id;
+  for (const id of sm.members) {
+    const m = S._a.get(id); if (!m) continue;
+    m.group = big.id; m.role = 'member'; m.boss = big.leader; m.joined = S.tick; m.war = null; m.job = null;
+    big.members.push(id);
+  }
+  // the old fields close enough to walk to stay in use; empty houses are taken apart for timber
+  if (sm.home && big.home) {
+    const keep = sm.fields.filter(f => Math.hypot(f.x - big.home.x, f.y - big.home.y) < 280);
+    for (const f of keep) { S.occ[f.c] = big.id; if (S.own) S.own[f.c] = big.id; f.owner = null; big.fields.push(f); }
+    sm.fields = sm.fields.filter(f => !keep.includes(f));
+    big.wood = (big.wood || 0) + sm.houses.length * 3; sm.houses = []; // taken apart: no ruin is left to lure the next band
+  }
+  big.treasury += sm.treasury; sm.treasury = 0; sm.members = [];
+  big.wood = (big.wood || 0) + (sm.wood || 0); big.stone = (big.stone || 0) + (sm.stone || 0); big.tools = (big.tools || 0) + (sm.tools || 0); big.goats = (big.goats || 0) + (sm.goats || 0);
+  sm.wood = sm.stone = sm.tools = sm.goats = 0;
+  S.wars = S.wars.filter(w => w.att !== sm.id && w.def !== sm.id);
+  dissolve(S, sm, true); restructure(S, big);
+  if (sL) sL.status += 0.5;
+  S.stats.merges++;
+}
+// the best village for a person or a small band to go to; null if none will take them
+function hostFor(S, x, y, from, a, minN) {
+  let best = null, bv = -1e9;
+  for (const o of S.groups) {
+    if (!o.home || o.dead || o === from || o.members.length < minN) continue;
+    const d = Math.hypot(o.home.x - x, o.home.y - y); if (d > 520) continue;
+    if (from && (S.hostility[key(from.id, o.id)] || 0) > 0.5) continue;
+    if (a && a.exiledFrom === o.id) continue;
+    const k = a ? kinIn(S, a, o) : from ? Math.min(4, (S.kinTies || {})[key(from.id, o.id)] || 0) : 0;
+    const v = 3 * Math.min(3, k) + Math.min(4, o.treasury / Math.max(1, o.members.length)) * 0.5 + Math.min(20, o.members.length) * 0.1 - Math.max(0, o.members.length - 30) * 0.15 - d / 120 + (o.thirst ? -3 : 0);
+    if (v > bv) { bv = v; best = { o, k, d }; }
+  }
+  return best && reach(S, x, y, best.o.home.x, best.o.home.y) ? best : null;
+}
+function hamletsMonth(S) {
+  // a loner goes to live with kin: parents, children, brothers and sisters in a village
+  for (const a of S.agents) {
+    if (a.group || a.age < 16 || rnd(S) > 0.35) continue;
+    const h = hostFor(S, a.x, a.y, null, a, 3); if (!h) continue;
+    const L = S._a.get(h.o.leader); if (!L) continue;
+    if (!h.k) continue; // strangers are not taken in for nothing: they come as hired hands when hungry (see monthly)
+    const p = (0.25 + 0.45 * L.coop + 0.2 * Math.min(2, h.k)) * ((a.rep || 0) < -0.3 ? 0.35 : 1);
+    if (rnd(S) > p) continue;
+    join(S, a, h.o, h.o.members.map(id => S._a.get(id)).find(o => o && kin(o, a)).id);
+    bio(S, a, 'move', `Уходит жить к родне в «${h.o.name}»`);
+    S.stats.settledIn = (S.stats.settledIn || 0) + 1;
+  }
+  for (const g of S.groups.slice()) {
+    if (g.dead) continue;
+    const n = g.members.length, L = S._a.get(g.leader); if (!L) continue;
+    const age = S.tick - g.founded;
+    // a small band that has wandered a year joins a village instead of founding its own
+    if (!g.home && n <= 4 && age > 360 && rnd(S) < 0.08) {
+      const h = hostFor(S, g.cx, g.cy, g, null, 5); if (!h) continue;
+      const HL = S._a.get(h.o.leader); if (!HL || rnd(S) > 0.3 + 0.5 * HL.coop) continue;
+      for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `Ватага «${g.name}» прибивается к «${h.o.name}»`);
+      log(S, 'merge', `Ватага «${g.name}» (${n} ${pl(n, 'человек', 'человека', 'человек')}) прибивается к «${h.o.name}»`, g.cx, g.cy, h.o.hue, { why: sent([`${yrs(Math.round(age / 360))} кочевья, а людей так и не прибавилось`, 'чтобы поднять деревню, нужно хотя бы пять пар рук', h.k ? `в «${h.o.name}» у них родня` : `${HL.name} готов${HL.sex === 'f' ? 'а' : ''} принять работников`]), who: [L.id, HL.id], gs: [g.id, h.o.id] });
+      absorb(S, h.o, g, false); continue;
+    }
+    // a hamlet of 2-4 grows, or moves into a neighbouring village: kin, safety, a shared well
+    if (g.home && n < 5 && age > 720 && !S.wars.some(w => w.att === g.id || w.def === g.id)) {
+      const h = hostFor(S, g.home.x, g.home.y, g, null, Math.max(5, n + 2)); if (!h || h.d > 380) continue;
+      const HL = S._a.get(h.o.leader); if (!HL) continue;
+      const threat = Math.min(1.5, g.threat || 0), noWell = !g.well && h.o.well && !h.o.well.dry, hungry = g.treasury < n * 1.5;
+      const p = (0.025 + 0.03 * Math.min(3, h.k) + 0.04 * threat + (noWell ? 0.025 : 0) + (hungry ? 0.04 : 0) + (S.tick - g.raided < 720 ? 0.04 : 0)) * (1.2 - 0.6 * L.ambition) * (0.6 + 0.6 * HL.coop);
+      if (rnd(S) > p) continue;
+      const why = sent([`в «${g.name}» ${n} ${pl(n, 'взрослый', 'взрослых', 'взрослых')}: некому одновременно пахать, носить воду и стеречь`, h.k ? `с «${h.o.name}» их связывают браки: ${h.k} ${pl(h.k, 'семейная связь', 'семейные связи', 'семейных связей')}` : '', threat > 0.5 || S.tick - g.raided < 720 ? 'вокруг неспокойно, а за частоколом большой деревни безопаснее' : '', noWell ? `у «${h.o.name}» есть колодец` : '', hungry ? 'своих запасов не хватает' : '', `${L.name} соглашается стать простым общинником`]);
+      for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `Хутор «${g.name}» пустеет: семья перебирается в «${h.o.name}»`);
+      log(S, 'merge', `Хутор «${g.name}» пустеет: ${n} ${pl(n, 'человек', 'человека', 'человек')} перебираются в «${h.o.name}»`, g.home.x, g.home.y, h.o.hue, { why, who: [L.id, HL.id], gs: [g.id, h.o.id] });
+      absorb(S, h.o, g, false);
+    }
+  }
+}
+// scalar stress: a kin-based village holds together until roughly 120-150 people, then tends to split
+// (Johnson 1982; Chagnon 1967; Alberti 2014). Kinship keeps it whole; a shared cult or a council raises the limit (Bandy 2004).
+function fissionP(S, g) {
+  const mem = g.members.map(id => S._a.get(id)).filter(Boolean), n = mem.length;
+  let T = 55;
+  if (g.faith || g.shrine) T += 10;
+  if (g.depth >= 2 || g.gov === 'assembly' || g.code) T += 8;
+  let kinned = 0; for (const m of mem) if (mem.some(o => o !== m && kin(o, m))) kinned++;
+  return clamp(Math.pow(n / T, 3), 0.02, 2) * (1.3 - 0.7 * kinned / Math.max(1, n));
+}
 /* ---------- water: springs, river, wells, drought, dirty water ---------- */
 function springsInit(S) {
   S.springs = [];
@@ -1786,16 +1893,12 @@ function bio(S, a, k, s) {
 }
 function groupName(S, id) { const g = S._g.get(id); return g ? g.name : (S.arch && S.arch[id] ? S.arch[id].name : 'исчезнувшей деревни'); }
 const AID_MEMORY_MIN = 2 * 360, AID_MEMORY_MAX = 15 * 360;
-function rememberGrain(S, village, helper) {
-  for (const id of village.members) {
-    const a = S._a.get(id);
-    if (a.id !== village.leader && a.wealth >= 0.3) continue;
-    const memories = (a.grainMemories || []).filter(m => S.tick - m.tick <= AID_MEMORY_MAX);
-    if (memories.some(m => m.helper === helper.id)) continue;
-    memories.push({ helper: helper.id, tick: S.tick });
-    a.grainMemories = memories.slice(-4);
-    bio(S, a, 'aidReceived', `В голод получает зерно. Помощь присылает ${helper.name}`);
-  }
+function rememberGrain(S, a, helper) {
+  const memories = (a.grainMemories || []).filter(m => S.tick - m.tick <= AID_MEMORY_MAX);
+  if (memories.some(m => m.helper === helper.id)) return;
+  memories.push({ helper: helper.id, tick: S.tick });
+  a.grainMemories = memories.slice(-4);
+  bio(S, a, 'aidReceived', `В голод получает зерно. Помогает ${helper.name}`);
 }
 function rememberedGrain(S, witness, villageId, minAge) {
   for (const memory of witness.grainMemories || []) {
@@ -2408,7 +2511,10 @@ function monthly(S) {
     for (const g of S.groups) { if (!g.home || g.id === a.group || g.treasury < g.members.length * 6) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d < rd) { rd = d; rich = g; } }
     if (!rich) continue;
     const L = S._a.get(rich.leader);
-    if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) { rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1; }
+    if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) {
+      if (a.wealth < 0) rememberGrain(S, a, L);
+      rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1;
+    }
     else if (a.coop < 0.45 && rnd(S) < 0.35) {
       rich.treasury -= 2; a.wealth += 2; S.stats.theft = (S.stats.theft || 0) + 1;
       if (rnd(S) < 0.3) { a.rep = clamp((a.rep || 0) - 0.2, -1, 1); if (a.group) { const k = key(a.group, rich.id); S.hostility[k] = Math.min(2, (S.hostility[k] || 0) + 0.08); } if (!a.bioTheft || S.tick - a.bioTheft > 3600) { a.bioTheft = S.tick; bio(S, a, 'theft', `Голодая, крадёт зерно из амбара «${rich.name}» и попадается`); } }
@@ -2434,24 +2540,34 @@ function monthly(S) {
       if (g0 && fh < 2) continue;
       const base = fh - d / 60 + (a.exiledFrom === g.id ? -50 : 0);
       if (base > usualScore) { usualScore = base; usual = g; }
-      const remembered = rememberedGrain(S, a, g.id, 180);
+      const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
+      const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;
       const score = base + (remembered ? 3 : 0);
       if (score > bv) { bv = score; best = g; memory = remembered; }
     }
     if (!best || !reach(S, a.x, a.y, best.home.x, best.home.y)) continue;
     const L = S._a.get(best.leader); if (!L) continue;
     const chance = (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15);
-    const welcome = memory && a.exiledFrom !== best.id ? 0.15 : 0;
+    const helper = memory?.helper;
+    const welcome = helper === L && a.exiledFrom !== best.id ? 0.15 : 0;
+    const sponsor = helper && helper !== L && a.exiledFrom !== best.id && helper.coop >= 0.35 && (L.trust[helper.id] || 0) >= 0.1;
     const roll = rnd(S);
-    if (roll >= chance + welcome) continue;
+    if (roll >= chance + welcome + (sponsor ? 0.18 : 0)) continue;
     const sp = a.spouse && S._a.get(a.spouse);
     join(S, a, best, best.leader);
     if (memory && (best !== usual || roll >= chance)) {
+      const first = !S.stats.aidMemoryMoves;
       S.stats.aidMemoryMoves = (S.stats.aidMemoryMoves || 0) + 1;
-      const { helper } = memory;
-      const why = `${a.name} помнит, как ${helper.name} ${helper.sex === 'f' ? 'помогла' : 'помог'} с зерном. Теперь там предлагают работу за еду.`;
+      const sponsorDecided = sponsor && roll >= chance;
+      if (sponsorDecided) {
+        S.stats.aidSponsoredMoves = (S.stats.aidSponsoredMoves || 0) + 1;
+        bio(S, helper, 'sponsor', `Ручается перед вождём ${L.name} за переселенца ${a.name}`);
+      }
+      const why = `${a.name} помнит, как ${helper.name} ${helper.sex === 'f' ? 'помогла' : 'помог'} с зерном. ${sponsorDecided ? `${helper.name} ${helper.sex === 'f' ? 'поручилась' : 'поручился'} перед вождём ${L.name}, и в деревне дали работу за еду.` : 'Теперь в деревне предлагают работу за еду.'}`;
       bio(S, a, 'move', `Уходит в «${best.name}», к тем, кто однажды помог зерном`);
-      log(S, 'aid', `${a.name} находит приют в «${best.name}»`, best.home.x, best.home.y, best.hue, { why, who: [a.id, helper.id], gs: [best.id] });
+      log(S, 'aid', `${a.name} находит приют в «${best.name}»`, best.home.x, best.home.y, best.hue, {
+        first, why, who: sponsorDecided ? [a.id, helper.id, L.id] : [a.id, helper.id], gs: [best.id],
+      });
     } else {
       bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`);
     }
@@ -2470,6 +2586,7 @@ function monthly(S) {
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
   for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
   aidMonth(S);
+  hamletsMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -2515,16 +2632,21 @@ function aidMonth(S) {
     g.aidFrom = g.aidFrom || {};
     if (obligation) {
       repayGrain(S, o, obligation);
+      const first = !S.stats.aidReturned;
       S.stats.aidReturned = (S.stats.aidReturned || 0) + 1;
       if (o !== usualDonor || roll > best.baseP) S.stats.aidMemoryChanged = (S.stats.aidMemoryChanged || 0) + 1;
       const { witness, helper, memory } = obligation;
       const ago = yrs(Math.floor((S.tick - memory.tick) / 360));
       log(S, 'aid', `«${o.name}» возвращает помощь «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, {
+        first,
         why: `${witness.name} помнит, как ${ago} назад ${helper.name} ${helper.sex === 'f' ? 'прислала' : 'прислал'} зерно в разгар голода. Теперь деревня делится в ответ.`,
         who: [...new Set([witness.id, helper.id, LO.id, LG.id])], gs: [o.id, g.id],
       });
     } else {
-      rememberGrain(S, g, LO);
+      for (const id of g.members) {
+        const a = S._a.get(id);
+        if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO);
+      }
       if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
     }
     g.aidFrom[o.id] = S.tick;
@@ -2619,7 +2741,7 @@ function groupMonth(S, g) {
     }
   }
   restructure(S, g);
-  if (!g.home && (n >= 6 || (n >= 4 && S.tick - g.founded > 720) || (n >= 3 && S.tick - g.founded > 1440))) settle(S, g);
+  if (!g.home && (n >= 6 || (n >= 5 && S.tick - g.founded > 720))) settle(S, g);
   jobs(S, g);
   // entropy
   let res = 0, fact = 0; for (const m of mem) { res += m.res; if ((m.trust[L.id] || 0) < 0) fact++; }
@@ -2653,7 +2775,7 @@ function groupMonth(S, g) {
       const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0)) > 0);
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
       if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
-      if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room)) {
+      if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
         const why = grievances(S, g, L, ch, sup, n) + ` Для переворота поддержки мало (${P0(frac)}), поэтому недовольные уходят сами.`;
         if (sup.length < 5 && g.home) {
           let dest = null, dv = -1e9;
@@ -2713,7 +2835,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   for (const m of sup) { m.res *= 0.4; bump(m, ch, 0.2); }
   const loyal = cur.filter(m => m !== ch && (m.trust[L.id] || 0) > (m.trust[ch.id] || 0));
   for (const m of loyal) bump(m, ch, -0.2);
-  if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6) {
+  if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6 * Math.min(1, 0.3 + fissionP(S, g))) {
     const ng = createGroup(S, L, loyal, g.id);
     S.hostility[key(g.id, ng.id)] = 0.9;
     log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
@@ -2825,7 +2947,7 @@ function merge(S, big, sm) {
   const al0 = S.alliances.find(x => (x.a === big.id && x.b === sm.id) || (x.a === sm.id && x.b === big.id));
   const why = `Союз длился ${yrs(Math.round((S.tick - (al0 ? al0.since : S.tick)) / 360))}. «${big.name}» как минимум вдвое больше, а ${sL.name} доверяет ${bL0.name} (${P0(sL.trust[bL0.id] || 0)}). Малой группе выгоднее влиться, чем стоять отдельно.`;
   if (S.arch && S.arch[sm.id]) S.arch[sm.id].into = big.id;
-  if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.id;
+  if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.home ? big.id : 0; // a band without a village cannot hold land
   for (const id of sm.members) {
     const m = S._a.get(id); m.group = big.id; m.role = 'member';
     if (m.id === sL.id) m.boss = big.leader;

@@ -22,7 +22,10 @@ function monthly(S) {
     for (const g of S.groups) { if (!g.home || g.id === a.group || g.treasury < g.members.length * 6) continue; const d = Math.hypot(g.home.x - a.x, g.home.y - a.y); if (d < rd) { rd = d; rich = g; } }
     if (!rich) continue;
     const L = S._a.get(rich.leader);
-    if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) { rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1; }
+    if (L && rnd(S) < 0.25 + 0.6 * L.coop + 0.3 * ((a.rep || 0))) {
+      if (a.wealth < 0) rememberGrain(S, a, L);
+      rich.treasury -= 1.5; a.wealth += 1.5; bump(a, L, 0.08); L.rep = clamp((L.rep || 0) + 0.01, -1, 1); S.stats.alms = (S.stats.alms || 0) + 1;
+    }
     else if (a.coop < 0.45 && rnd(S) < 0.35) {
       rich.treasury -= 2; a.wealth += 2; S.stats.theft = (S.stats.theft || 0) + 1;
       if (rnd(S) < 0.3) { a.rep = clamp((a.rep || 0) - 0.2, -1, 1); if (a.group) { const k = key(a.group, rich.id); S.hostility[k] = Math.min(2, (S.hostility[k] || 0) + 0.08); } if (!a.bioTheft || S.tick - a.bioTheft > 3600) { a.bioTheft = S.tick; bio(S, a, 'theft', `Голодая, крадёт зерно из амбара «${rich.name}» и попадается`); } }
@@ -48,24 +51,34 @@ function monthly(S) {
       if (g0 && fh < 2) continue;
       const base = fh - d / 60 + (a.exiledFrom === g.id ? -50 : 0);
       if (base > usualScore) { usualScore = base; usual = g; }
-      const remembered = rememberedGrain(S, a, g.id, 180);
+      const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
+      const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;
       const score = base + (remembered ? 3 : 0);
       if (score > bv) { bv = score; best = g; memory = remembered; }
     }
     if (!best || !reach(S, a.x, a.y, best.home.x, best.home.y)) continue;
     const L = S._a.get(best.leader); if (!L) continue;
     const chance = (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15);
-    const welcome = memory && a.exiledFrom !== best.id ? 0.15 : 0;
+    const helper = memory?.helper;
+    const welcome = helper === L && a.exiledFrom !== best.id ? 0.15 : 0;
+    const sponsor = helper && helper !== L && a.exiledFrom !== best.id && helper.coop >= 0.35 && (L.trust[helper.id] || 0) >= 0.1;
     const roll = rnd(S);
-    if (roll >= chance + welcome) continue;
+    if (roll >= chance + welcome + (sponsor ? 0.18 : 0)) continue;
     const sp = a.spouse && S._a.get(a.spouse);
     join(S, a, best, best.leader);
     if (memory && (best !== usual || roll >= chance)) {
+      const first = !S.stats.aidMemoryMoves;
       S.stats.aidMemoryMoves = (S.stats.aidMemoryMoves || 0) + 1;
-      const { helper } = memory;
-      const why = `${a.name} помнит, как ${helper.name} ${helper.sex === 'f' ? 'помогла' : 'помог'} с зерном. Теперь там предлагают работу за еду.`;
+      const sponsorDecided = sponsor && roll >= chance;
+      if (sponsorDecided) {
+        S.stats.aidSponsoredMoves = (S.stats.aidSponsoredMoves || 0) + 1;
+        bio(S, helper, 'sponsor', `Ручается перед вождём ${L.name} за переселенца ${a.name}`);
+      }
+      const why = `${a.name} помнит, как ${helper.name} ${helper.sex === 'f' ? 'помогла' : 'помог'} с зерном. ${sponsorDecided ? `${helper.name} ${helper.sex === 'f' ? 'поручилась' : 'поручился'} перед вождём ${L.name}, и в деревне дали работу за еду.` : 'Теперь в деревне предлагают работу за еду.'}`;
       bio(S, a, 'move', `Уходит в «${best.name}», к тем, кто однажды помог зерном`);
-      log(S, 'aid', `${a.name} находит приют в «${best.name}»`, best.home.x, best.home.y, best.hue, { why, who: [a.id, helper.id], gs: [best.id] });
+      log(S, 'aid', `${a.name} находит приют в «${best.name}»`, best.home.x, best.home.y, best.hue, {
+        first, why, who: sponsorDecided ? [a.id, helper.id, L.id] : [a.id, helper.id], gs: [best.id],
+      });
     } else {
       bio(S, a, 'move', `Голодая, нанимается работать за еду в «${best.name}»`);
     }
@@ -84,6 +97,7 @@ function monthly(S) {
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
   for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
   aidMonth(S);
+  hamletsMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -129,16 +143,21 @@ function aidMonth(S) {
     g.aidFrom = g.aidFrom || {};
     if (obligation) {
       repayGrain(S, o, obligation);
+      const first = !S.stats.aidReturned;
       S.stats.aidReturned = (S.stats.aidReturned || 0) + 1;
       if (o !== usualDonor || roll > best.baseP) S.stats.aidMemoryChanged = (S.stats.aidMemoryChanged || 0) + 1;
       const { witness, helper, memory } = obligation;
       const ago = yrs(Math.floor((S.tick - memory.tick) / 360));
       log(S, 'aid', `«${o.name}» возвращает помощь «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, {
+        first,
         why: `${witness.name} помнит, как ${ago} назад ${helper.name} ${helper.sex === 'f' ? 'прислала' : 'прислал'} зерно в разгар голода. Теперь деревня делится в ответ.`,
         who: [...new Set([witness.id, helper.id, LO.id, LG.id])], gs: [o.id, g.id],
       });
     } else {
-      rememberGrain(S, g, LO);
+      for (const id of g.members) {
+        const a = S._a.get(id);
+        if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO);
+      }
       if (!g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5) log(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
     }
     g.aidFrom[o.id] = S.tick;
@@ -233,7 +252,7 @@ function groupMonth(S, g) {
     }
   }
   restructure(S, g);
-  if (!g.home && (n >= 6 || (n >= 4 && S.tick - g.founded > 720) || (n >= 3 && S.tick - g.founded > 1440))) settle(S, g);
+  if (!g.home && (n >= 6 || (n >= 5 && S.tick - g.founded > 720))) settle(S, g);
   jobs(S, g);
   // entropy
   let res = 0, fact = 0; for (const m of mem) { res += m.res; if ((m.trust[L.id] || 0) < 0) fact++; }
@@ -267,7 +286,7 @@ function groupMonth(S, g) {
       const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0)) > 0);
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
       if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
-      if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room)) {
+      if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
         const why = grievances(S, g, L, ch, sup, n) + ` Для переворота поддержки мало (${P0(frac)}), поэтому недовольные уходят сами.`;
         if (sup.length < 5 && g.home) {
           let dest = null, dv = -1e9;
@@ -327,7 +346,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   for (const m of sup) { m.res *= 0.4; bump(m, ch, 0.2); }
   const loyal = cur.filter(m => m !== ch && (m.trust[L.id] || 0) > (m.trust[ch.id] || 0));
   for (const m of loyal) bump(m, ch, -0.2);
-  if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6) {
+  if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6 * Math.min(1, 0.3 + fissionP(S, g))) {
     const ng = createGroup(S, L, loyal, g.id);
     S.hostility[key(g.id, ng.id)] = 0.9;
     log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
