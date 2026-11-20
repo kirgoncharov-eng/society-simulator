@@ -101,6 +101,7 @@ function monthly(S) {
   aidMonth(S);
   hamletsMonth(S);
   bondsMonth(S);
+  householdsMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
