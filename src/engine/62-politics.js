@@ -17,6 +17,8 @@ function relations(S) {
     const rv = ((A.rivals || {})[B.id] || 0) + ((B.rivals || {})[A.id] || 0);
     const contest = Math.min(1.5, rv / 30) + (A.target === B.target ? 0.3 : 0) + (d < 160 ? 0.15 : 0);
     if (A.state && A.state === B.state) h *= 0.5;
+    // a personal feud between the two leaders drags their villages into it
+    const lf = Math.min(0, bondW(LA, LB)) + Math.min(0, bondW(LB, LA)); if (lf < 0 && d < 450) h += -lf * 0.006;
     if (!al) h += contest * (0.03 + 0.12 * P.scarcity) * (0.5 + (LA.ambition + LB.ambition) / 2) * (0.7 + cdist(A, B)) - 0.08 * Math.max(0, mutual) - 0.02 * Math.min(3, (S.kinTies || {})[k] || 0);
     h -= h * decay; if (al) h *= 0.6;
     h = clamp(h, 0, 2);
@@ -62,7 +64,7 @@ function conflict(S, A, B) {
   const lt = (Lg.tools || 0) * 0.3; W.tools = (W.tools || 0) + lt; Lg.tools = (Lg.tools || 0) - lt;
   Lg.avoid[Lg.target] = S.tick + 360;
   const WL = S._a.get(W.leader), LL = S._a.get(Lg.leader);
-  bump(WL, LL, -0.3); bump(LL, WL, -0.35);
+  bump(WL, LL, -0.3); bump(LL, WL, -0.35); bond(S, LL, WL, 'rival', 'отбил наш промысел', 0.4);
   for (const g of wAl) { const al = S._a.get(g.leader); if (al) bump(al, LL, -0.15); }
   let def = 0;
   for (const m of Lg.members.map(id => S._a.get(id))) {

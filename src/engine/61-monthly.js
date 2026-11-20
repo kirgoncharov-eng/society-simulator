@@ -49,7 +49,8 @@ function monthly(S) {
       if (d > (g0 ? 380 : 600)) continue;
       const fh = g.treasury / Math.max(1, g.members.length);
       if (g0 && fh < 2) continue;
-      const base = fh - d / 60 + (exiledBy(S, a, g.id) ? -50 : 0);
+      if (exiledBy(S, a, g.id)) continue; // a village that cast you out does not hire you back
+      const base = fh - d / 60;
       if (base > usualScore) { usualScore = base; usual = g; }
       const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
       const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;
@@ -98,6 +99,7 @@ function monthly(S) {
   for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
   aidMonth(S);
   hamletsMonth(S);
+  bondsMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -139,7 +141,7 @@ function aidMonth(S) {
     if (amt < 1) continue;
     o.treasury -= amt; g.treasury += amt; S.stats.aid = (S.stats.aid || 0) + 1; S.stats.aidFood = (S.stats.aidFood || 0) + amt;
     const k = key(g.id, o.id); S.hostility[k] = Math.max(0, (S.hostility[k] || 0) - 0.15);
-    bump(LG, LO, 0.15); LO.rep = clamp((LO.rep || 0) + 0.03, -1, 1); LO.status += 0.3;
+    bump(LG, LO, 0.15); bond(S, LG, LO, 'debt', `${fem(LO, 'прислал', 'прислала')} зерно голодной «${g.name}»`, 0.6); LO.rep = clamp((LO.rep || 0) + 0.03, -1, 1); LO.status += 0.3;
     g.aidFrom = g.aidFrom || {};
     if (obligation) {
       repayGrain(S, o, obligation);
@@ -232,7 +234,7 @@ function groupMonth(S, g) {
     if (rich.length) for (const m of mem) {
       if (m.wealth > 0.5 || m.patron) continue;
       const pt = rich.find(r => r !== m && r.wealth > 14); if (!pt) break;
-      pt.wealth -= 3; m.wealth += 3; m.patron = pt.id; bump(m, pt, 0.25); bio(S, m, 'client', `В голод ${pt.name} кормит ${m.sex === 'f' ? 'её' : 'его'} семью: теперь ${m.sex === 'f' ? 'она' : 'он'} клиент ${pt.name}`); pt.status += 0.15; pt.rep = clamp((pt.rep || 0) + 0.04, -1, 1);
+      pt.wealth -= 3; m.wealth += 3; m.patron = pt.id; bump(m, pt, 0.25); bond(S, m, pt, 'debt', `${fem(pt, 'кормил', 'кормила')} семью в голод`, 0.5); bio(S, m, 'client', `В голод ${pt.name} кормит ${m.sex === 'f' ? 'её' : 'его'} семью: теперь ${m.sex === 'f' ? 'она' : 'он'} клиент ${pt.name}`); pt.status += 0.15; pt.rep = clamp((pt.rep || 0) + 0.04, -1, 1);
       S.stats.clients = (S.stats.clients || 0) + 1;
     }
   }
@@ -283,7 +285,8 @@ function groupMonth(S, g) {
     let ch = null, cv = -1;
     for (const m of cur) { const v = m.status * (0.3 + m.ambition) * (0.5 + m.energy); if (v > cv) { cv = v; ch = m; } }
     if (ch && ch.ambition > 0.4) {
-      const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0)) > 0);
+      if (ch.ambition > 0.6 && !bondOf(L, ch) && rnd(S) < 0.08) { const why = `${fem(ch, 'метит', 'метит')} на место вождя «${g.name}»`; bond(S, L, ch, 'rival', why, 0.5); bond(S, ch, L, 'rival', `${fem(L, 'держится', 'держится')} за власть в «${g.name}»`, 0.5); }
+      const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0) + bondW(m, ch) - bondW(m, L)) > 0);
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
       if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
       if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
@@ -300,7 +303,7 @@ function groupMonth(S, g) {
           }
         }
         const ng = createGroup(S, ch, sup, g.id);
-        S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); S.stats.schisms++;
+        S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); bond(S, L, ch, 'enemy', `${fem(ch, 'расколол', 'расколола')} «${g.name}» и ${fem(ch, 'увёл', 'увела')} людей`, 0.6); S.stats.schisms++;
         log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
         return;
       }
@@ -311,10 +314,10 @@ function groupMonth(S, g) {
   for (const m of g.members.map(id => S._a.get(id))) {
     if (m.id === g.leader) continue;
     if (m.res > 0.7 && (m.trust[g.leader] || 0) < -0.15 && rnd(S) < 0.25 * (0.25 + 0.75 * room)) {
-      bio(S, m, 'quit', `Уходит из «${g.name}»: не ладит с вождём ${L.name}`); (m.quit = m.quit || {})[g.id] = S.tick;
+      bio(S, m, 'quit', `Уходит из «${g.name}»: не ладит с вождём ${L.name}`); bond(S, m, L, 'rival', `не поладили в «${g.name}»`, 0.4); (m.quit = m.quit || {})[g.id] = S.tick;
       gone.push(m.id); leave(S, m, 'move'); exits++; if (g.dead) return;
       const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { bio(S, sp, 'quit', `Уходит из «${g.name}» вслед за ${sp.sex === 'f' ? 'мужем' : 'женой'}`); (sp.quit = sp.quit || {})[g.id] = S.tick; leave(S, sp, 'move'); exits++; if (g.dead) return; }
-    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && rnd(S) < 0.15) { bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
+    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && bondW(L, m) < 0.2 && rnd(S) < 0.15) { bond(S, m, L, 'enemy', `${fem(L, 'изгнал', 'изгнала')} меня из «${g.name}»`, 0.5); bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
   }
   if (exits >= 3) log(S, 'exodus', `Из «${g.name}» разом уходят ${exits} недовольных`, g.cx, g.cy, g.hue, { why: `У каждого обида выше 70% и доверие к лидеру ниже нуля. Но лидера среди них нет, поэтому они расходятся поодиночке. Доля ${L.name} в добыче: ${P0(g.take)}.`, who: gone, gs: [g.id] });
   if (g.shrine) g.treasury *= 0.99;
@@ -340,6 +343,9 @@ function coup(S, g, L, ch, sup, cur, why) {
   g.coupCount = (g.coupCount || 0) + 1;
   g.priestRule = false;
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.group === g.id && o.age >= 15 && (!o.feud || o.feud.done)) { o.feud = { g: g.id, gname: g.name, L: ch.id, Lname: ch.name, t: S.tick, v: L.name, rel: L.sex === 'f' ? 'мать' : 'отца', personal: true }; bio(S, o, 'feud', `${ch.name} свергает ${L.sex === 'f' ? 'мать' : 'отца'} ${L.name}. ${o.name} затаивает обиду`); }
+  bond(S, L, ch, 'enemy', `${fem(ch, 'сверг', 'свергла')} меня с места вождя «${g.name}»`, 0.9);
+  for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.group === g.id && o.age >= 15) bond(S, o, ch, 'enemy', `${fem(ch, 'сверг', 'свергла')} ${fem(L, 'отца', 'мать')}`, 0.6);
+  for (const m of sup) if (bondW(m, L) > 0.15 || bondW(L, m) > 0.15) bond(S, L, m, 'enemy', `${fem(m, 'поддержал', 'поддержала')} переворот против меня`, 0.6);
   bio(S, ch, 'coup', `Поднимает переворот и свергает ${L.name}`); bio(S, L, 'deposed', `${L.sex === 'f' ? 'Свергнута' : 'Свергнут'}: власть в «${g.name}» берёт ${ch.name}`); ch.bioL = g.id; bio(S, ch, 'leader', `Становится вождём «${g.name}»`);
   setLeader(S, g, ch); g.gen++; g.coupCool = S.tick + 1800; g.legit = clamp(sup.length / Math.max(1, cur.length), 0.2, 1); S.stats.coups++;
   bump(L, ch, -0.7); bump(ch, L, -0.3);

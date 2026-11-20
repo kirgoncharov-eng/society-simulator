@@ -22,7 +22,7 @@ function families(S) {
       if (m.spouse || Math.abs(m.age - f.age) > 14 || kin(m, f)) continue;
       const d = Math.hypot(m.x - f.x, m.y - f.y), gm = S._g.get(m.group), gf = S._g.get(f.group);
       if (m.group !== f.group && d > 320) continue;
-      const v = (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + 0.3 * (m.rep || 0) + 0.02 * m.status - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
+      const v = (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + bondW(f, m) + Math.min(0, bondW(S._a.get(f.father), m), bondW(S._a.get(f.mother), m)) + 0.3 * (m.rep || 0) + 0.02 * m.status - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
       if (v > bv) { bv = v; best = m; }
     }
     if (!best || bv < -0.4) continue;
@@ -64,6 +64,10 @@ function marry(S, f, m) {
   f.spouse = m.id; m.spouse = f.id; bump(f, m, 0.5); bump(m, f, 0.5);
   bio(S, f, 'marry', `Выходит замуж за ${m.name}${m.group && m.group !== f.group ? ` из «${groupName(S, m.group)}»` : ''}`); bio(S, m, 'marry', `Женится на ${f.name}${f.group && f.group !== m.group ? ` из «${groupName(S, f.group)}»` : ''}`);
   S.stats.marriages = (S.stats.marriages || 0) + 1;
+  // the one who hoped for her: a spurned suitor turns rival to the groom
+  let sp = null, sv = 0.35;
+  for (const o of S.agents) if (o !== m && o.sex === 'm' && !o.spouse && o.age >= 17 && o.group === f.group && (o.trust[f.id] || 0) > sv && !kin(o, f)) { sv = o.trust[f.id]; sp = o; }
+  if (sp) { bond(S, sp, f, 'love', `любит без ответа: ${f.name} выходит за другого`, 0.5); bond(S, sp, m, 'rival', `${fem(m, 'женился', 'вышла')} на ${f.name}`, 0.6); }
   const gf = S._g.get(f.group), gm = S._g.get(m.group);
   if (gf === gm) return;
   // wife moves to husband's side, unless she leads
@@ -93,6 +97,8 @@ function growUp(S, k, mo, fa, g) {
   if (!mo && !fa) bio(S, a, 'orphan', 'Растёт сиротой: родителей уже нет в живых');
   if (k.plagueOrphan) bio(S, a, 'orphan', 'Родители умерли в мор');
   for (const o of S.agents) if (o !== a && ((a.mother && o.mother === a.mother) || (a.father && o.father === a.father))) { a.trust[o.id] = 0.4; o.trust[a.id] = 0.4; }
+  inheritBonds(S, a, par);
+  childhoodFriend(S, a);
 }
 function plagueMonth(S) {
   const sick = S.groups.filter(g => g.sick > 0);

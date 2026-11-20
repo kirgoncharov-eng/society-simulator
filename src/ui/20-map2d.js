@@ -76,10 +76,26 @@ function stateCenters(W0) {
   return res;
 }
 let ownCv = document.createElement('canvas'), ownKey = '';
+const LANDING_LABEL = 'Первая высадка';
+function firstLanding(W0) {
+  const boat = W0.boats?.[0];
+  return W0.tick < 360 && boat?.t === 0 && !boat.out ? boat : null;
+}
+function wreckTimbers(boat) {
+  const angle = Math.atan2(boat.y1 - boat.y0, boat.x1 - boat.x0);
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return [[-23, -14, 0.3], [-11, 17, -0.55], [12, 21, 0.75]].map(([along, across, turn]) => ({
+    x: boat.x1 + along * cos - across * sin,
+    y: boat.y1 + along * sin + across * cos,
+    angle: angle + turn
+  }));
+}
 function boatPos(b, tick) {
-  const age = tick - b.t, k = Math.min(1, age / 50), e = k * k * (3 - 2 * k);
+  const age = tick - b.t;
   if (b.out && age > 70) return null;
   if (!b.out && age > 360 * 4) return null;
+  const k = b.t === 0 && !b.out ? 1 : Math.min(1, age / 50);
+  const e = k * k * (3 - 2 * k);
   return { x: b.x0 + (b.x1 - b.x0) * e, y: b.y0 + (b.y1 - b.y0) * e, a: Math.atan2(b.y1 - b.y0, b.x1 - b.x0), moving: k < 1, beached: !b.out && k >= 1, fade: b.out ? 1 - Math.max(0, (age - 50) / 20) : 1 };
 }
 function fishBoats(W0, now) {
@@ -103,11 +119,26 @@ function drawLife(c, W0, now) {
   for (const b of fishBoats(W0, now)) { c.save(); c.translate(b.x, b.y); c.rotate(b.a); c.fillStyle = C.dark ? '#a07a50' : '#7a5530'; c.beginPath(); c.moveTo(-9, -3); c.lineTo(7, -3); c.lineTo(11, 0); c.lineTo(7, 3); c.lineTo(-9, 3); c.closePath(); c.fill(); c.restore(); }
 }
 function drawBoats(c, W0) {
+  const landing = firstLanding(W0);
+  if (landing) {
+    c.fillStyle = C.dark ? '#b78b60' : '#805537';
+    for (const plank of wreckTimbers(landing)) {
+      c.save();
+      c.translate(plank.x, plank.y);
+      c.rotate(plank.angle);
+      c.fillRect(-7, -1.5, 14, 3);
+      c.restore();
+    }
+  }
   for (const b of W0.boats || []) {
     const p = boatPos(b, W0.tick); if (!p) continue;
     c.save(); c.translate(p.x, p.y); c.rotate(p.a); c.globalAlpha *= p.fade;
     c.fillStyle = C.dark ? '#a07a50' : '#7a5530'; c.beginPath(); c.moveTo(-14, -5); c.lineTo(10, -5); c.lineTo(16, 0); c.lineTo(10, 5); c.lineTo(-14, 5); c.closePath(); c.fill();
     if (!p.beached) { c.fillStyle = C.dark ? '#e8e0d0' : '#fbf7ee'; c.beginPath(); c.moveTo(-2, -2); c.lineTo(-2, -20); c.lineTo(9, -3); c.closePath(); c.fill(); c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 0.8; c.stroke(); }
+    else if (b.t === 0) {
+      c.fillStyle = C.dark ? '#d5af7e' : '#d9b488';
+      for (const seat of [-7, 2, 8]) c.fillRect(seat, -3, 2, 6);
+    }
     c.restore();
   }
 }
@@ -376,6 +407,17 @@ function draw(now) {
   if (fgs) top = S.groups.filter(g => fgs.has(g.id)).concat(top.filter(g => !fgs.has(g.id)));
   ctx.font = `500 ${12 * dpr}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
   const placed = [];
+  const landing = firstLanding(S);
+  if (landing) {
+    const x = landing.x1 * k + ox, y = landing.y1 * k + oy - 13 * dpr;
+    ctx.font = `600 ${13 * dpr}px Inter, system-ui, sans-serif`;
+    const w = ctx.measureText(LANDING_LABEL).width;
+    if (x > w / 2 && x < W - w / 2 && y > 20 * dpr && y < H) {
+      ctx.strokeStyle = C.plate; ctx.lineWidth = 4 * dpr; ctx.strokeText(LANDING_LABEL, x, y);
+      ctx.fillStyle = C.ink; ctx.fillText(LANDING_LABEL, x, y);
+      placed.push({ x, y, w });
+    }
+  }
   if (now - (draw.scAt || 0) > 2000 || draw.scTick !== S.tick) { draw.sc = stateCenters(S); draw.scAt = now; draw.scTick = S.tick; }
   ctx.textAlign = 'center';
   for (const c of draw.sc || []) {

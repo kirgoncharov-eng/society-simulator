@@ -1,5 +1,5 @@
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, quit: 1.5, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 function bio(S, a, k, s) {
   if (!a) return;
   const b = a.bio || (a.bio = []);
@@ -17,6 +17,7 @@ function rememberGrain(S, a, helper) {
   memories.push({ helper: helper.id, tick: S.tick });
   a.grainMemories = memories.slice(-4);
   bio(S, a, 'aidReceived', `В голод получает зерно. Помогает ${helper.name}`);
+  bond(S, a, helper, 'debt', `${fem(helper, 'прислал', 'прислала')} зерно в голод`, 0.6);
 }
 function rememberedGrain(S, witness, villageId, minAge) {
   for (const memory of witness.grainMemories || []) {
@@ -53,7 +54,7 @@ function legend(S, a, why) {
   S.legends.sort((x, y) => y.drama - x.drama);
   if (S.legends.length > 40) S.legends.length = 40;
 }
-function feudFor(S, victim, killers, how) {
+function feudFor(S, victim, killers, how, killer) {
   if (!killers) return;
   for (const o of S.agents) {
     if (o === victim || o.group === killers.id) continue;
@@ -62,7 +63,8 @@ function feudFor(S, victim, killers, how) {
     if (o.feud && S.tick - o.feud.t < 360 * 30) continue;
     o.feud = { g: killers.id, gname: killers.name, L: killers.leader, Lname: (S._a.get(killers.leader) || {}).name || '', t: S.tick, v: victim.name, rel };
     const NOM = { 'отца': 'отец', 'мать': 'мать', 'жену': 'жена', 'мужа': 'муж', 'брата': 'брат', 'сестру': 'сестра' };
-    bio(S, o, 'feud', `${how} гибнет ${NOM[rel]} ${victim.name}. ${o.name} клянётся отомстить «${killers.name}»`);
+    bio(S, o, 'feud', `${how} гибнет ${NOM[rel]} ${victim.name}${killer ? ` от руки ${killer.name}` : ''}. ${o.name} клянётся отомстить «${killers.name}»`);
+    if (killer) bond(S, o, killer, 'enemy', `${fem(killer, 'убил', 'убила')} ${rel} ${victim.name} в бою`, 0.8);
   }
 }
 function revengeDone(S, a, how) {
@@ -91,6 +93,7 @@ function fatesMonth(S) {
         revengeDone(S, m, `Убивает ${KL.name}${wasL ? `, вождя «${g.name}»` : ''}`);
         bio(S, m, 'murder', `Своими руками убивает ${KL.name}`);
         S.stats.murders = (S.stats.murders || 0) + 1;
+        for (const o of kinOf(S, KL)) bond(S, o, m, 'enemy', `${fem(m, 'убил', 'убила')} ${KL.name}`, 0.9);
         for (const o of kinOf(S, KL)) if (!o.feud || o.feud.done) { o.feud = { g: g.id, gname: g.name, L: m.id, Lname: m.name, t: S.tick, v: KL.name, rel: o.mother === KL.id || o.father === KL.id ? (KL.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: m.id }; bio(S, o, 'feud', `${m.name} убивает ${KL.name}. ${o.name} клянётся отомстить`); }
         removeAgent(S, KL, 'killed');
         if (g.dead) break;
@@ -106,13 +109,14 @@ function fatesMonth(S) {
     if (a.age > 25 || !a.group || a.master || a.teacher) continue;
     const g = S._g.get(a.group); if (!g) continue;
     const t = g.members.map(id => S._a.get(id)).find(m => m && m.master && m.master === a.job && m !== a);
-    if (t) { a.teacher = t.id; a.teacherName = t.name; bump(a, t, 0.25); bump(t, a, 0.15); bio(S, a, 'apprentice', `Учится ремеслу у ${t.name}`); }
+    if (t) { a.teacher = t.id; a.teacherName = t.name; bump(a, t, 0.25); bump(t, a, 0.15); bond(S, a, t, 'mentor', 'учит ремеслу', 0.6); bond(S, t, a, 'pupil', 'учится ремеслу', 0.5); bio(S, a, 'apprentice', `Учится ремеслу у ${t.name}`); }
   }
 }
 function elope(S, f, m) {
   const gf = S._g.get(f.group), gm = S._g.get(m.group);
   leave(S, f, 'move'); leave(S, m, 'move');
   f.spouse = m.id; m.spouse = f.id; bump(f, m, 0.6); bump(m, f, 0.6);
+  bond(S, f, m, 'love', 'бежали вместе против воли родни', 0.9); bond(S, m, f, 'love', 'бежали вместе против воли родни', 0.9);
   const ng = createGroup(S, m.ambition >= f.ambition ? m : f, [m.ambition >= f.ambition ? f : m]);
   ng.x0 = (f.x + m.x) / 2;
   for (const g of [gf, gm]) if (g && !g.dead) S.hostility[key(g.id, ng.id)] = 0.5;
