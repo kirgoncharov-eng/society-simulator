@@ -956,8 +956,8 @@ function warMonth(S) {
 // talks before a war: the weaker side usually buys peace with a ransom instead of fighting
 function parley(S, A, B, LA, best, av) {
   const LB = S._a.get(B.leader);
-  if (!LB || B.treasury < 4) return false;
-  const p = (0.35 + 0.3 * LB.coop + 0.4 * Math.max(0, best.oddsR - 0.45) + (A.lord === B.id ? -0.25 : 0) + (B.gov === 'assembly' ? 0.1 : 0)) * (av >= 2 ? 0.35 : 1) * (1 - 0.35 * LA.ambition);
+  if (!LB || B.treasury < 2) return false;
+  const p = (0.5 + 0.3 * LB.coop + 0.4 * Math.max(0, best.oddsR - 0.45) + (A.lord === B.id ? -0.25 : 0) + (B.gov === 'assembly' ? 0.1 : 0)) * (av >= 2 ? 0.35 : 1) * (1 - 0.35 * LA.ambition);
   if (rnd(S) > p) return false;
   const rate = clamp(0.15 + 0.25 * best.oddsR, 0.15, 0.4), food = B.treasury * rate, tools = (B.tools || 0) * rate * 0.5, goats = B.goats > 4 ? Math.floor(B.goats * rate * 0.6) : 0;
   B.treasury -= food; B.tools = (B.tools || 0) - tools; A.treasury += food; A.tools = (A.tools || 0) + tools;
