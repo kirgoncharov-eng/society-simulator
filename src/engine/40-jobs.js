@@ -47,7 +47,7 @@ function jobs(S, g) {
   };
   const free = new Set(pool);
   const priorities = season === 3
-    ? ['water', 'pray', 'guard', 'herd', 'fish', 'farm', 'craft', 'build', 'stone', 'wood']
+    ? ['water', 'pray', 'guard', 'herd', 'fish', 'build', 'farm', 'craft', 'stone', 'wood']
     : ['water', 'pray', 'guard', 'herd', 'fish', 'craft', 'build', 'stone', 'wood', 'farm'];
   for (const job of priorities) {
     let q = Math.min(quota[job], free.size);

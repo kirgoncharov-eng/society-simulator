@@ -22,7 +22,7 @@ function advanceWeather(S) {
 
 function farmQuota(season, fieldCount, available) {
   if (!fieldCount || !available || !season) return 0;
-  if (season === 2) return Math.min(fieldCount, Math.max(1, Math.floor(available * 0.16)));
+  if (season === 2) return Math.min(fieldCount, Math.max(1, Math.floor(available * 0.20)));
   if (season === 3) return Math.min(fieldCount * 3, Math.ceil(available * 0.60));
   return fieldCount * 2;
 }
@@ -41,7 +41,7 @@ function farmYield(S, field, season, food, effort) {
   }
   if (season === 2) {
     field.tended = Math.min(1, field.tended + effort * 0.029 * rain);
-    return food * 1.2 * rain;
+    return food * 1.45 * rain;
   }
   const frost = weather?.frostYear === year ? 0.81 : 1;
   return food * (0.85 + 0.55 * field.sown + 0.23 * field.tended) * frost;
