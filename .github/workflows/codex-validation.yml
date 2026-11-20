@@ -1,0 +1,23 @@
+name: Requested simulation validation
+on:
+  push:
+    branches: [codex/validation-world]
+permissions:
+  contents: read
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ref: [7781728f3c0bb5c8b2d82c96bacea3b0517bbc1c, 2246d80f339d26e8408cfdda7b8246cf71e332e9]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: /usr/bin/time -p npm test
+      - run: /usr/bin/time -p npm run audit
