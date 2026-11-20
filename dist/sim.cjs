@@ -1282,6 +1282,13 @@ function absorb(S, big, sm, keepLand) {
     m.group = big.id; m.role = 'member'; m.boss = big.leader; m.joined = S.tick; m.war = null; m.job = null;
     big.members.push(id);
   }
+  // the old fields close enough to walk to stay in use; empty houses are taken apart for timber
+  if (sm.home && big.home) {
+    const keep = sm.fields.filter(f => Math.hypot(f.x - big.home.x, f.y - big.home.y) < 280);
+    for (const f of keep) { S.occ[f.c] = big.id; if (S.own) S.own[f.c] = big.id; f.owner = null; big.fields.push(f); }
+    sm.fields = sm.fields.filter(f => !keep.includes(f));
+    big.wood = (big.wood || 0) + sm.houses.length * 3;
+  }
   big.treasury += sm.treasury; sm.treasury = 0; sm.members = [];
   big.wood = (big.wood || 0) + (sm.wood || 0); big.stone = (big.stone || 0) + (sm.stone || 0); big.tools = (big.tools || 0) + (sm.tools || 0); big.goats = (big.goats || 0) + (sm.goats || 0);
   sm.wood = sm.stone = sm.tools = sm.goats = 0;
@@ -1299,7 +1306,7 @@ function hostFor(S, x, y, from, a, minN) {
     if (from && (S.hostility[key(from.id, o.id)] || 0) > 0.5) continue;
     if (a && a.exiledFrom === o.id) continue;
     const k = a ? kinIn(S, a, o) : from ? Math.min(4, (S.kinTies || {})[key(from.id, o.id)] || 0) : 0;
-    const v = 3 * Math.min(3, k) + Math.min(4, o.treasury / Math.max(1, o.members.length)) * 0.5 + Math.min(20, o.members.length) * 0.1 - d / 120 + (o.thirst ? -3 : 0);
+    const v = 3 * Math.min(3, k) + Math.min(4, o.treasury / Math.max(1, o.members.length)) * 0.5 + Math.min(20, o.members.length) * 0.1 - Math.max(0, o.members.length - 30) * 0.15 - d / 120 + (o.thirst ? -3 : 0);
     if (v > bv) { bv = v; best = { o, k, d }; }
   }
   return best && reach(S, x, y, best.o.home.x, best.o.home.y) ? best : null;
@@ -1341,11 +1348,11 @@ function hamletsMonth(S) {
       absorb(S, h.o, g, false);
       continue;
     }
-    // synoecism: a village of 5-11 next to one at least twice its size grows into it, if marriages, an alliance or a common lord bind them
-    if (g.home && n >= 5 && n < 12 && age > 360 * 5 && !S.wars.some(w => w.att === g.id || w.def === g.id) && rnd(S) < 0.25) {
+    // synoecism: a village under 15 grows together with a neighbour at least as big (but not into a giant), if marriages, an alliance or a common lord bind them
+    if (g.home && n >= 5 && n < 15 && age > 360 * 5 && !S.wars.some(w => w.att === g.id || w.def === g.id) && rnd(S) < 0.25) {
       let best = null, bv = 0;
       for (const o of S.groups) {
-        if (o === g || !o.home || o.dead || o.members.length < n * 2) continue;
+        if (o === g || !o.home || o.dead || o.members.length < n || o.members.length + n > 36) continue;
         const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y); if (d > 300) continue;
         const k = key(g.id, o.id); if ((S.hostility[k] || 0) > 0.4) continue;
         const ties = Math.min(3, (S.kinTies || {})[k] || 0), bond = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id;
