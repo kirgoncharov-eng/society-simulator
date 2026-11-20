@@ -1,11 +1,13 @@
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 function bio(S, a, k, s) {
   if (!a) return;
   const b = a.bio || (a.bio = []);
+  // the same turn of fate repeated within five years matters less each time
+  let rep = 0; for (let i = b.length - 1; i >= 0 && S.tick - b[i][0] < 360 * 5; i--) if (b[i][1] === k) rep++;
   b.push([S.tick, k, s]);
   if (b.length > 46) b.splice(6, b.length - 46);
-  a.drama = (a.drama || 0) + (BW[k] || 1);
+  a.drama = (a.drama || 0) + (BW[k] || 1) / (1 + rep);
 }
 function groupName(S, id) { const g = S._g.get(id); return g ? g.name : (S.arch && S.arch[id] ? S.arch[id].name : 'исчезнувшей деревни'); }
 const AID_MEMORY_MIN = 2 * 360, AID_MEMORY_MAX = 15 * 360;
@@ -92,7 +94,7 @@ function fatesMonth(S) {
         for (const o of kinOf(S, KL)) if (!o.feud || o.feud.done) { o.feud = { g: g.id, gname: g.name, L: m.id, Lname: m.name, t: S.tick, v: KL.name, rel: o.mother === KL.id || o.father === KL.id ? (KL.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: m.id }; bio(S, o, 'feud', `${m.name} убивает ${KL.name}. ${o.name} клянётся отомстить`); }
         removeAgent(S, KL, 'killed');
         if (g.dead) break;
-        if (!wasL && m.group === g.id && L.coop > 0.4 && rnd(S) < 0.6) { leave(S, m, 'move'); m.x += 50; bio(S, m, 'exiled', `За убийство ${m.sex === 'f' ? 'изгнана' : 'изгнан'} из «${g.name}»`); m.exiledFrom = g.id; }
+        if (!wasL && m.group === g.id && L.coop > 0.4 && rnd(S) < 0.6) { leave(S, m, 'move'); m.x += 50; bio(S, m, 'exiled', `За убийство ${m.sex === 'f' ? 'изгнана' : 'изгнан'} из «${g.name}»`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; }
         break;
       }
     }

@@ -3,7 +3,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm16', date: '2026-11-20', note: 'полевые работы зависят от времени года, заморозок портит урожай, а штормы оставляют лодки у берега' };
+const MODEL = { v: 'm17', date: '2026-11-20', note: 'полевые работы зависят от времени года, заморозок портит урожай, а штормы оставляют лодки у берега' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -90,7 +90,7 @@ function homeEconomy(S, g, mem) {
       if (seas === 0 && !needy) continue;
       const c = 3.4 * (0.4 + m.energy * 0.6) * (0.3 + 0.7 * stock) * (seas === 0 ? 0.45 : 1) * seaOpen; catchT += c;
       const risk = seas === 0 ? 0.0025 : seas === 3 ? 0.0012 : seas === 1 ? 0.0005 : 0.00025;
-      if (rnd(S) < risk * seaOpen) { bio(S, m, 'drowned', 'Уходит в море на лодке и не возвращается'); S.stats.lostAtSea = (S.stats.lostAtSea || 0) + 1; if (rnd(S) < 0.4 && g.fboats) g.fboats--; if (!S.firstLost || S.tick - S.firstLost > 360 * 6) { log(S, 'drown', `Лодка из «${g.name}» не возвращается с моря: ${m.name} не вернул${m.sex === 'f' ? 'ась' : 'ся'}`, g.landing.x, g.landing.y, g.hue, { first: !S.firstLost, why: seas === 0 ? 'Зимние шторма: в это время в море выходят только от голода.' : 'Море опасно и летом: лодку могло опрокинуть ветром.', who: [m.id], gs: [g.id] }); S.firstLost = S.tick; } removeAgent(S, m, 'drown'); }
+      if (rnd(S) < risk * seaOpen) { if (rnd(S) < 0.4 && g.fboats) g.fboats--; if (!S.firstLost || S.tick - S.firstLost > 360 * 6) { log(S, 'drown', `Лодка из «${g.name}» не возвращается с моря: ${m.name} не вернул${m.sex === 'f' ? 'ась' : 'ся'}`, g.landing.x, g.landing.y, g.hue, { first: !S.firstLost, why: seas === 0 ? 'Зимние шторма: в это время в море выходят только от голода.' : 'Море опасно и летом: лодку могло опрокинуть ветром.', who: [m.id], gs: [g.id] }); S.firstLost = S.tick; } removeAgent(S, m, 'lostAtSea'); }
     }
     sec.amt = Math.max(0, sec.amt - catchT * 0.55);
     g.treasury += catchT; S.stats.seaCatch = (S.stats.seaCatch || 0) + catchT;
@@ -1328,6 +1328,8 @@ function money(S, g, L) {
 }
 
 /* ---------- hamlets: loners, small bands and tiny villages drift into real villages ---------- */
+// a village that cast someone out in the last 15 years will not take them back, kin or no kin
+function exiledBy(S, a, gid) { return a.exiledFrom === gid || !!(a.exiled && a.exiled[gid] && S.tick - a.exiled[gid] < 360 * 15) || !!(a.quit && a.quit[gid] && S.tick - a.quit[gid] < 360 * 5); }
 // how many close kin (parents, children, siblings, spouse) of a live in village g
 function kinIn(S, a, g) {
   let k = 0;
@@ -1366,7 +1368,7 @@ function hostFor(S, x, y, from, a, minN) {
     if (!o.home || o.dead || o === from || o.members.length < minN) continue;
     const d = Math.hypot(o.home.x - x, o.home.y - y); if (d > 520) continue;
     if (from && (S.hostility[key(from.id, o.id)] || 0) > 0.5) continue;
-    if (a && a.exiledFrom === o.id) continue;
+    if (a && exiledBy(S, a, o.id)) continue;
     const k = a ? kinIn(S, a, o) : from ? Math.min(4, (S.kinTies || {})[key(from.id, o.id)] || 0) : 0;
     const v = 3 * Math.min(3, k) + Math.min(4, o.treasury / Math.max(1, o.members.length)) * 0.5 + Math.min(20, o.members.length) * 0.1 - Math.max(0, o.members.length - 30) * 0.15 - d / 120 + (o.thirst ? -3 : 0);
     if (v > bv) { bv = v; best = { o, k, d }; }
@@ -1376,7 +1378,7 @@ function hostFor(S, x, y, from, a, minN) {
 function hamletsMonth(S) {
   // a loner goes to live with kin: parents, children, brothers and sisters in a village
   for (const a of S.agents) {
-    if (a.group || a.age < 16 || rnd(S) > 0.35) continue;
+    if (a.group || a.age < 16 || S.tick - (a.joined || -1e9) < 360 || rnd(S) > 0.35) continue;
     const h = hostFor(S, a.x, a.y, null, a, 3); if (!h) continue;
     const L = S._a.get(h.o.leader); if (!L) continue;
     if (!h.k) continue; // strangers are not taken in for nothing: they come as hired hands when hungry (see monthly)
@@ -1397,6 +1399,13 @@ function hamletsMonth(S) {
       for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `Ватага «${g.name}» прибивается к «${h.o.name}»`);
       log(S, 'merge', `Ватага «${g.name}» (${n} ${pl(n, 'человек', 'человека', 'человек')}) прибивается к «${h.o.name}»`, g.cx, g.cy, h.o.hue, { why: sent([`${yrs(Math.round(age / 360))} кочевья, а людей так и не прибавилось`, 'чтобы поднять деревню, нужно хотя бы пять пар рук', h.k ? `в «${h.o.name}» у них родня` : `${HL.name} готов${HL.sex === 'f' ? 'а' : ''} принять работников`]), who: [L.id, HL.id], gs: [g.id, h.o.id] });
       absorb(S, h.o, g, false); continue;
+    }
+    // a daughter village: a big village short of land or bread sends a few families off in peace to clear new land
+    // (how farming spread, e.g. the Linear Pottery villages of Neolithic Europe); unlike a schism there is no quarrel
+    if (g.home && n >= 28 && age > 360 * 3 && (g.budT || 0) < S.tick && !S.wars.some(w => w.att === g.id || w.def === g.id)) {
+      const room = g.room === undefined ? 1 : g.room, hungry = g.treasury < n * 1.5;
+      const press = (room < 0.5 ? 1 : 0) + (hungry ? 1 : 0) + Math.max(0, (g.entropy || 0) - 1.2);
+      if (press > 0 && rnd(S) < 0.02 * press * fissionP(S, g)) { bud(S, g, L); continue; }
     }
     // a hamlet of 2-4 grows, or moves into a neighbouring village: kin, safety, a shared well
     if (g.home && n < 5 && age > 720 && !S.wars.some(w => w.att === g.id || w.def === g.id)) {
@@ -1421,6 +1430,24 @@ function fissionP(S, g) {
   if (g.depth >= 2 || g.gov === 'assembly' || g.code) T += 8;
   let kinned = 0; for (const m of mem) if (mem.some(o => o !== m && kin(o, m))) kinned++;
   return clamp(Math.pow(n / T, 3), 0.02, 2) * (1.3 - 0.7 * kinned / Math.max(1, n));
+}
+function bud(S, g, L) {
+  const mem = g.members.map(id => S._a.get(id)).filter(m => m && m !== L && !m.war && !m.car);
+  const n = g.members.length, want = Math.max(6, Math.round(n * 0.3));
+  const F = mem.filter(m => m.age >= 25 && m.age < 55).sort((a, b) => (b.status * (0.5 + b.ambition) + b.skill) - (a.status * (0.5 + a.ambition) + a.skill))[0];
+  if (!F) return;
+  const kinF = mem.filter(m => m !== F && kin(m, F));
+  const rest = mem.filter(m => m !== F && !kinF.includes(m) && (m.trust[F.id] || 0) > (m.trust[L.id] || 0)).sort((a, b) => (b.trust[F.id] || 0) - (a.trust[F.id] || 0));
+  const go = kinF.concat(rest).slice(0, want - 1);
+  if (go.length < 5) return;
+  const why = sent([`в «${g.name}» ${n} взрослых${(g.room === undefined ? 1 : g.room) < 0.5 ? ', и свободной земли рядом почти не осталось' : ''}`, g.treasury < n * 1.5 ? 'хлеба на всех не хватает' : '', (g.entropy || 0) > 1.2 ? 'в большой деревне трудно договориться: работа идёт вразнобой' : '', `${F.name} уводит свою родню и тех, кто ${F.sex === 'f' ? 'ей' : 'ему'} доверяет`, 'уходят без ссоры, со своей долей зерна и скота, и остаются союзниками']);
+  const ng = createGroup(S, F, go, g.id);
+  g.budT = S.tick + 360 * 4; S.stats.colonies = (S.stats.colonies || 0) + 1;
+  S.hostility[key(g.id, ng.id)] = 0; S.alliances.push({ a: g.id, b: ng.id, since: S.tick });
+  bump(F, L, 0.1); bump(L, F, 0.1);
+  bio(S, F, 'found', `Уводит ${go.length} ${pl(go.length, 'человека', 'человек', 'человек')} из «${g.name}» поднимать новую деревню «${ng.name}»`);
+  for (const m of go) bio(S, m, 'move', `Уходит с ${F.name} из «${g.name}» на новые земли`);
+  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why, who: [F.id, L.id], gs: [g.id, ng.id] });
 }
 /* ---------- water: springs, river, wells, drought, dirty water ---------- */
 function springsInit(S) {
@@ -1481,13 +1508,15 @@ function droughtYear(S) {
 }
 
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 function bio(S, a, k, s) {
   if (!a) return;
   const b = a.bio || (a.bio = []);
+  // the same turn of fate repeated within five years matters less each time
+  let rep = 0; for (let i = b.length - 1; i >= 0 && S.tick - b[i][0] < 360 * 5; i--) if (b[i][1] === k) rep++;
   b.push([S.tick, k, s]);
   if (b.length > 46) b.splice(6, b.length - 46);
-  a.drama = (a.drama || 0) + (BW[k] || 1);
+  a.drama = (a.drama || 0) + (BW[k] || 1) / (1 + rep);
 }
 function groupName(S, id) { const g = S._g.get(id); return g ? g.name : (S.arch && S.arch[id] ? S.arch[id].name : 'исчезнувшей деревни'); }
 const AID_MEMORY_MIN = 2 * 360, AID_MEMORY_MAX = 15 * 360;
@@ -1574,7 +1603,7 @@ function fatesMonth(S) {
         for (const o of kinOf(S, KL)) if (!o.feud || o.feud.done) { o.feud = { g: g.id, gname: g.name, L: m.id, Lname: m.name, t: S.tick, v: KL.name, rel: o.mother === KL.id || o.father === KL.id ? (KL.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: m.id }; bio(S, o, 'feud', `${m.name} убивает ${KL.name}. ${o.name} клянётся отомстить`); }
         removeAgent(S, KL, 'killed');
         if (g.dead) break;
-        if (!wasL && m.group === g.id && L.coop > 0.4 && rnd(S) < 0.6) { leave(S, m, 'move'); m.x += 50; bio(S, m, 'exiled', `За убийство ${m.sex === 'f' ? 'изгнана' : 'изгнан'} из «${g.name}»`); m.exiledFrom = g.id; }
+        if (!wasL && m.group === g.id && L.coop > 0.4 && rnd(S) < 0.6) { leave(S, m, 'move'); m.x += 50; bio(S, m, 'exiled', `За убийство ${m.sex === 'f' ? 'изгнана' : 'изгнан'} из «${g.name}»`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; }
         break;
       }
     }
@@ -2057,9 +2086,9 @@ function removeAgent(S, a, why) {
   S.stats[why] = (S.stats[why] || 0) + 1;
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
-    const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
-    if (why !== 'killed') bio(S, a, why === 'drown' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
-    const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
+    const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
+    if (why !== 'killed') bio(S, a, why === 'drown' || why === 'lostAtSea' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
+    const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'lostAtSea' ? ', в море' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
     legend(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
     const w = Math.max(0, a.wealth), g = S._g.get(a.group);
@@ -2138,7 +2167,7 @@ function monthly(S) {
       if (d > (g0 ? 380 : 600)) continue;
       const fh = g.treasury / Math.max(1, g.members.length);
       if (g0 && fh < 2) continue;
-      const base = fh - d / 60 + (a.exiledFrom === g.id ? -50 : 0);
+      const base = fh - d / 60 + (exiledBy(S, a, g.id) ? -50 : 0);
       if (base > usualScore) { usualScore = base; usual = g; }
       const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
       const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;
@@ -2149,8 +2178,8 @@ function monthly(S) {
     const L = S._a.get(best.leader); if (!L) continue;
     const chance = (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15);
     const helper = memory?.helper;
-    const welcome = helper === L && a.exiledFrom !== best.id ? 0.15 : 0;
-    const sponsor = helper && helper !== L && a.exiledFrom !== best.id && helper.coop >= 0.35 && (L.trust[helper.id] || 0) >= 0.1;
+    const welcome = helper === L && !exiledBy(S, a, best.id) ? 0.15 : 0;
+    const sponsor = helper && helper !== L && !exiledBy(S, a, best.id) && helper.coop >= 0.35 && (L.trust[helper.id] || 0) >= 0.1;
     const roll = rnd(S);
     if (roll >= chance + welcome + (sponsor ? 0.18 : 0)) continue;
     const sp = a.spouse && S._a.get(a.spouse);
@@ -2312,7 +2341,7 @@ function groupMonth(S, g) {
   // retainers: a rich leader keeps armed clients
   if (L.wealth > 18 && n >= 6) {
     const want = Math.min(Math.ceil(n * (0.12 + 0.2 * (1 - (g.room === undefined ? 1 : g.room)))), Math.floor((L.wealth - 12) / 5)), cur = mem.filter(m => m.patron === L.id);
-    if (cur.length < want) { const c = mem.filter(m => m.patron !== L.id && !kin(m, L) && m.res < 0.5).sort((a, b) => b.skill - a.skill)[0]; if (c) { c.patron = L.id; bump(c, L, 0.2); bio(S, c, 'retainer', `Поступает в дружину вождя ${L.name}`); } }
+    if (cur.length < want) { const c = mem.filter(m => m.patron !== L.id && !kin(m, L) && m.res < 0.5).sort((a, b) => b.skill - a.skill)[0]; if (c) { c.patron = L.id; bump(c, L, 0.2); if (c.lastPatron !== L.id) bio(S, c, 'retainer', `Поступает в дружину вождя ${L.name}`); c.lastPatron = L.id; } }
     for (const m of cur) { const pay = 0.6; if (L.wealth > pay + 8) { L.wealth -= pay; m.wealth += pay; bump(m, L, 0.02); } else if (rnd(S) < 0.2) m.patron = null; }
   }
   // patrons and clients: the rich feed the hungry and collect obligation
@@ -2400,9 +2429,10 @@ function groupMonth(S, g) {
   for (const m of g.members.map(id => S._a.get(id))) {
     if (m.id === g.leader) continue;
     if (m.res > 0.7 && (m.trust[g.leader] || 0) < -0.15 && rnd(S) < 0.25 * (0.25 + 0.75 * room)) {
+      bio(S, m, 'quit', `Уходит из «${g.name}»: не ладит с вождём ${L.name}`); (m.quit = m.quit || {})[g.id] = S.tick;
       gone.push(m.id); leave(S, m, 'move'); exits++; if (g.dead) return;
-      const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { leave(S, sp, 'move'); exits++; sp.x = m.x; sp.y = m.y; if (g.dead) return; }
-    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && rnd(S) < 0.15) { bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`); m.exiledFrom = g.id; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
+      const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { bio(S, sp, 'quit', `Уходит из «${g.name}» вслед за ${sp.sex === 'f' ? 'мужем' : 'женой'}`); (sp.quit = sp.quit || {})[g.id] = S.tick; leave(S, sp, 'move'); exits++; if (g.dead) return; }
+    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && rnd(S) < 0.15) { bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
   }
   if (exits >= 3) log(S, 'exodus', `Из «${g.name}» разом уходят ${exits} недовольных`, g.cx, g.cy, g.hue, { why: `У каждого обида выше 70% и доверие к лидеру ниже нуля. Но лидера среди них нет, поэтому они расходятся поодиночке. Доля ${L.name} в добыче: ${P0(g.take)}.`, who: gone, gs: [g.id] });
   if (g.shrine) g.treasury *= 0.99;

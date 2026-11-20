@@ -49,7 +49,7 @@ function monthly(S) {
       if (d > (g0 ? 380 : 600)) continue;
       const fh = g.treasury / Math.max(1, g.members.length);
       if (g0 && fh < 2) continue;
-      const base = fh - d / 60 + (a.exiledFrom === g.id ? -50 : 0);
+      const base = fh - d / 60 + (exiledBy(S, a, g.id) ? -50 : 0);
       if (base > usualScore) { usualScore = base; usual = g; }
       const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
       const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;
@@ -60,8 +60,8 @@ function monthly(S) {
     const L = S._a.get(best.leader); if (!L) continue;
     const chance = (0.35 * (0.5 + L.coop) + Math.min(0.4, best.treasury / Math.max(1, best.members.length) / 25)) * ((a.rep || 0) > -0.3 ? 1 : g0 ? 0.2 : 0.45) + (g0 ? 0 : 0.15);
     const helper = memory?.helper;
-    const welcome = helper === L && a.exiledFrom !== best.id ? 0.15 : 0;
-    const sponsor = helper && helper !== L && a.exiledFrom !== best.id && helper.coop >= 0.35 && (L.trust[helper.id] || 0) >= 0.1;
+    const welcome = helper === L && !exiledBy(S, a, best.id) ? 0.15 : 0;
+    const sponsor = helper && helper !== L && !exiledBy(S, a, best.id) && helper.coop >= 0.35 && (L.trust[helper.id] || 0) >= 0.1;
     const roll = rnd(S);
     if (roll >= chance + welcome + (sponsor ? 0.18 : 0)) continue;
     const sp = a.spouse && S._a.get(a.spouse);
@@ -223,7 +223,7 @@ function groupMonth(S, g) {
   // retainers: a rich leader keeps armed clients
   if (L.wealth > 18 && n >= 6) {
     const want = Math.min(Math.ceil(n * (0.12 + 0.2 * (1 - (g.room === undefined ? 1 : g.room)))), Math.floor((L.wealth - 12) / 5)), cur = mem.filter(m => m.patron === L.id);
-    if (cur.length < want) { const c = mem.filter(m => m.patron !== L.id && !kin(m, L) && m.res < 0.5).sort((a, b) => b.skill - a.skill)[0]; if (c) { c.patron = L.id; bump(c, L, 0.2); bio(S, c, 'retainer', `Поступает в дружину вождя ${L.name}`); } }
+    if (cur.length < want) { const c = mem.filter(m => m.patron !== L.id && !kin(m, L) && m.res < 0.5).sort((a, b) => b.skill - a.skill)[0]; if (c) { c.patron = L.id; bump(c, L, 0.2); if (c.lastPatron !== L.id) bio(S, c, 'retainer', `Поступает в дружину вождя ${L.name}`); c.lastPatron = L.id; } }
     for (const m of cur) { const pay = 0.6; if (L.wealth > pay + 8) { L.wealth -= pay; m.wealth += pay; bump(m, L, 0.02); } else if (rnd(S) < 0.2) m.patron = null; }
   }
   // patrons and clients: the rich feed the hungry and collect obligation
@@ -311,9 +311,10 @@ function groupMonth(S, g) {
   for (const m of g.members.map(id => S._a.get(id))) {
     if (m.id === g.leader) continue;
     if (m.res > 0.7 && (m.trust[g.leader] || 0) < -0.15 && rnd(S) < 0.25 * (0.25 + 0.75 * room)) {
+      bio(S, m, 'quit', `Уходит из «${g.name}»: не ладит с вождём ${L.name}`); (m.quit = m.quit || {})[g.id] = S.tick;
       gone.push(m.id); leave(S, m, 'move'); exits++; if (g.dead) return;
-      const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { leave(S, sp, 'move'); exits++; sp.x = m.x; sp.y = m.y; if (g.dead) return; }
-    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && rnd(S) < 0.15) { bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`); m.exiledFrom = g.id; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
+      const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { bio(S, sp, 'quit', `Уходит из «${g.name}» вслед за ${sp.sex === 'f' ? 'мужем' : 'женой'}`); (sp.quit = sp.quit || {})[g.id] = S.tick; leave(S, sp, 'move'); exits++; if (g.dead) return; }
+    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && rnd(S) < 0.15) { bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
   }
   if (exits >= 3) log(S, 'exodus', `Из «${g.name}» разом уходят ${exits} недовольных`, g.cx, g.cy, g.hue, { why: `У каждого обида выше 70% и доверие к лидеру ниже нуля. Но лидера среди них нет, поэтому они расходятся поодиночке. Доля ${L.name} в добыче: ${P0(g.take)}.`, who: gone, gs: [g.id] });
   if (g.shrine) g.treasury *= 0.99;
