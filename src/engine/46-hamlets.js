@@ -45,16 +45,16 @@ function hostFor(S, x, y, from, a, minN) {
   return best && reach(S, x, y, best.o.home.x, best.o.home.y) ? best : null;
 }
 function hamletsMonth(S) {
-  // loners look for a village: kin first, then any that will feed one more pair of hands
+  // a loner goes to live with kin: parents, children, brothers and sisters in a village
   for (const a of S.agents) {
     if (a.group || a.age < 16 || rnd(S) > 0.35) continue;
     const h = hostFor(S, a.x, a.y, null, a, 3); if (!h) continue;
     const L = S._a.get(h.o.leader); if (!L) continue;
-    if (!h.k && h.o.treasury < h.o.members.length * 1.5) continue; // strangers are taken in only where there is bread to spare
+    if (!h.k) continue; // strangers are not taken in for nothing: they come as hired hands when hungry (see monthly)
     const p = (0.25 + 0.45 * L.coop + 0.2 * Math.min(2, h.k)) * ((a.rep || 0) < -0.3 ? 0.35 : 1);
     if (rnd(S) > p) continue;
-    join(S, a, h.o, h.k ? h.o.members.map(id => S._a.get(id)).find(o => o && kin(o, a)).id : L.id);
-    bio(S, a, 'move', h.k ? `Уходит жить к родне в «${h.o.name}»` : `Прибивается к «${h.o.name}»: одному не прожить`);
+    join(S, a, h.o, h.o.members.map(id => S._a.get(id)).find(o => o && kin(o, a)).id);
+    bio(S, a, 'move', `Уходит жить к родне в «${h.o.name}»`);
     S.stats.settledIn = (S.stats.settledIn || 0) + 1;
   }
   for (const g of S.groups.slice()) {
@@ -80,27 +80,16 @@ function hamletsMonth(S) {
       for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `Хутор «${g.name}» пустеет: семья перебирается в «${h.o.name}»`);
       log(S, 'merge', `Хутор «${g.name}» пустеет: ${n} ${pl(n, 'человек', 'человека', 'человек')} перебираются в «${h.o.name}»`, g.home.x, g.home.y, h.o.hue, { why, who: [L.id, HL.id], gs: [g.id, h.o.id] });
       absorb(S, h.o, g, false);
-      continue;
-    }
-    // synoecism: a village under 15 grows together with a neighbour at least as big (but not into a giant), if marriages, an alliance or a common lord bind them
-    if (g.home && n >= 5 && n < 15 && age > 360 * 5 && !S.wars.some(w => w.att === g.id || w.def === g.id) && rnd(S) < 0.25) {
-      let best = null, bv = 0;
-      for (const o of S.groups) {
-        if (o === g || !o.home || o.dead || o.members.length < n || o.members.length + n > 36) continue;
-        const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y); if (d > 300) continue;
-        const k = key(g.id, o.id); if ((S.hostility[k] || 0) > 0.4) continue;
-        const ties = Math.min(3, (S.kinTies || {})[k] || 0), bond = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id;
-        const v = 0.1 * ties + (bond ? 0.25 : 0) + 0.12 * Math.min(1.5, g.threat || 0) + (g.treasury < n * 1.5 ? 0.1 : 0) - d / 1500;
-        if (v > bv) { bv = v; best = { o, ties, bond, d }; }
-      }
-      if (!best) continue;
-      const OL = S._a.get(best.o.leader); if (!OL) continue;
-      if (rnd(S) > bv * 0.12 * (1.3 - 0.9 * L.ambition) * (0.6 + 0.6 * OL.coop) || !reach(S, g.home.x, g.home.y, best.o.home.x, best.o.home.y)) continue;
-      const { o } = best, nb = o.members.length;
-      const why = sent([`«${g.name}» (${n}) стоит в ${cells(best.d)} от «${o.name}» (${nb}): поля уже сходятся`, best.ties ? `между деревнями ${best.ties} ${pl(best.ties, 'брак', 'брака', 'браков')}` : '', best.bond ? (g.lord === o.id ? `«${g.name}» и так платит «${o.name}» дань` : 'деревни давно в союзе') : '', (g.threat || 0) > 0.5 ? 'вместе легче отбиться от набегов' : '', `${L.name} соглашается войти в совет «${o.name}»`]);
-      for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `«${g.name}» сливается с «${o.name}»`);
-      log(S, 'merge', `«${g.name}» сливается с «${o.name}»: теперь там ${n + nb} человек`, g.home.x, g.home.y, o.hue, { why, who: [L.id, OL.id], gs: [g.id, o.id] });
-      absorb(S, o, g, true);
     }
   }
+}
+// scalar stress: a kin-based village holds together until roughly 120-150 people, then tends to split
+// (Johnson 1982; Chagnon 1967; Alberti 2014). Kinship keeps it whole; a shared cult or a council raises the limit (Bandy 2004).
+function fissionP(S, g) {
+  const mem = g.members.map(id => S._a.get(id)).filter(Boolean), n = mem.length;
+  let T = 55;
+  if (g.faith || g.shrine) T += 10;
+  if (g.depth >= 2 || g.gov === 'assembly' || g.code) T += 8;
+  let kinned = 0; for (const m of mem) if (mem.some(o => o !== m && kin(o, m))) kinned++;
+  return clamp(Math.pow(n / T, 3), 0.02, 2) * (1.3 - 0.7 * kinned / Math.max(1, n));
 }
