@@ -2594,6 +2594,7 @@ function ruling(S, g, kind, outcome, ev) {
   S.stats['case_' + kind + '_' + outcome] = (S.stats['case_' + kind + '_' + outcome] || 0) + 1;
   g.customs = g.customs || {};
   if (g.customs[kind]) return;
+  if (kind === 'blood' && outcome === 'revenge') return; // after bloodshed the elders choose the custom themselves (see bloodShed)
   const last = g.cases.filter(c => c[0] === kind).slice(-4), same = last.filter(c => c[1] === outcome);
   if (same.length >= 2 && same.length >= last.length - 1) setCustom(S, g, kind, outcome, same.map(c => c[3]).filter(Boolean), `решали так ${same.length} ${pl(same.length, 'раз', 'раза', 'раз')} из ${last.length}`);
 }
@@ -2668,14 +2669,17 @@ function bloodOrWergild(S, g, avenger, killer) {
   ruling(S, g, 'blood', 'wergild', ev.id);
   return true;
 }
-// after a revenge killing: a ruling 'revenge'; two bloody turns lead the elders to think of a custom of blood money
+// after a revenge killing: a ruling 'revenge'. Two bloody turns force the elders to choose: blood money (it breaks the chain)
+// or blood for blood as the custom; the more the old and the leader value peace, the likelier blood money
 function bloodShed(S, g, ev) {
   ruling(S, g, 'blood', 'revenge', ev);
   if ((g.customs || {}).blood) return;
   const recent = (g.cases || []).filter(c => c[0] === 'blood' && c[1] === 'revenge' && S.tick - c[2] < 360 * 30);
-  const L = S._a.get(g.leader);
-  if (recent.length >= 2 && rnd(S) < 0.25 + 0.3 * ((L && L.coop) || 0.4) + 0.4 * elders(S, g))
-    setCustom(S, g, 'blood', 'wergild', recent.map(c => c[3]).filter(Boolean), `за ${yrs(Math.max(1, Math.round((S.tick - recent[0][2]) / 360)))} кровь пролилась ${recent.length} ${pl(recent.length, 'раз', 'раза', 'раз')}, и каждая месть рождает новую`);
+  if (recent.length < 2) return;
+  const L = S._a.get(g.leader), causes = recent.map(c => c[3]).filter(Boolean), span = yrs(Math.max(1, Math.round((S.tick - recent[0][2]) / 360)));
+  if (rnd(S) < 0.2 + 0.35 * ((L && L.coop) || 0.4) + 0.5 * elders(S, g))
+    setCustom(S, g, 'blood', 'wergild', causes, `за ${span} кровь пролилась ${recent.length} ${pl(recent.length, 'раз', 'раза', 'раз')}, и каждая месть рождает новую; старейшины решают платить, а не мстить`);
+  else setCustom(S, g, 'blood', 'revenge', causes, `за ${span} кровь пролилась ${recent.length} ${pl(recent.length, 'раз', 'раза', 'раз')}; в деревне решают, что выкуп — позор, а за кровь платят кровью`);
 }
 // customs spread the way other institutions do: a village takes up a neighbour's custom (trade, alliance, marriages)
 function customsYear(S) {
