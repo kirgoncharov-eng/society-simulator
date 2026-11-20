@@ -38,7 +38,7 @@ function jobs(S, g) {
     wood: g.woodCell === null || lean ? 0 : woodNeed ? Math.max(1, Math.round(n * 0.2)) : (season === 0 ? 1 : 0),
     stone: stoneNeed ? Math.max(1, Math.round(n * 0.12)) : 0,
     craft: lean ? 0 : (g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n * 1.2) || (n >= 5 && ((g.pots || 0) < n * 0.5 || ((g.goats || 0) >= 4 && (g.cloth || 0) < n * 0.6))) ? Math.max(1, Math.round(n * 0.1)) : 0,
-    farm: season === 0 ? 0 : g.fields.length * 2,
+    farm: farmQuota(season, g.fields.length, pool.length),
     pray: g.shrine ? 1 : 0,
     water: g.wNeed || 0,
     fish: g.fboats && g.landing ? Math.min(g.fboats * 2, Math.ceil(n * 0.3)) : 0,
@@ -46,7 +46,10 @@ function jobs(S, g) {
     guard: threat > 0.5 || S.tick - g.raided < 720 || g.lord ? Math.max(1, Math.round(n * (0.08 + 0.18 * Math.min(1.5, threat)))) : 0
   };
   const free = new Set(pool);
-  for (const job of ['water', 'pray', 'guard', 'herd', 'fish', 'craft', 'build', 'stone', 'wood', 'farm']) {
+  const priorities = season === 3
+    ? ['water', 'pray', 'guard', 'herd', 'fish', 'farm', 'craft', 'build', 'stone', 'wood']
+    : ['water', 'pray', 'guard', 'herd', 'fish', 'craft', 'build', 'stone', 'wood', 'farm'];
+  for (const job of priorities) {
     let q = Math.min(quota[job], free.size);
     if (!q) continue;
     const ranked = [...free].sort((a, b) => job === 'pray' ? (((b.xp.pray || 0) - (a.xp.pray || 0)) || (b.coop * (1 + b.status / 10) - a.coop * (1 + a.status / 10))) : (((b.xp[job] || 0) - (a.xp[job] || 0)) || a.id - b.id));

@@ -19,7 +19,10 @@ const pct = v => Math.round(v * 100);
 function ui(force) {
   RC.clear(); for (const g of S.groups) if (g.home) RC.set(g.id, SIM.regime(S, g));
   $('year').textContent = `Год ${Math.floor(S.tick / 360)}`;
-  $('season').textContent = ['зима', 'весна', 'лето', 'осень'][Math.floor((S.tick % 360) / 90)] + (S.tick < (S.drought || 0) ? ' · засуха' : '');
+  const weather = S.weather?.kind;
+  const weatherLabel = weather === 'storm' ? '🌊 шторм' : weather === 'rain' ? '☂ дождь'
+    : weather === 'frost' ? '❄ ранний мороз' : S.tick < (S.drought || 0) ? '☀ засуха' : '';
+  $('season').textContent = ['зима', 'весна', 'лето', 'осень'][Math.floor((S.tick % 360) / 90)] + (weatherLabel ? ' · ' + weatherLabel : '');
   const h = S.hist, inG = S.groups.reduce((s, g) => s + g.members.length, 0);
   $('mPop').textContent = SIM.popOf(S);
   drawFates();

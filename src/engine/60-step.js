@@ -1,5 +1,6 @@
 function step(S) {
   S.tick++;
+  advanceWeather(S);
   if (!S.wear) navInit(S);
   if (!S.springs) springsInit(S);
   { const d = S.tick % 360, fr = d >= 12 && d < 78; if (fr !== S.frozen) { S.frozen = fr; S.navV++; } }
@@ -45,7 +46,7 @@ function move(S) {
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
-      else if (a.job === 'fish' && g.landing) p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
+      else if (a.job === 'fish' && g.landing && S.weather?.kind !== 'storm') p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
       else if (a.job === 'herd' && g.pasture) p = { x: g.pasture.x + Math.cos(S.tick / 90 + a.id) * 22, y: g.pasture.y + Math.sin(S.tick / 90 + a.id) * 22 };
       else if (a.job === 'water' && g.wsrc) { const tgt = a.wc ? g.home : g.wsrc; if (Math.hypot(a.x - tgt.x, a.y - tgt.y) < 14) a.wc = !a.wc; p = a.wc ? g.home : g.wsrc; }
       else if (a.job === 'guard') {
@@ -187,7 +188,8 @@ function produce(S) {
       else if (m.job === 'farm') {
         const f = g.fields[(m.slot || 0) % Math.max(1, g.fields.length)];
         if (f && season !== 0 && Math.hypot(m.x - f.x, m.y - f.y) < 30) {
-          const v = 0.34 * e * syn * f.fert * (S.tick < S.drought ? 0.4 : 1) * (1.2 - 0.5 * P.scarcity) * HAUL;
+          const food = 0.34 * e * syn * f.fert * (S.tick < S.drought ? 0.4 : 1) * (1.2 - 0.5 * P.scarcity) * HAUL;
+          const v = farmYield(S, f, season, food, e);
           const ow = f.owner && S._a.get(f.owner);
           if (g.land === 'private' && ow && ow.group === g.id) { if (ow === m) { m.wealth += v * 0.5; load(m, 'food', v * 0.5); } else { ow.wealth += v * 0.35; m.wealth += v * 0.15; load(m, 'food', v * 0.5); m.hired = S.tick; } }
           else load(m, 'food', v);

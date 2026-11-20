@@ -3,7 +3,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm14', date: '2026-11-20', note: 'деревни вместо хуторов: хутора и ватаги перебираются к соседям, деревня раскалывается только когда разрастается (масштабный стресс)' };
+const MODEL = { v: 'm15', date: '2026-11-20', note: 'полевые работы зависят от времени года, заморозок портит урожай, а штормы оставляют лодки у берега' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -79,7 +79,8 @@ function homeEconomy(S, g, mem) {
   } else if (S.tick - g.founded > 360 && rnd(S) < 0.01) { for (const o of S.groups) if (o !== g && o.goats > 8 && o.home && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300 && (S.hostility[key(o.id, g.id)] || 0) < 0.6) { o.goats -= 2; g.goats = 2; break; } }
   // sea fishing from boats
   const fishers = mem.filter(m => m.job === 'fish');
-  if (fishers.length && g.landing) {
+  const seaOpen = S.weather?.seaOpenShare ?? 1;
+  if (fishers.length && g.landing && seaOpen > 0) {
     S.seaFish = S.seaFish || Array.from({ length: 12 }, () => ({ amt: 220, cap: 220 }));
     const sec = S.seaFish[sectorOf(S, g.landing.x, g.landing.y)], stock = sec.amt / sec.cap;
     let catchT = 0;
@@ -87,9 +88,9 @@ function homeEconomy(S, g, mem) {
     const needy = g.treasury < (n + 1) * 2;
     for (const m of fishers) {
       if (seas === 0 && !needy) continue;
-      const c = 3.4 * (0.4 + m.energy * 0.6) * (0.3 + 0.7 * stock) * (seas === 0 ? 0.45 : 1); catchT += c;
+      const c = 3.4 * (0.4 + m.energy * 0.6) * (0.3 + 0.7 * stock) * (seas === 0 ? 0.45 : 1) * seaOpen; catchT += c;
       const risk = seas === 0 ? 0.0025 : seas === 3 ? 0.0012 : seas === 1 ? 0.0005 : 0.00025;
-      if (rnd(S) < risk) { bio(S, m, 'drowned', 'Уходит в море на лодке и не возвращается'); S.stats.lostAtSea = (S.stats.lostAtSea || 0) + 1; if (rnd(S) < 0.4 && g.fboats) g.fboats--; if (!S.firstLost || S.tick - S.firstLost > 360 * 6) { log(S, 'drown', `Лодка из «${g.name}» не возвращается с моря: ${m.name} не вернул${m.sex === 'f' ? 'ась' : 'ся'}`, g.landing.x, g.landing.y, g.hue, { first: !S.firstLost, why: seas === 0 ? 'Зимние шторма: в это время в море выходят только от голода.' : 'Море опасно и летом: лодку могло опрокинуть ветром.', who: [m.id], gs: [g.id] }); S.firstLost = S.tick; } removeAgent(S, m, 'drown'); }
+      if (rnd(S) < risk * seaOpen) { bio(S, m, 'drowned', 'Уходит в море на лодке и не возвращается'); S.stats.lostAtSea = (S.stats.lostAtSea || 0) + 1; if (rnd(S) < 0.4 && g.fboats) g.fboats--; if (!S.firstLost || S.tick - S.firstLost > 360 * 6) { log(S, 'drown', `Лодка из «${g.name}» не возвращается с моря: ${m.name} не вернул${m.sex === 'f' ? 'ась' : 'ся'}`, g.landing.x, g.landing.y, g.hue, { first: !S.firstLost, why: seas === 0 ? 'Зимние шторма: в это время в море выходят только от голода.' : 'Море опасно и летом: лодку могло опрокинуть ветром.', who: [m.id], gs: [g.id] }); S.firstLost = S.tick; } removeAgent(S, m, 'drown'); }
     }
     sec.amt = Math.max(0, sec.amt - catchT * 0.55);
     g.treasury += catchT; S.stats.seaCatch = (S.stats.seaCatch || 0) + catchT;
@@ -701,6 +702,54 @@ function deliver(S) {
     else if (!a.haul && a.job !== ({ food: a.job === 'gather' ? 'gather' : 'farm', wood: 'wood', stone: 'stone' })[a.lk]) a.haul = true;
   }
 }
+/* ---------- weather and the agricultural year ---------- */
+const STORM_CHANCE = [0.09, 0.045, 0.02, 0.06];
+const RAIN_CHANCE = [0.18, 0.29, 0.19, 0.31];
+
+function advanceWeather(S) {
+  const w = S.weather ||= { rng: (S.rng ^ 0x149e63b5) | 0, stormDays: 0, seaOpenShare: 1, frostYear: -1 };
+  const day = S.tick % 360, season = seasonOf(S.tick), year = Math.floor(S.tick / 360);
+  const draw = rnd(w);
+  const drought = S.tick < S.drought;
+  const storm = draw < STORM_CHANCE[season];
+  const frost = !drought && !storm && season === 3 && day < 318 && draw > 0.992 && w.frostYear !== year;
+  const rain = !drought && !storm && !frost && draw < RAIN_CHANCE[season];
+  w.kind = storm ? 'storm' : drought ? 'drought' : frost ? 'frost' : rain ? 'rain' : 'clear';
+  w.year = year;
+  w.stormDays += Number(storm);
+  if (frost) w.frostYear = year;
+  if (S.tick % 30 === 0) {
+    w.seaOpenShare = (30 - w.stormDays) / 30;
+    w.stormDays = 0;
+  }
+}
+
+function farmQuota(season, fieldCount, available) {
+  if (!fieldCount || !available || !season) return 0;
+  if (season === 2) return Math.min(fieldCount, Math.max(1, Math.floor(available * 0.16)));
+  if (season === 3) return Math.min(fieldCount * 3, Math.ceil(available * 0.60));
+  return fieldCount * 2;
+}
+
+function farmYield(S, field, season, food, effort) {
+  const weather = S.weather, year = weather.year;
+  if (field.cropYear !== year) {
+    field.cropYear = year;
+    field.sown = 0;
+    field.tended = 0;
+  }
+  const rain = weather?.kind === 'rain' ? 1.06 : 1;
+  if (season === 1) {
+    field.sown = Math.min(1, field.sown + effort * 0.022 * rain);
+    return food * 0.86 * rain;
+  }
+  if (season === 2) {
+    field.tended = Math.min(1, field.tended + effort * 0.029 * rain);
+    return food * 1.2 * rain;
+  }
+  const frost = weather?.frostYear === year ? 0.81 : 1;
+  return food * (0.85 + 0.55 * field.sown + 0.23 * field.tended) * frost;
+}
 const TITLE = { farm: 'мастер-земледелец', wood: 'мастер-лесоруб', build: 'мастер-строитель', stone: 'каменотёс', craft: 'мастер-ремесленник', gather: 'опытный охотник' };
 const JOBX = ['farm', 'wood', 'build', 'stone', 'craft', 'gather'];
 const jobSkill = (m, j) => m.skill * (1 + 0.6 * Math.min(1, (m.xp && m.xp[j]) || 0));
@@ -741,7 +790,7 @@ function jobs(S, g) {
     wood: g.woodCell === null || lean ? 0 : woodNeed ? Math.max(1, Math.round(n * 0.2)) : (season === 0 ? 1 : 0),
     stone: stoneNeed ? Math.max(1, Math.round(n * 0.12)) : 0,
     craft: lean ? 0 : (g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n * 1.2) || (n >= 5 && ((g.pots || 0) < n * 0.5 || ((g.goats || 0) >= 4 && (g.cloth || 0) < n * 0.6))) ? Math.max(1, Math.round(n * 0.1)) : 0,
-    farm: season === 0 ? 0 : g.fields.length * 2,
+    farm: farmQuota(season, g.fields.length, pool.length),
     pray: g.shrine ? 1 : 0,
     water: g.wNeed || 0,
     fish: g.fboats && g.landing ? Math.min(g.fboats * 2, Math.ceil(n * 0.3)) : 0,
@@ -749,7 +798,10 @@ function jobs(S, g) {
     guard: threat > 0.5 || S.tick - g.raided < 720 || g.lord ? Math.max(1, Math.round(n * (0.08 + 0.18 * Math.min(1.5, threat)))) : 0
   };
   const free = new Set(pool);
-  for (const job of ['water', 'pray', 'guard', 'herd', 'fish', 'craft', 'build', 'stone', 'wood', 'farm']) {
+  const priorities = season === 3
+    ? ['water', 'pray', 'guard', 'herd', 'fish', 'farm', 'craft', 'build', 'stone', 'wood']
+    : ['water', 'pray', 'guard', 'herd', 'fish', 'craft', 'build', 'stone', 'wood', 'farm'];
+  for (const job of priorities) {
     let q = Math.min(quota[job], free.size);
     if (!q) continue;
     const ranked = [...free].sort((a, b) => job === 'pray' ? (((b.xp.pray || 0) - (a.xp.pray || 0)) || (b.coop * (1 + b.status / 10) - a.coop * (1 + a.status / 10))) : (((b.xp[job] || 0) - (a.xp[job] || 0)) || a.id - b.id));
@@ -1697,6 +1749,7 @@ function imitP(S, g, has, linkOnly) {
 
 function step(S) {
   S.tick++;
+  advanceWeather(S);
   if (!S.wear) navInit(S);
   if (!S.springs) springsInit(S);
   { const d = S.tick % 360, fr = d >= 12 && d < 78; if (fr !== S.frozen) { S.frozen = fr; S.navV++; } }
@@ -1742,7 +1795,7 @@ function move(S) {
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
-      else if (a.job === 'fish' && g.landing) p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
+      else if (a.job === 'fish' && g.landing && S.weather?.kind !== 'storm') p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
       else if (a.job === 'herd' && g.pasture) p = { x: g.pasture.x + Math.cos(S.tick / 90 + a.id) * 22, y: g.pasture.y + Math.sin(S.tick / 90 + a.id) * 22 };
       else if (a.job === 'water' && g.wsrc) { const tgt = a.wc ? g.home : g.wsrc; if (Math.hypot(a.x - tgt.x, a.y - tgt.y) < 14) a.wc = !a.wc; p = a.wc ? g.home : g.wsrc; }
       else if (a.job === 'guard') {
@@ -1884,7 +1937,8 @@ function produce(S) {
       else if (m.job === 'farm') {
         const f = g.fields[(m.slot || 0) % Math.max(1, g.fields.length)];
         if (f && season !== 0 && Math.hypot(m.x - f.x, m.y - f.y) < 30) {
-          const v = 0.34 * e * syn * f.fert * (S.tick < S.drought ? 0.4 : 1) * (1.2 - 0.5 * P.scarcity) * HAUL;
+          const food = 0.34 * e * syn * f.fert * (S.tick < S.drought ? 0.4 : 1) * (1.2 - 0.5 * P.scarcity) * HAUL;
+          const v = farmYield(S, f, season, food, e);
           const ow = f.owner && S._a.get(f.owner);
           if (g.land === 'private' && ow && ow.group === g.id) { if (ow === m) { m.wealth += v * 0.5; load(m, 'food', v * 0.5); } else { ow.wealth += v * 0.35; m.wealth += v * 0.15; load(m, 'food', v * 0.5); m.hired = S.tick; } }
           else load(m, 'food', v);
