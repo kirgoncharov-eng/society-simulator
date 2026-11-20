@@ -712,6 +712,13 @@ function createGroup(S, L, others, parent) {
   S.groups.push(g); S._g.set(g.id, g); S.stats.founded++;
   S.arch = S.arch || {};
   S.arch[g.id] = { name: g.name, hue, founded: S.tick, end: null, parent: parent || null, into: null };
+  // those who split off take their share of the stores, tools and goats (at most half)
+  const P = parent && S._g.get(parent);
+  if (P && P.members.length) {
+    const fr = Math.min(0.5, (others.length + 1) / P.members.length);
+    for (const k of ['treasury', 'tools', 'wood', 'stone']) { const v = (P[k] || 0) * fr; P[k] = (P[k] || 0) - v; g[k] = (g[k] || 0) + v; }
+    if (P.goats > 3) { const k = Math.floor(P.goats * fr); P.goats -= k; g.goats = (g.goats || 0) + k; }
+  }
   const prevG = L.group;
   if (L.group) leave(S, L, 'move');
   L.group = g.id; L.role = 'leader'; L.boss = null; L.joined = S.tick; L.res = 0; g.members.push(L.id);
