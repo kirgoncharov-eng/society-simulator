@@ -47,6 +47,12 @@ function bondsMonth(S) {
       bond(S, a, L0, 'rival', why, 0.4);
     }
     for (const id in a.trust) {
+      // enmity with someone from a hostile village: the reason is the feud between the villages
+      if (a.trust[id] < -0.4 && !(a.bonds && a.bonds[id])) {
+        const o = S._a.get(+id), go = o && o.group && S._g.get(o.group);
+        if (go && go.id !== a.group && (S.hostility[key(a.group, go.id)] || 0) > 0.4) bond(S, a, o, 'rival', `из враждебной «${go.name}»: стычки на промыслах`, 0.35);
+        continue;
+      }
       if (a.trust[id] < 0.45 || (a.bonds && a.bonds[id])) continue;
       const o = S._a.get(+id); if (!o || o.group !== a.group || o.age < 16 || kin(o, a) || (o.trust[a.id] || 0) < 0.45) continue;
       const g = S._g.get(a.group), same = o.job && o.job === a.job;

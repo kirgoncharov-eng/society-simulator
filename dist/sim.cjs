@@ -1822,6 +1822,12 @@ function bondsMonth(S) {
       bond(S, a, L0, 'rival', why, 0.4);
     }
     for (const id in a.trust) {
+      // enmity with someone from a hostile village: the reason is the feud between the villages
+      if (a.trust[id] < -0.4 && !(a.bonds && a.bonds[id])) {
+        const o = S._a.get(+id), go = o && o.group && S._g.get(o.group);
+        if (go && go.id !== a.group && (S.hostility[key(a.group, go.id)] || 0) > 0.4) bond(S, a, o, 'rival', `из враждебной «${go.name}»: стычки на промыслах`, 0.35);
+        continue;
+      }
       if (a.trust[id] < 0.45 || (a.bonds && a.bonds[id])) continue;
       const o = S._a.get(+id); if (!o || o.group !== a.group || o.age < 16 || kin(o, a) || (o.trust[a.id] || 0) < 0.45) continue;
       const g = S._g.get(a.group), same = o.job && o.job === a.job;
@@ -2573,6 +2579,8 @@ function relations(S) {
     const rv = ((A.rivals || {})[B.id] || 0) + ((B.rivals || {})[A.id] || 0);
     const contest = Math.min(1.5, rv / 30) + (A.target === B.target ? 0.3 : 0) + (d < 160 ? 0.15 : 0);
     if (A.state && A.state === B.state) h *= 0.5;
+    // a personal feud between the two leaders drags their villages into it
+    const lf = Math.min(0, bondW(LA, LB)) + Math.min(0, bondW(LB, LA)); if (lf < 0 && d < 450) h += -lf * 0.03;
     if (!al) h += contest * (0.03 + 0.12 * P.scarcity) * (0.5 + (LA.ambition + LB.ambition) / 2) * (0.7 + cdist(A, B)) - 0.08 * Math.max(0, mutual) - 0.02 * Math.min(3, (S.kinTies || {})[k] || 0);
     h -= h * decay; if (al) h *= 0.6;
     h = clamp(h, 0, 2);
