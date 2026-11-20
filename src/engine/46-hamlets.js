@@ -1,4 +1,6 @@
 /* ---------- hamlets: loners, small bands and tiny villages drift into real villages ---------- */
+// a village that cast someone out in the last 15 years will not take them back, kin or no kin
+function exiledBy(S, a, gid) { return a.exiledFrom === gid || !!(a.exiled && a.exiled[gid] && S.tick - a.exiled[gid] < 360 * 15) || !!(a.quit && a.quit[gid] && S.tick - a.quit[gid] < 360 * 5); }
 // how many close kin (parents, children, siblings, spouse) of a live in village g
 function kinIn(S, a, g) {
   let k = 0;
@@ -37,7 +39,7 @@ function hostFor(S, x, y, from, a, minN) {
     if (!o.home || o.dead || o === from || o.members.length < minN) continue;
     const d = Math.hypot(o.home.x - x, o.home.y - y); if (d > 520) continue;
     if (from && (S.hostility[key(from.id, o.id)] || 0) > 0.5) continue;
-    if (a && a.exiledFrom === o.id) continue;
+    if (a && exiledBy(S, a, o.id)) continue;
     const k = a ? kinIn(S, a, o) : from ? Math.min(4, (S.kinTies || {})[key(from.id, o.id)] || 0) : 0;
     const v = 3 * Math.min(3, k) + Math.min(4, o.treasury / Math.max(1, o.members.length)) * 0.5 + Math.min(20, o.members.length) * 0.1 - Math.max(0, o.members.length - 30) * 0.15 - d / 120 + (o.thirst ? -3 : 0);
     if (v > bv) { bv = v; best = { o, k, d }; }
@@ -47,7 +49,7 @@ function hostFor(S, x, y, from, a, minN) {
 function hamletsMonth(S) {
   // a loner goes to live with kin: parents, children, brothers and sisters in a village
   for (const a of S.agents) {
-    if (a.group || a.age < 16 || rnd(S) > 0.35) continue;
+    if (a.group || a.age < 16 || S.tick - (a.joined || -1e9) < 360 || rnd(S) > 0.35) continue;
     const h = hostFor(S, a.x, a.y, null, a, 3); if (!h) continue;
     const L = S._a.get(h.o.leader); if (!L) continue;
     if (!h.k) continue; // strangers are not taken in for nothing: they come as hired hands when hungry (see monthly)
