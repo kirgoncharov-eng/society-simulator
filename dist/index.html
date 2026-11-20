@@ -570,7 +570,11 @@ function seaMonth(S) {
     g.wood -= 8;
     const tx = `Уплывает с семьёй за море: в «${g.name}» ${g.thirst ? 'нет воды' : hungryF > 0.3 ? 'голодно' : 'тесно, свободной земли нет'}`;
     for (const m of fam) bio(S, m, 'emigr', tx);
-    S.kids = (S.kids || []).filter(k => !fam.some(m => m.id === k.mo || m.id === k.fa));
+    S.kids = (S.kids || []).filter(k => {
+      if (!fam.some(m => m.id === k.mo || m.id === k.fa)) return true;
+      if (S.ageAudit && k.t > 0 && k.t <= S.ageAudit.lastBirthTick) S.ageAudit.leftBefore60++;
+      return false;
+    });
     const d = Math.hypot(bs.x - S.isle.x, bs.y - S.isle.y) || 1;
     S.boats.push({ x0: bs.x, y0: bs.y, x1: bs.x + (bs.x - S.isle.x) / d * 160, y1: bs.y + (bs.y - S.isle.y) / d * 160, t: S.tick, out: true });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
@@ -2419,6 +2423,7 @@ function lifecycle(S) {
 
 function removeAgent(S, a, why) {
   if (!S._a.has(a.id)) return;
+  if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
@@ -3049,6 +3054,18 @@ function restore(str) { const S = JSON.parse(str); index(S); return S; }
 
 return { MODEL, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
+// Opt-in observations for the Node audit. They never affect a simulation decision.
+function noteAgeExit(S, a, why) {
+  const audit = S.ageAudit;
+  const unobserved = why === 'emigr' || why === 'move' || why === 'vanish';
+  if (!unobserved && a.age >= 15) {
+    audit.adultDeaths++;
+    audit.ageAtDeath += a.age;
+  }
+  if (!(a.bornT > 0 && a.bornT <= audit.lastBirthTick)) return;
+  if (S.tick - a.bornT >= 60 * 360) audit.reached60++;
+  else if (unobserved) audit.leftBefore60++;
+}
 })();
 if (typeof module !== 'undefined') module.exports = SIM;
 

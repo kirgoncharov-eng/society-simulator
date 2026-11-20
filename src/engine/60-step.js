@@ -268,6 +268,7 @@ function lifecycle(S) {
 
 function removeAgent(S, a, why) {
   if (!S._a.has(a.id)) return;
+  if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
