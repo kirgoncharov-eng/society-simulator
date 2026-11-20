@@ -83,7 +83,7 @@ function merge(S, big, sm) {
   const al0 = S.alliances.find(x => (x.a === big.id && x.b === sm.id) || (x.a === sm.id && x.b === big.id));
   const why = `Союз длился ${yrs(Math.round((S.tick - (al0 ? al0.since : S.tick)) / 360))}. «${big.name}» как минимум вдвое больше, а ${sL.name} доверяет ${bL0.name} (${P0(sL.trust[bL0.id] || 0)}). Малой группе выгоднее влиться, чем стоять отдельно.`;
   if (S.arch && S.arch[sm.id]) S.arch[sm.id].into = big.id;
-  if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.id;
+  if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.home ? big.id : 0; // a band without a village cannot hold land
   for (const id of sm.members) {
     const m = S._a.get(id); m.group = big.id; m.role = 'member';
     if (m.id === sL.id) m.boss = big.leader;

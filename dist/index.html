@@ -1579,7 +1579,7 @@ function patrol(S) {
     if (a.war || a.car || !S._a.has(a.id)) continue;
     const o = S.own[cellAt(a.x, a.y)]; if (!o || o === a.group) continue;
     if (a.group && (allied(S, a.group, o) || !['gather', 'wood', 'stone'].includes(a.job))) continue;
-    const O = S._g.get(o); if (!O) continue;
+    const O = S._g.get(o); if (!O || !O.home) { S.own[cellAt(a.x, a.y)] = 0; continue; }
     const G = a.group && S._g.get(a.group);
     if (G && G.lord === o) continue;
     let guard = null;
@@ -1791,6 +1791,27 @@ function hamletsMonth(S) {
       for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `Хутор «${g.name}» пустеет: семья перебирается в «${h.o.name}»`);
       log(S, 'merge', `Хутор «${g.name}» пустеет: ${n} ${pl(n, 'человек', 'человека', 'человек')} перебираются в «${h.o.name}»`, g.home.x, g.home.y, h.o.hue, { why, who: [L.id, HL.id], gs: [g.id, h.o.id] });
       absorb(S, h.o, g, false);
+      continue;
+    }
+    // synoecism: a village of 5-11 next to one at least twice its size grows into it, if marriages, an alliance or a common lord bind them
+    if (g.home && n >= 5 && n < 12 && age > 360 * 5 && !S.wars.some(w => w.att === g.id || w.def === g.id) && rnd(S) < 0.25) {
+      let best = null, bv = 0;
+      for (const o of S.groups) {
+        if (o === g || !o.home || o.dead || o.members.length < n * 2) continue;
+        const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y); if (d > 300) continue;
+        const k = key(g.id, o.id); if ((S.hostility[k] || 0) > 0.4) continue;
+        const ties = Math.min(3, (S.kinTies || {})[k] || 0), bond = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id;
+        const v = 0.1 * ties + (bond ? 0.25 : 0) + 0.12 * Math.min(1.5, g.threat || 0) + (g.treasury < n * 1.5 ? 0.1 : 0) - d / 1500;
+        if (v > bv) { bv = v; best = { o, ties, bond, d }; }
+      }
+      if (!best) continue;
+      const OL = S._a.get(best.o.leader); if (!OL) continue;
+      if (rnd(S) > bv * 0.12 * (1.3 - 0.9 * L.ambition) * (0.6 + 0.6 * OL.coop) || !reach(S, g.home.x, g.home.y, best.o.home.x, best.o.home.y)) continue;
+      const { o } = best, nb = o.members.length;
+      const why = sent([`«${g.name}» (${n}) стоит в ${cells(best.d)} от «${o.name}» (${nb}): поля уже сходятся`, best.ties ? `между деревнями ${best.ties} ${pl(best.ties, 'брак', 'брака', 'браков')}` : '', best.bond ? (g.lord === o.id ? `«${g.name}» и так платит «${o.name}» дань` : 'деревни давно в союзе') : '', (g.threat || 0) > 0.5 ? 'вместе легче отбиться от набегов' : '', `${L.name} соглашается войти в совет «${o.name}»`]);
+      for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `«${g.name}» сливается с «${o.name}»`);
+      log(S, 'merge', `«${g.name}» сливается с «${o.name}»: теперь там ${n + nb} человек`, g.home.x, g.home.y, o.hue, { why, who: [L.id, OL.id], gs: [g.id, o.id] });
+      absorb(S, o, g, true);
     }
   }
 }
@@ -2813,7 +2834,7 @@ function merge(S, big, sm) {
   const al0 = S.alliances.find(x => (x.a === big.id && x.b === sm.id) || (x.a === sm.id && x.b === big.id));
   const why = `Союз длился ${yrs(Math.round((S.tick - (al0 ? al0.since : S.tick)) / 360))}. «${big.name}» как минимум вдвое больше, а ${sL.name} доверяет ${bL0.name} (${P0(sL.trust[bL0.id] || 0)}). Малой группе выгоднее влиться, чем стоять отдельно.`;
   if (S.arch && S.arch[sm.id]) S.arch[sm.id].into = big.id;
-  if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.id;
+  if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.home ? big.id : 0; // a band without a village cannot hold land
   for (const id of sm.members) {
     const m = S._a.get(id); m.group = big.id; m.role = 'member';
     if (m.id === sL.id) m.boss = big.leader;

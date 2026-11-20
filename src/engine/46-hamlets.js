@@ -72,6 +72,27 @@ function hamletsMonth(S) {
       for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `Хутор «${g.name}» пустеет: семья перебирается в «${h.o.name}»`);
       log(S, 'merge', `Хутор «${g.name}» пустеет: ${n} ${pl(n, 'человек', 'человека', 'человек')} перебираются в «${h.o.name}»`, g.home.x, g.home.y, h.o.hue, { why, who: [L.id, HL.id], gs: [g.id, h.o.id] });
       absorb(S, h.o, g, false);
+      continue;
+    }
+    // synoecism: a village of 5-11 next to one at least twice its size grows into it, if marriages, an alliance or a common lord bind them
+    if (g.home && n >= 5 && n < 12 && age > 360 * 5 && !S.wars.some(w => w.att === g.id || w.def === g.id) && rnd(S) < 0.25) {
+      let best = null, bv = 0;
+      for (const o of S.groups) {
+        if (o === g || !o.home || o.dead || o.members.length < n * 2) continue;
+        const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y); if (d > 300) continue;
+        const k = key(g.id, o.id); if ((S.hostility[k] || 0) > 0.4) continue;
+        const ties = Math.min(3, (S.kinTies || {})[k] || 0), bond = allied(S, g.id, o.id) || (g.state && g.state === o.state) || g.lord === o.id;
+        const v = 0.1 * ties + (bond ? 0.25 : 0) + 0.12 * Math.min(1.5, g.threat || 0) + (g.treasury < n * 1.5 ? 0.1 : 0) - d / 1500;
+        if (v > bv) { bv = v; best = { o, ties, bond, d }; }
+      }
+      if (!best) continue;
+      const OL = S._a.get(best.o.leader); if (!OL) continue;
+      if (rnd(S) > bv * 0.12 * (1.3 - 0.9 * L.ambition) * (0.6 + 0.6 * OL.coop) || !reach(S, g.home.x, g.home.y, best.o.home.x, best.o.home.y)) continue;
+      const { o } = best, nb = o.members.length;
+      const why = sent([`«${g.name}» (${n}) стоит в ${cells(best.d)} от «${o.name}» (${nb}): поля уже сходятся`, best.ties ? `между деревнями ${best.ties} ${pl(best.ties, 'брак', 'брака', 'браков')}` : '', best.bond ? (g.lord === o.id ? `«${g.name}» и так платит «${o.name}» дань` : 'деревни давно в союзе') : '', (g.threat || 0) > 0.5 ? 'вместе легче отбиться от набегов' : '', `${L.name} соглашается войти в совет «${o.name}»`]);
+      for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `«${g.name}» сливается с «${o.name}»`);
+      log(S, 'merge', `«${g.name}» сливается с «${o.name}»: теперь там ${n + nb} человек`, g.home.x, g.home.y, o.hue, { why, who: [L.id, OL.id], gs: [g.id, o.id] });
+      absorb(S, o, g, true);
     }
   }
 }
