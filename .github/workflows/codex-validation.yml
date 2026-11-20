@@ -5,17 +5,18 @@ on:
 permissions:
   contents: read
 jobs:
-  age:
+  weather:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 8ef56f3a8f640b5d788f4d5b12065337810525d3
+          ref: de70b1343caf0450dfee1624fa68fe74a55bf923
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: /usr/bin/time -p npm test
+      - run: git diff --exit-code -- dist
       - uses: actions/checkout@v4
         with:
           ref: 8f7c69f614f3c01748c53192e43bd0c3548b9d4b
@@ -24,4 +25,8 @@ jobs:
       - run: /usr/bin/time -p npm test
         working-directory: reference
       - run: /usr/bin/time -p npm run audit
-      - run: node tools/audit.mjs 1 5
+      - name: Browser smoke for weather display
+        run: |
+          python3 -m pip install playwright
+          python3 -m playwright install --with-deps chromium
+          python3 tools/page_check.py
