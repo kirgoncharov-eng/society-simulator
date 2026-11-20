@@ -39,8 +39,6 @@ for (let i = 0; i < W; i++) {
   allV.push(...villages); vMed.push(med(villages)); vSmall.push(villages.filter(v => v < 5).length);
   console.log(`seed ${seed}: population by 20y ${pops.join('/')}, coups ${st.coups || 0}, wars ${st.wars || 0}, births/1000/yr ${cbr.toFixed(0)}, adults now ${adults.length}, villages ${villages.join(',')}`);
 }
-// a fisher lost at sea is removed with cause 'drown' and also counted in lostAtSea: keep only river drownings in 'drown'
-tot.drown = Math.max(0, (tot.drown || 0) - (tot.lostAtSea || 0));
 const sum = Object.values(tot).reduce((s, x) => s + x, 0) || 1;
 console.log('\nadult deaths by cause: ' + causes.map(k => `${label[k]} ${Math.round(tot[k] / sum * 100)}%`).join(', '));
 const sh = (...ks) => (ks.reduce((q, k) => q + (tot[k] || 0), 0) / sum * 100).toFixed(1);

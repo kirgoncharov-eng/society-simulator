@@ -1,4 +1,6 @@
 /* ---------- hamlets: loners, small bands and tiny villages drift into real villages ---------- */
+// a village that cast someone out in the last 15 years will not take them back, kin or no kin
+function exiledBy(S, a, gid) { return a.exiledFrom === gid || !!(a.exiled && a.exiled[gid] && S.tick - a.exiled[gid] < 360 * 15) || !!(a.quit && a.quit[gid] && S.tick - a.quit[gid] < 360 * 5); }
 // how many close kin (parents, children, siblings, spouse) of a live in village g
 function kinIn(S, a, g) {
   let k = 0;
@@ -37,7 +39,7 @@ function hostFor(S, x, y, from, a, minN) {
     if (!o.home || o.dead || o === from || o.members.length < minN) continue;
     const d = Math.hypot(o.home.x - x, o.home.y - y); if (d > 520) continue;
     if (from && (S.hostility[key(from.id, o.id)] || 0) > 0.5) continue;
-    if (a && a.exiledFrom === o.id) continue;
+    if (a && exiledBy(S, a, o.id)) continue;
     const k = a ? kinIn(S, a, o) : from ? Math.min(4, (S.kinTies || {})[key(from.id, o.id)] || 0) : 0;
     const v = 3 * Math.min(3, k) + Math.min(4, o.treasury / Math.max(1, o.members.length)) * 0.5 + Math.min(20, o.members.length) * 0.1 - Math.max(0, o.members.length - 30) * 0.15 - d / 120 + (o.thirst ? -3 : 0);
     if (v > bv) { bv = v; best = { o, k, d }; }
@@ -47,7 +49,7 @@ function hostFor(S, x, y, from, a, minN) {
 function hamletsMonth(S) {
   // a loner goes to live with kin: parents, children, brothers and sisters in a village
   for (const a of S.agents) {
-    if (a.group || a.age < 16 || rnd(S) > 0.35) continue;
+    if (a.group || a.age < 16 || S.tick - (a.joined || -1e9) < 360 || rnd(S) > 0.35) continue;
     const h = hostFor(S, a.x, a.y, null, a, 3); if (!h) continue;
     const L = S._a.get(h.o.leader); if (!L) continue;
     if (!h.k) continue; // strangers are not taken in for nothing: they come as hired hands when hungry (see monthly)
@@ -68,6 +70,13 @@ function hamletsMonth(S) {
       for (const m of g.members.map(id => S._a.get(id))) if (m) bio(S, m, 'move', `Ватага «${g.name}» прибивается к «${h.o.name}»`);
       log(S, 'merge', `Ватага «${g.name}» (${n} ${pl(n, 'человек', 'человека', 'человек')}) прибивается к «${h.o.name}»`, g.cx, g.cy, h.o.hue, { why: sent([`${yrs(Math.round(age / 360))} кочевья, а людей так и не прибавилось`, 'чтобы поднять деревню, нужно хотя бы пять пар рук', h.k ? `в «${h.o.name}» у них родня` : `${HL.name} готов${HL.sex === 'f' ? 'а' : ''} принять работников`]), who: [L.id, HL.id], gs: [g.id, h.o.id] });
       absorb(S, h.o, g, false); continue;
+    }
+    // a daughter village: a big village short of land or bread sends a few families off in peace to clear new land
+    // (how farming spread, e.g. the Linear Pottery villages of Neolithic Europe); unlike a schism there is no quarrel
+    if (g.home && n >= 28 && age > 360 * 3 && (g.budT || 0) < S.tick && !S.wars.some(w => w.att === g.id || w.def === g.id)) {
+      const room = g.room === undefined ? 1 : g.room, hungry = g.treasury < n * 1.5;
+      const press = (room < 0.5 ? 1 : 0) + (hungry ? 1 : 0) + Math.max(0, (g.entropy || 0) - 1.2);
+      if (press > 0 && rnd(S) < 0.02 * press * fissionP(S, g)) { bud(S, g, L); continue; }
     }
     // a hamlet of 2-4 grows, or moves into a neighbouring village: kin, safety, a shared well
     if (g.home && n < 5 && age > 720 && !S.wars.some(w => w.att === g.id || w.def === g.id)) {
@@ -92,4 +101,22 @@ function fissionP(S, g) {
   if (g.depth >= 2 || g.gov === 'assembly' || g.code) T += 8;
   let kinned = 0; for (const m of mem) if (mem.some(o => o !== m && kin(o, m))) kinned++;
   return clamp(Math.pow(n / T, 3), 0.02, 2) * (1.3 - 0.7 * kinned / Math.max(1, n));
+}
+function bud(S, g, L) {
+  const mem = g.members.map(id => S._a.get(id)).filter(m => m && m !== L && !m.war && !m.car);
+  const n = g.members.length, want = Math.max(6, Math.round(n * 0.3));
+  const F = mem.filter(m => m.age >= 25 && m.age < 55).sort((a, b) => (b.status * (0.5 + b.ambition) + b.skill) - (a.status * (0.5 + a.ambition) + a.skill))[0];
+  if (!F) return;
+  const kinF = mem.filter(m => m !== F && kin(m, F));
+  const rest = mem.filter(m => m !== F && !kinF.includes(m) && (m.trust[F.id] || 0) > (m.trust[L.id] || 0)).sort((a, b) => (b.trust[F.id] || 0) - (a.trust[F.id] || 0));
+  const go = kinF.concat(rest).slice(0, want - 1);
+  if (go.length < 5) return;
+  const why = sent([`в «${g.name}» ${n} взрослых${(g.room === undefined ? 1 : g.room) < 0.5 ? ', и свободной земли рядом почти не осталось' : ''}`, g.treasury < n * 1.5 ? 'хлеба на всех не хватает' : '', (g.entropy || 0) > 1.2 ? 'в большой деревне трудно договориться: работа идёт вразнобой' : '', `${F.name} уводит свою родню и тех, кто ${F.sex === 'f' ? 'ей' : 'ему'} доверяет`, 'уходят без ссоры, со своей долей зерна и скота, и остаются союзниками']);
+  const ng = createGroup(S, F, go, g.id);
+  g.budT = S.tick + 360 * 4; S.stats.colonies = (S.stats.colonies || 0) + 1;
+  S.hostility[key(g.id, ng.id)] = 0; S.alliances.push({ a: g.id, b: ng.id, since: S.tick });
+  bump(F, L, 0.1); bump(L, F, 0.1);
+  bio(S, F, 'found', `Уводит ${go.length} ${pl(go.length, 'человека', 'человек', 'человек')} из «${g.name}» поднимать новую деревню «${ng.name}»`);
+  for (const m of go) bio(S, m, 'move', `Уходит с ${F.name} из «${g.name}» на новые земли`);
+  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why, who: [F.id, L.id], gs: [g.id, ng.id] });
 }
