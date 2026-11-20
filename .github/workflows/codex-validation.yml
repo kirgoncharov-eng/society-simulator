@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ref: [9e4d60790f25c029240a1ca3eded8faa4d98a12c, 152f27d662f8bcc8ee036bbad5300d9faccb034c]
+        ref: [54ab4607bc56166c99029bfadb6eaeeeef4585de, 63c899b1e09dd69db71fd86fe736af7bb11fb228]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,4 +20,19 @@ jobs:
         with:
           node-version: '22'
       - run: /usr/bin/time -p npm test
+      - uses: actions/checkout@v4
+        if: matrix.ref == '54ab4607bc56166c99029bfadb6eaeeeef4585de'
+        with:
+          ref: 66d07ceabbcfaeafd7c43c6b1254f146029fc857
+          path: reference
+          persist-credentials: false
+      - run: /usr/bin/time -p npm test
+        working-directory: reference
+        if: matrix.ref == '54ab4607bc56166c99029bfadb6eaeeeef4585de'
       - run: /usr/bin/time -p npm run audit
+      - name: Browser smoke for weather display
+        if: matrix.ref == '54ab4607bc56166c99029bfadb6eaeeeef4585de'
+        run: |
+          python3 -m pip install playwright
+          python3 -m playwright install --with-deps chromium
+          python3 tools/page_check.py
