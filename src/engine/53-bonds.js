@@ -31,7 +31,7 @@ function bond(S, a, b, k, why, s) {
   return B[b.id];
 }
 function bondLabel(a, o, k) {
-  return ({ friend: fem(o, 'друг', 'подруга'), sworn: fem(o, 'побратим', 'посестра'), love: 'любовь', rival: fem(o, 'соперник', 'соперница'), enemy: fem(o, 'враг', 'врагиня'), debt: fem(a, 'обязан', 'обязана'), mentor: fem(o, 'учитель', 'учительница'), pupil: fem(o, 'ученик', 'ученица') })[k] || k;
+  return ({ friend: fem(o, 'друг', 'подруга'), sworn: fem(o, 'побратим', 'посестра'), love: 'любовь', rival: fem(o, 'соперник', 'соперница'), enemy: 'враг', debt: fem(a, 'обязан', 'обязана'), mentor: fem(o, 'учитель', 'учительница'), pupil: fem(o, 'ученик', 'ученица') })[k] || k;
 }
 function bondsMonth(S) {
   for (const a of S.agents) {
