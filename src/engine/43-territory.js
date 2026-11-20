@@ -47,7 +47,7 @@ function patrol(S) {
     if (a.war || a.car || !S._a.has(a.id)) continue;
     const o = S.own[cellAt(a.x, a.y)]; if (!o || o === a.group) continue;
     if (a.group && (allied(S, a.group, o) || !['gather', 'wood', 'stone'].includes(a.job))) continue;
-    const O = S._g.get(o); if (!O) continue;
+    const O = S._g.get(o); if (!O || !O.home) { S.own[cellAt(a.x, a.y)] = 0; continue; }
     const G = a.group && S._g.get(a.group);
     if (G && G.lord === o) continue;
     let guard = null;

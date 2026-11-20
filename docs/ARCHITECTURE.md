@@ -44,6 +44,7 @@ SIM.date(S), SIM.key(a,b), SIM.gini(arr), SIM.regime(S,g), SIM.landTop(S), SIM.p
 | 42-war | угроза, оборона, решение о войне, переговоры и откуп (`parley`), поход, битва, дань |
 | 43-territory | владения клеток, межи, патрули |
 | 44-institutions | монета, вече, долги, кабала |
+| 46-hamlets | хутора, ватаги и одиночки перебираются в деревни (`hamletsMonth`, `absorb`), масштабный стресс раскола (`fissionP`) |
 | 50-water | родники, колодцы, водоносы, засуха, грязная вода |
 | 51-fates | летопись `bio`, вес драмы `BW`, месть, побег влюблённых, легенды |
 | 52-people | родство, браки, дети, взросление, мор, теснота, подражание |
@@ -62,7 +63,7 @@ SIM.date(S), SIM.key(a,b), SIM.gini(arr), SIM.regime(S,g), SIM.landTop(S), SIM.p
 | 40-panels | правая панель, карточка человека (`card`) |
 | 50-experiment | режим «два мира» с разными вводными |
 | 60-view3d | 3D на three.js r128 (InstancedMesh, камера, полёт к деревне) |
-| 70-atlas / 71-atlas-runner | атлас 100 миров; пересчёт в Web Workers (`ATLW` — код воркера строкой; `MODEL_V` — версия модели для кэша в localStorage) |
+| 70-atlas / 71-atlas-runner | атлас 100 миров; пересчёт в Web Workers (`ATLW` — код воркера строкой; `MODEL_V` = `SIM.MODEL.v` — версия модели для кэша в localStorage) |
 | 80-fates | вкладка «Судьбы», слежение камерой |
 | 90-main | главный цикл `frame`, запуск |
 

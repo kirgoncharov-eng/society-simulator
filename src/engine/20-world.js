@@ -120,6 +120,13 @@ function createGroup(S, L, others, parent) {
   S.groups.push(g); S._g.set(g.id, g); S.stats.founded++;
   S.arch = S.arch || {};
   S.arch[g.id] = { name: g.name, hue, founded: S.tick, end: null, parent: parent || null, into: null };
+  // those who split off take their share of the stores, tools and goats (at most half)
+  const P = parent && S._g.get(parent);
+  if (P && P.members.length) {
+    const fr = Math.min(0.5, (others.length + 1) / P.members.length);
+    for (const k of ['treasury', 'tools', 'wood', 'stone']) { const v = (P[k] || 0) * fr; P[k] = (P[k] || 0) - v; g[k] = (g[k] || 0) + v; }
+    if (P.goats > 3) { const k = Math.floor(P.goats * fr); P.goats -= k; g.goats = (g.goats || 0) + k; }
+  }
   const prevG = L.group;
   if (L.group) leave(S, L, 'move');
   L.group = g.id; L.role = 'leader'; L.boss = null; L.joined = S.tick; L.res = 0; g.members.push(L.id);
@@ -169,7 +176,7 @@ function succession(S, g, why, old) {
   const R = ranked[1];
   if (R && share < 0.5 && R.ambition > 0.5 && mem.length >= 6) {
     const sup = mem.filter(m => m !== W && m !== R && (m.trust[R.id] || 0) > (m.trust[W.id] || 0));
-    if (sup.length >= 4) {
+    if (sup.length >= 4 && rnd(S) < Math.min(1, 0.2 + fissionP(S, g))) {
       const ng = createGroup(S, R, sup, g.id);
       S.hostility[key(g.id, ng.id)] = 0.7; S.stats.schisms++;
       log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ним те, кто доверяет ему больше, чем новому лидеру`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
