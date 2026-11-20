@@ -55,6 +55,7 @@ function monthly(S) {
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
   for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
   aidMonth(S);
+  hamletsMonth(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
@@ -182,7 +183,7 @@ function groupMonth(S, g) {
     }
   }
   restructure(S, g);
-  if (!g.home && (n >= 6 || (n >= 4 && S.tick - g.founded > 720) || (n >= 3 && S.tick - g.founded > 1440))) settle(S, g);
+  if (!g.home && (n >= 6 || (n >= 5 && S.tick - g.founded > 720))) settle(S, g);
   jobs(S, g);
   // entropy
   let res = 0, fact = 0; for (const m of mem) { res += m.res; if ((m.trust[L.id] || 0) < 0) fact++; }
