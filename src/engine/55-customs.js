@@ -6,6 +6,7 @@ function elders(S, g) { return g.members.map(id => S._a.get(id)).filter(m => m &
 // record a ruling; when the same ruling keeps coming back, it becomes the village's custom
 function ruling(S, g, kind, outcome, ev) {
   g.cases = g.cases || []; g.cases.push([kind, outcome, S.tick, ev]); if (g.cases.length > 16) g.cases.shift();
+  if ((g.customs || {})[kind]) S.stats['custom_' + kind + '_' + outcome] = (S.stats['custom_' + kind + '_' + outcome] || 0) + 1;
   S.stats['case_' + kind + '_' + outcome] = (S.stats['case_' + kind + '_' + outcome] || 0) + 1;
   g.customs = g.customs || {};
   if (g.customs[kind]) return;
@@ -55,18 +56,21 @@ function inheritDispute(S, g, house, heir, ownerName, deathEv) {
    Returns true if the feud is settled and the killing does not happen. */
 function bloodOrWergild(S, g, avenger, killer) {
   const L = S._a.get(g.leader), custom = (g.customs || {}).blood === 'wergild';
-  const kinK = kinOf(S, killer).filter(o => o.group === g.id), purse = killer.wealth + kinK.reduce((s, o) => s + Math.max(0, o.wealth - 2), 0);
-  const price = 12;
-  const p = purse < price * 0.6 ? 0 : custom ? 0.8 : clamp(0.1 + 0.35 * elders(S, g) + 0.2 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
+  const kinK = kinOf(S, killer).filter(o => o.group === g.id), price = 12;
+  // the killer's kin pay what they can; the community adds the rest from the common store (by custom it must)
+  const kinPurse = Math.max(0, killer.wealth) + kinK.reduce((s, o) => s + Math.max(0, o.wealth - 2), 0);
+  const help = custom || (L && L.coop > 0.5) ? Math.min(Math.max(0, price - kinPurse), g.treasury * 0.25) : 0;
+  const p = kinPurse + help < price * 0.6 ? 0 : custom ? 0.8 : clamp(0.1 + 0.35 * elders(S, g) + 0.2 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
   if (rnd(S) > p) return false;
   // pay: the killer first, then the kin
   let due = price; const take = (o, cap) => { const x = Math.min(due, Math.max(0, cap)); o.wealth -= x; due -= x; };
   take(killer, killer.wealth); for (const o of kinK) if (due > 0) take(o, o.wealth - 2);
+  const common = Math.min(due, help); g.treasury -= common; due -= common;
   avenger.wealth += price - due;
   const f = avenger.feud, src = f.ev;
   f.done = S.tick; f.settled = true;
   const text = `${killer.name} платит виру за ${f.v}: ${avenger.name} принимает выкуп и не мстит`;
-  const why = sent([`${avenger.name} ${yrs(Math.max(1, Math.round((S.tick - f.t) / 360)))} ${fem(avenger, 'ждал', 'ждала')} мести за ${f.rel} ${f.v}`, custom ? `в «${g.name}» обычай: за кровь платят` : `старейшины и ${L ? (L.sex === 'f' ? 'вождь ' : 'вождь ') + L.name : 'община'} уговаривают взять выкуп`, `родня ${killer.name} собирает ${qty(price - due, 'food')}`, 'цепочка мести обрывается, но обида остаётся']);
+  const why = sent([`${avenger.name} ${yrs(Math.max(1, Math.round((S.tick - f.t) / 360)))} ${fem(avenger, 'ждал', 'ждала')} мести за ${f.rel} ${f.v}`, custom ? `в «${g.name}» обычай: за кровь платят` : `старейшины и ${L ? (L.sex === 'f' ? 'вождь ' : 'вождь ') + L.name : 'община'} уговаривают взять выкуп`, `родня ${killer.name} собирает ${qty(price - due - common, 'food')}`, common >= 1 ? `община добавляет из амбара ${qty(common, 'food')}` : '', 'цепочка мести обрывается, но обида остаётся']);
   const ev = log(S, 'case', text, avenger.x, avenger.y, g.hue, { why, who: [avenger.id, killer.id].concat(L ? [L.id] : []), gs: [g.id], causes: src ? [src] : undefined });
   bio(S, avenger, 'wergild', `Принимает виру за ${f.rel} ${f.v} от ${killer.name}`, ev.id);
   bio(S, killer, 'wergild', `Платит виру родне ${f.v}, чтобы оборвать месть`, ev.id);
