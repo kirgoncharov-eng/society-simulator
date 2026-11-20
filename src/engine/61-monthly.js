@@ -49,7 +49,8 @@ function monthly(S) {
       if (d > (g0 ? 380 : 600)) continue;
       const fh = g.treasury / Math.max(1, g.members.length);
       if (g0 && fh < 2) continue;
-      const base = fh - d / 60 + (exiledBy(S, a, g.id) ? -50 : 0);
+      if (exiledBy(S, a, g.id)) continue; // a village that cast you out does not hire you back
+      const base = fh - d / 60;
       if (base > usualScore) { usualScore = base; usual = g; }
       const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
       const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;

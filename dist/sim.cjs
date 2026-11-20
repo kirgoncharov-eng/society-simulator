@@ -1788,14 +1788,17 @@ function bond(S, a, b, k, why, s) {
   s = s === undefined ? 0.6 : s;
   const B = a.bonds || (a.bonds = {}), cur = B[b.id];
   if (cur && cur[0] === k) { cur[2] = Math.min(1, cur[2] + s * 0.5); cur[1] = S.tick; if (why) cur[3] = why; return cur; }
+  let said = false;
   if (cur && BOND_W[cur[0]] > 0.3 && BOND_W[k] < 0 && cur[2] > 0.25) {
+    said = true;
     // a friend, a blood brother or a benefactor turning into a foe: a betrayal
     bio(S, a, 'betrayed', `${b.name}, ${cur[0] === 'sworn' ? fem(b, 'побратим', 'посестра') : cur[0] === 'debt' ? 'кому был' + fem(a, '', 'а') + ' обязан' + fem(a, '', 'а') : fem(b, 'друг', 'подруга')}, становится врагом: ${why}`);
     S.stats.betrayals = (S.stats.betrayals || 0) + 1;
   }
   if (cur && BOND_W[cur[0]] < 0 && BOND_W[k] > 0.3 && cur[2] > 0.3) bio(S, a, 'reconcile', `Мирится с ${b.name}: ${why}`);
   B[b.id] = [k, S.tick, Math.min(1, s), why];
-  if (k === 'enemy' || k === 'sworn' || k === 'love') bio(S, a, k, k === 'enemy' ? `Заводит врага: ${b.name} — ${why}` : k === 'sworn' ? `Братается с ${b.name}: ${why}` : `Любит ${b.name}: ${why}`);
+  // enmities already have their own line in the chronicle (exile, coup, a kinsman killed); sworn brotherhood and love do not
+  if (!said && (k === 'sworn' || k === 'love')) bio(S, a, k, k === 'sworn' ? `Братается с ${b.name}: ${why}` : `Любит ${b.name}: ${why}`);
   bump(a, b, BOND_W[k] * 0.4);
   const ids = Object.keys(B);
   if (ids.length > BOND_MAX) { ids.sort((p, q) => B[p][2] - B[q][2]); delete B[ids[0]]; }
@@ -1833,7 +1836,7 @@ function inheritBonds(S, a, parents) {
     if (!p || !p.bonds) continue;
     for (const id in p.bonds) {
       const [k, , s, why] = p.bonds[id], o = S._a.get(+id); if (!o || o === a || kin(o, a)) continue;
-      if (k === 'enemy' && s > 0.3) bond(S, a, o, 'enemy', `враг рода: ${fem(p, 'отец', 'мать')} не простил${fem(p, '', 'а')} — ${why}`, s * 0.5);
+      if (k === 'enemy' && s > 0.3) { a.bonds = a.bonds || {}; if (!a.bonds[id]) a.bonds[id] = ['enemy', S.tick, s * 0.5, `враг рода: ${why.replace(/меня/g, fem(p, 'отца', 'мать'))}`]; }
       else if ((k === 'friend' || k === 'sworn' || k === 'debt') && s > 0.35 && !(a.bonds && a.bonds[id])) { a.bonds = a.bonds || {}; a.bonds[id] = ['friend', S.tick, s * 0.4, `друг семьи: ${fem(o, 'дружил', 'дружила')} с ${fem(p, 'отцом', 'матерью')}`]; }
     }
   }
@@ -2220,7 +2223,8 @@ function monthly(S) {
       if (d > (g0 ? 380 : 600)) continue;
       const fh = g.treasury / Math.max(1, g.members.length);
       if (g0 && fh < 2) continue;
-      const base = fh - d / 60 + (exiledBy(S, a, g.id) ? -50 : 0);
+      if (exiledBy(S, a, g.id)) continue; // a village that cast you out does not hire you back
+      const base = fh - d / 60;
       if (base > usualScore) { usualScore = base; usual = g; }
       const canFeedNewcomer = g.treasury >= (g.members.length + 1) * 3;
       const remembered = canFeedNewcomer ? rememberedGrain(S, a, g.id, 180) : null;
