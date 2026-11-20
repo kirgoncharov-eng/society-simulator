@@ -39,7 +39,7 @@ $('back').addEventListener('click', () => {
   S.events.unshift({ id: S.evId, t: S.tick, type: 'fork', text: $('fly').checked ? 'Возврат к развилке. Шум перемешан: история может пойти иначе' : 'Возврат к развилке. Шум тот же: расхождения дадут только ваши вводные' });
   resetView();
 });
-$('reset').addEventListener('click', () => world((Math.random() * 99999) | 0));
+$('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
   SIM.shock(S, b.dataset.shock); seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
@@ -69,9 +69,15 @@ new MutationObserver(readColors).observe(document.documentElement, { attributes:
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
 
 function intro() {
-  playing = false; syncPlay();
+  playing = false; acc = 0; syncPlay();
+  const landing = firstLanding(S);
+  if (landing) {
+    vt = { x: landing.x1, y: landing.y1, z: 1.65 };
+    view = { ...vt };
+    fly3D(landing.x1, landing.y1, true);
+  }
   const box = $('focus'); box.style.setProperty('--c', C.slate);
-  box.innerHTML = `<em>Как смотреть</em><strong>Пустой остров посреди моря</strong><p>Год 0: к берегу пристают первые лодки, в каждой одна семья или род. Ещё несколько лодок приплывут в ближайшие десятилетия. Люди ищут воду и землю, женятся, рожают, оседают, ловят рыбу, пашут, торгуют и воюют. Уйти с острова можно только морем. Ничего не задано заранее.</p><p>Вращайте и приближайте мир пальцем или мышью. Нажмите на человека, чтобы увидеть его семью, славу и покровителя. Внизу на ленте — последнее важное событие. Хроника, общества и графики — во вкладках под картой.</p><div class="acts"><button class="main" id="go">Смотреть</button></div>`;
+  box.innerHTML = `<em>Год 0</em><strong>После кораблекрушения</strong><p>Ночью шторм разбил корабль. К утру шлюпки прибило к берегам острова. Выжившие вынесли на сушу то, что удалось спасти. Теперь им нужно найти пресную воду и место для ночлега.</p><div class="acts"><button class="main" id="go">Смотреть</button></div>`;
   box.hidden = false;
   $('go').onclick = () => { box.hidden = true; lastStop = performance.now() - 6000; playing = true; syncPlay(); };
 }
