@@ -77,6 +77,13 @@ function famTxt(a, g, L) {
   if (a.age > 55 && g) soc.push('старейшина: голос весит больше');
   return `<p class="rel">${parts.join('. ')}.</p>${soc.length ? `<p class="rel">${soc.map((t, i) => i ? t : t[0].toUpperCase() + t.slice(1)).join('; ')}.</p>` : ''}`;
 }
+// named ties with their cause: who is a friend, a rival, an enemy, and why
+const BOND_ORDER = { enemy: 0, love: 1, sworn: 2, rival: 3, debt: 4, friend: 5, mentor: 6, pupil: 7 };
+function bondsTxt(a) {
+  const bs = Object.entries(a.bonds || {}).map(([id, b]) => [S._a.get(+id), b]).filter(([o]) => o).sort((x, y) => BOND_ORDER[x[1][0]] - BOND_ORDER[y[1][0]] || y[1][2] - x[1][2]);
+  if (!bs.length) return '';
+  return `<p class="rel"><b>Связи.</b> ${bs.map(([o, b]) => `${esc(o.name)} — ${esc(SIM.bondLabel(a, o, b[0]))}: ${esc(b[3])} (${yr(b[1])})`).join('; ')}.</p>`;
+}
 function card() {
   const el = $('card');
   if (!sel) return;
@@ -102,6 +109,7 @@ function card() {
   ${g && g.land === 'private' ? (() => { const nf = g.fields.filter(f => f.owner === a.id).length; return `<p class="rel">${nf ? `Владеет ${nf} ${nf === 1 ? 'полем' : 'полями'} из ${g.fields.length}.` : a.job === 'farm' ? 'Безземельный: батрачит на чужом поле за малую долю урожая.' : 'Своей земли нет.'}</p>`; })() : ''}
   ${a.debt ? (() => { const cr = S._a.get(a.cred); return `<p class="rel">${a.bond ? '<b style="color:var(--red)">В кабале.</b> ' : ''}Должен ${Math.round(a.debt)} ${cr ? esc(cr.name) : ''}${a.rate ? ` под ${pct(a.rate)}% годовых` : ' без процентов: вера запрещает рост'}${a.bond ? '; почти всё сверх пропитания уходит кредитору' : ''}.</p>`; })() : ''}
   ${a.loans ? (() => { const debtors = S.agents.filter(o => o.cred === a.id && o.debt); return `<p class="rel">Ростовщик: выдал займов ${a.loans}, сейчас должны ${debtors.length} чел. на ${Math.round(debtors.reduce((s2, o) => s2 + o.debt, 0))}${debtors.some(o => o.bond) ? `, в кабале ${debtors.filter(o => o.bond).length}` : ''}.</p>`; })() : ''}
+  ${bondsTxt(a)}
   <p class="rel">Запас: ${a.wealth.toFixed(1)}.${a.made ? ` Сделал орудий: ${a.made}.` : ''} ${fr.length ? `Доверяет: ${esc(fr.join(', '))}. ` : ''}${en.length ? `Враждует: ${esc(en.join(', '))}.` : ''}${(a.intr || 0) > 2 ? ' Плетёт интриги против лидера.' : ''}</p>`;
 }
 const TOG = [['landPriv', 'Частная земля разрешена', 'Иначе поля всегда общие и не переходят по наследству'], ['assembly', 'Вече разрешено', 'Иначе решения всегда принимает вождь или монарх'], ['coin', 'Монета разрешена', 'Иначе торговля остаётся меновой, а богатство гниёт'], ['usury', 'Проценты по займам разрешены', 'Иначе в долг дают без роста, и кабалы нет']];

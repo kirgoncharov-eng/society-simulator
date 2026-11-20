@@ -164,7 +164,7 @@ function succession(S, g, why, old) {
   const votes = new Map(cands.map(c => [c.id, 0]));
   for (const m of mem) {
     let best = cands[0], bv = -9;
-    for (const c of cands) { const v = (c.id === m.id ? 0.4 : (m.trust[c.id] || 0)) + c.status * 0.01 + 0.25 * (c.rep || 0) + (kin(m, c) ? 0.3 : 0); if (v > bv) { bv = v; best = c; } }
+    for (const c of cands) { const v = (c.id === m.id ? 0.4 : (m.trust[c.id] || 0)) + c.status * 0.01 + 0.25 * (c.rep || 0) + (kin(m, c) ? 0.3 : 0) + 0.5 * bondW(m, c); if (v > bv) { bv = v; best = c; } }
     votes.set(best.id, votes.get(best.id) + (m.age > 55 ? 1.5 : 1));
   }
   const ranked = cands.slice().sort((a, b) => votes.get(b.id) - votes.get(a.id));

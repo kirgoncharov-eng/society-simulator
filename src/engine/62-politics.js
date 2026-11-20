@@ -62,7 +62,7 @@ function conflict(S, A, B) {
   const lt = (Lg.tools || 0) * 0.3; W.tools = (W.tools || 0) + lt; Lg.tools = (Lg.tools || 0) - lt;
   Lg.avoid[Lg.target] = S.tick + 360;
   const WL = S._a.get(W.leader), LL = S._a.get(Lg.leader);
-  bump(WL, LL, -0.3); bump(LL, WL, -0.35);
+  bump(WL, LL, -0.3); bump(LL, WL, -0.35); bond(S, LL, WL, 'rival', 'отбил наш промысел', 0.4);
   for (const g of wAl) { const al = S._a.get(g.leader); if (al) bump(al, LL, -0.15); }
   let def = 0;
   for (const m of Lg.members.map(id => S._a.get(id))) {
