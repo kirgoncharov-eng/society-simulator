@@ -87,7 +87,18 @@ function shock(S, kind) {
 }
 
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
-function restore(str) { const S = JSON.parse(str); index(S); return S; }
+function restore(str) {
+  const S = JSON.parse(str); index(S);
+  for (const g of S.groups) {
+    if (!g.home) continue;
+    if (g.plan && !g.plan.street) g.plan.street = streetFor(S, g);
+    if (g.walls && !g.wallPlan && g.plan) {
+      g.wallPlan = wallPlan(S, g);
+      if (g.wallPlan) g.wallPlan.built = S.tick;
+    }
+  }
+  return S;
+}
 
 return { MODEL, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 

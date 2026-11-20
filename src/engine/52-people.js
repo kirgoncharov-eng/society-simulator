@@ -62,12 +62,14 @@ function families(S) {
 }
 function marry(S, f, m) {
   f.spouse = m.id; m.spouse = f.id; bump(f, m, 0.5); bump(m, f, 0.5);
-  bio(S, f, 'marry', `Выходит замуж за ${m.name}${m.group && m.group !== f.group ? ` из «${groupName(S, m.group)}»` : ''}`); bio(S, m, 'marry', `Женится на ${f.name}${f.group && f.group !== m.group ? ` из «${groupName(S, f.group)}»` : ''}`);
+  // the wedding is an event: the couple's house, the spurned suitor's grudge and an alliance of villages point to it
+  const wev = note(S, 'marriage', `Свадьба: ${f.name} и ${m.name}`, f.x, f.y, (S._g.get(m.group) || {}).hue || 0, { who: [f.id, m.id], gs: [f.group, m.group].filter(Boolean) }).id; f.marryEv = m.marryEv = cite(S, wev);
+  bio(S, f, 'marry', `Выходит замуж за ${m.name}${m.group && m.group !== f.group ? ` из «${groupName(S, m.group)}»` : ''}`, wev); bio(S, m, 'marry', `Женится на ${f.name}${f.group && f.group !== m.group ? ` из «${groupName(S, f.group)}»` : ''}`, wev);
   S.stats.marriages = (S.stats.marriages || 0) + 1;
   // the one who hoped for her: a spurned suitor turns rival to the groom
   let sp = null, sv = 0.35;
   for (const o of S.agents) if (o !== m && o.sex === 'm' && !o.spouse && o.age >= 17 && o.group === f.group && (o.trust[f.id] || 0) > sv && !kin(o, f)) { sv = o.trust[f.id]; sp = o; }
-  if (sp) { bond(S, sp, f, 'love', `любит без ответа: ${f.name} выходит за другого`, 0.5); bond(S, sp, m, 'rival', `${fem(m, 'женился', 'вышла')} на ${f.name}`, 0.6); }
+  if (sp) { bond(S, sp, f, 'love', `любит без ответа: ${f.name} выходит за другого`, 0.5, false, wev); bond(S, sp, m, 'rival', `${fem(m, 'женился', 'вышла')} на ${f.name}`, 0.6, false, wev); }
   const gf = S._g.get(f.group), gm = S._g.get(m.group);
   if (gf === gm) return;
   // wife moves to husband's side, unless she leads
@@ -85,7 +87,7 @@ function marry(S, f, m) {
     const al = allied(S, gf.id, gm.id);
     if (!al && (S.hostility[k] || 0) < 0.5) S.alliances.push({ a: gf.id, b: gm.id, since: S.tick, kin: true });
     const firstM = !S.firstMarriage; S.firstMarriage = true;
-    log(S, 'marriage', `${firstM ? 'Первый в мире брачный союз' : 'Брачный союз'}: ${f.name} из «${gf.name}» выходит за ${m.name} из «${gm.name}»`, (gf.cx + gm.cx) / 2, (gf.cy + gm.cy) / 2, gm.hue, { why: sent([`${royal(f) && f.role !== 'leader' && (f.mother === (LF && LF.id) || f.father === (LF && LF.id)) ? `${f.name} — дочь вождя ${LF.name}` : royal(m) && m.role !== 'leader' ? `${m.name} — сын вождя ${LM ? LM.name : ''}` : 'жених или невеста из правящей семьи'}`, 'родство между правящими домами гасит вражду: вожди теперь доверяют друг другу больше', al ? 'союз деревень скреплён кровью' : 'деревни заключают союз', `всего браков между ними: ${S.kinTies[k]}`]), who: [f.id, m.id], gs: [gf.id, gm.id], first: firstM });
+    log(S, 'marriage', `${firstM ? 'Первый в мире брачный союз' : 'Брачный союз'}: ${f.name} из «${gf.name}» выходит за ${m.name} из «${gm.name}»`, (gf.cx + gm.cx) / 2, (gf.cy + gm.cy) / 2, gm.hue, { why: sent([`${royal(f) && f.role !== 'leader' && (f.mother === (LF && LF.id) || f.father === (LF && LF.id)) ? `${f.name} — дочь вождя ${LF.name}` : royal(m) && m.role !== 'leader' ? `${m.name} — сын вождя ${LM ? LM.name : ''}` : 'жених или невеста из правящей семьи'}`, 'родство между правящими домами гасит вражду: вожди теперь доверяют друг другу больше', al ? 'союз деревень скреплён кровью' : 'деревни заключают союз', `всего браков между ними: ${S.kinTies[k]}`]), who: [f.id, m.id], gs: [gf.id, gm.id], first: firstM, causes: [wev] });
   }
 }
 function growUp(S, k, mo, fa, g) {

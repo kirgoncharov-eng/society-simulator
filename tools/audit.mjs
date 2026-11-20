@@ -1,4 +1,4 @@
-// Realism audit: demography and causes of death over several island worlds.
+// Audit of demography, island history and chronicle links.
 // Usage: node tools/audit.mjs [worlds=6] [years=80]
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -7,19 +7,57 @@ const W = +(process.argv[2] || 6), Y = +(process.argv[3] || 80);
 console.log(`model ${SIM.MODEL.v} (${SIM.MODEL.date}), ${W} islands x ${Y} years`);
 const causes = ['death', 'sick', 'burnout', 'war', 'plague', 'drown', 'lostAtSea', 'killed'];
 const label = { death: 'old age', sick: 'sickness', burnout: 'hunger', war: 'war', plague: 'plague', drown: 'drowning', lostAtSea: 'lost at sea', killed: 'murder' };
-let famN = 0, houseN = 0, villN = 0, roofN = 0, lodgerN = 0, customN = 0, customW = 0, customI = 0; const caseN = {};
+const refK = {}, bondRef = {}; let famN = 0, houseN = 0, villN = 0, roofN = 0, lodgerN = 0, customN = 0, customW = 0, customI = 0; const caseN = {};
 const tot = {}; let B = 0, CD = 0, minPop = Infinity, bondN = 0, adultN = 0, feuds = 0, feudsNamed = 0; const bondK = {}; const allV = [], vMed = [], vSmall = [];
 let st0;
 const med = a => { const x = a.slice().sort((p, q) => p - q); return x.length ? x[Math.floor((x.length - 1) / 2)] : 0; };
 let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
 const age = { deaths: 0, sum: 0, eligible: 0, reached: 0, left: 0 };
 const lastBirthTick = Math.max(0, (Y - 60) * 360);
+const islandHistory = [];
+
+function newShelterLinks(S) {
+  // Each memory-driven move increments aidMemoryMoves and emits one shelter event.
+  // Inspect it on that day, before subsequent events can push it out of the feed.
+  let linked = 0;
+  for (const event of S.events) {
+    if (event.t !== S.tick) break;
+    if (event.type !== 'aid' || !event.text.includes('находит приют в')) continue;
+    const helper = event.who?.[1];
+    if (helper && event.causes?.some(id => {
+      const source = SIM.eventById(S, id);
+      return source?.type === 'aid' && source.t < event.t && source.who?.[0] === helper
+        && (source.text.includes('посылает зерно') || source.text.includes('даёт зерно'));
+    })) linked++;
+  }
+  return linked;
+}
+
+function tradeLinks(S) {
+  return Object.values(S.routes).filter(route =>
+    route.n >= 2 && S._g.has(route.a) && S._g.has(route.b)
+  ).length;
+}
+
+const percent = (n, total) => total ? `${(100 * n / total).toFixed(1)} %` : 'н/д';
+const coverage = (linked, cases) => `${linked}/${cases} (${percent(linked, cases)})`;
+
 for (let i = 0; i < W; i++) {
   const seed = 5000 + i * 7919, S = SIM.newWorld(seed, {}), pops = [];
   const ages = S.ageAudit = { lastBirthTick, adultDeaths: 0, ageAtDeath: 0, reached60: 0, leftBefore60: 0 };
-  let cohortBirths = 0;
+  let cohortBirths = 0, peakTradeLinks = 0, activeTradeLinks = 0;
+  let shelterCases = 0, sheltersLinked = 0;
   for (let y = 1; y <= Y; y++) {
-    for (let d = 0; d < 360; d++) SIM.step(S);
+    for (let d = 0; d < 360; d++) {
+      SIM.step(S);
+      const cases = S.stats.aidMemoryMoves || 0;
+      if (cases !== shelterCases) {
+        sheltersLinked += newShelterLinks(S);
+        shelterCases = cases;
+      }
+    }
+    activeTradeLinks = tradeLinks(S);
+    peakTradeLinks = Math.max(peakTradeLinks, activeTradeLinks);
     if (S.tick === lastBirthTick) cohortBirths = S.stats.births || 0;
     if (y % 20 === 0) pops.push(SIM.popOf(S));
     if (y >= 10) minPop = Math.min(minPop, SIM.popOf(S));
@@ -31,6 +69,12 @@ for (let i = 0; i < W; i++) {
   age.left += ages.leftBefore60;
   age.reached += ages.reached60 + aliveAt60;
   const st = S.stats; B += st.births || 0; CD += st.childDeaths || 0;
+  const deaths = causes.reduce((total, kind) => total + (st[kind] || 0), 0);
+  islandHistory.push({
+    seed, deaths, hunger: st.burnout || 0, trades: st.trades || 0, activeTradeLinks, peakTradeLinks,
+    wars: st.wars || 0, regimeChanges: S.evc?.regime || 0, states: st.states || 0,
+    shelterCases, sheltersLinked,
+  });
   memoryMoves += st.aidMemoryMoves || 0;
   sponsoredMoves += st.aidSponsoredMoves || 0;
   aidReturned += st.aidReturned || 0;
@@ -42,6 +86,9 @@ for (let i = 0; i < W; i++) {
   for (const g of S.groups) if (g.home) { famN += g.wantH || 0; houseN += g.houses.filter(h => !h.ruined).length; for (const id of g.members) { const a = S._a.get(id); villN++; if (a.shel) roofN++; if (a.lodger) lodgerN++; } }
   for (const k in st0 = S.stats) if (k.startsWith('case_')) caseN[k] = (caseN[k] || 0) + st0[k];
   customN += S.stats.customs || 0; for (const g of S.groups) { if ((g.customs || {}).blood) customW++; if ((g.customs || {}).inherit) customI++; }
+  // linked chronicle: share of lines and ties that point to the event behind them
+  for (const B of S.agents.map(a => a.bio || []).concat((S.legends || []).map(l => l.bio))) for (const b of B) { const r = refK[b[1]] || (refK[b[1]] = [0, 0]); r[0]++; if (b[3]) r[1]++; }
+  for (const a of S.agents) for (const id in a.bonds || {}) { const x = a.bonds[id]; if (x[4]) continue; const r = bondRef[x[0]] || (bondRef[x[0]] = [0, 0]); r[0]++; if (x[5]) r[1]++; }
   allV.push(...villages); vMed.push(med(villages)); vSmall.push(villages.filter(v => v < 5).length);
   console.log(`seed ${seed}: population by 20y ${pops.join('/')}, coups ${st.coups || 0}, wars ${st.wars || 0}, births/1000/yr ${cbr.toFixed(0)}, adults now ${adults.length}, villages ${villages.join(',')}`);
 }
@@ -53,6 +100,8 @@ console.log(`villages (adults): median over all islands ${med(allV)}, median by 
 console.log(`households: living houses per family ${(houseN / Math.max(1, famN)).toFixed(2)} (${houseN} houses, ${famN} families); villagers under a roof ${Math.round(roofN / Math.max(1, villN) * 100)}%, living with kin or as hands ${Math.round(lodgerN / Math.max(1, villN) * 100)}%`);
 { const cs = {}; let cust = 0, villages = 0; for (const k of Object.keys(caseN)) cs[k] = caseN[k];
   console.log(`disputes: inheritance — house to the eldest ${cs.case_inherit_eldest || 0}, shared ${cs.case_inherit_share || 0}; blood — revenge ${cs.case_blood_revenge || 0}, blood money ${cs.case_blood_wergild || 0}; customs formed ${customN} (wergild ${customW}, inheritance ${customI})`); }
+{ const pc = (o, k) => o[k] ? `${k} ${Math.round(o[k][1] / o[k][0] * 100)}%` : `${k} -`;
+  console.log(`linked chronicle (share with a cause): ${['coup', 'deposed', 'exiled', 'quit', 'feud', 'revenge', 'marry', 'house', 'inheritHouse', 'dispute', 'wergild', 'aidReceived', 'client'].map(k => pc(refK, k)).join(', ')}; ties: ${['enemy', 'sworn', 'rival', 'debt', 'love', 'friend'].map(k => pc(bondRef, k)).join(', ')}`); }
 console.log(`bonds: ${(bondN / Math.max(1, adultN)).toFixed(1)} per adult (${Object.entries(bondK).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}); enmities (trust < -0.3) with a named cause ${Math.round(feudsNamed / Math.max(1, feuds) * 100)}% of ${feuds}`);
 console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
 console.log(`grain memories: ${memoryMoves} moves changed (${sponsoredMoves} through sponsorship), ${aidReturned} gifts returned (${aidChanged} decisions changed)`);
@@ -61,3 +110,12 @@ console.log(age.eligible
   ? `survived to 60 (island-born): ${(100 * age.reached / age.eligible).toFixed(1)}% (${age.reached}/${age.eligible}; ${age.left} left before 60)`
   : 'survived to 60 (island-born): n/a (no eligible birth cohort)');
 console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out; median village >= 15 adults, at most 2 villages under 5 per island; 2-5 bonds per adult, >= 30% of enmities with a cause; 0.8-1.2 living houses per family');
+
+console.log('\nИстория островов');
+let sheltersLinked = 0;
+for (const island of islandHistory) {
+  const { seed, deaths, hunger, trades, activeTradeLinks, peakTradeLinks, wars, regimeChanges, states, shelterCases } = island;
+  sheltersLinked += island.sheltersLinked;
+  console.log(`сид ${seed}: голод ${percent(hunger, deaths)} (${hunger}/${deaths}), сделки ${trades}, повторные торговые связи ${activeTradeLinks} (пик ${peakTradeLinks}), войны ${wars}, смены строя ${regimeChanges}, новые государства ${states}, приют со ссылкой ${coverage(island.sheltersLinked, shelterCases)}`);
+}
+console.log(`Приют после помощи зерном с подтверждённой ссылкой: ${coverage(sheltersLinked, memoryMoves)}`);

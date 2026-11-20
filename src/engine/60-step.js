@@ -53,6 +53,11 @@ function move(S) {
       else if (a.job === 'guard') {
         const bc = g.bcells || [];
         if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + Math.floor(S.tick / 160)) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
+        else if (g.wallPlan) {
+          const segments = g.wallPlan.segments;
+          const { a: from, b: to } = segments[(a.id + Math.floor(S.tick / 120)) % segments.length];
+          p = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+        }
         else { const ang = a.id * 1.7 + S.tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);

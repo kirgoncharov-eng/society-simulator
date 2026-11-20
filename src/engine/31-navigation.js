@@ -157,17 +157,32 @@ function bridgeSpot(S, g) {
     if (d > 320) continue;
     let near = false; for (const c in S.bridge) if (Math.abs(((+c / N) | 0) - j) < 6) near = true;
     if (near) continue;
-    const v = -ws.length * 60 - d / 4 + (S.road[ws[0] - 1] || 0) * 20 + (S.road[ws[ws.length - 1] + 1] || 0) * 20;
-    if (v > bv) { const side = g.home.x < x ? -1 : 1, bi = side < 0 ? (ws[0] % N) - 1 : (ws[ws.length - 1] % N) + 1; bv = v; best = { kind: 'bridge', cells: ws, x: bi * CS + 10, y, prog: 0, need: 120 + ws.length * 40 }; }
+    const lo = ws[0] - 1, hi = ws[ws.length - 1] + 1;
+    if (Math.floor(lo / N) !== j || Math.floor(hi / N) !== j || hi - lo !== ws.length + 1) continue;
+    const bank = c => ({ x: (c % N) * CS + CS / 2, y });
+    const approaches = [bank(lo), bank(hi)];
+    if (approaches.some(p => !siteLand(S, p.x, p.y))) continue;
+    if (![lo, hi].every(c => [c - N, c + N, c === lo ? c - 1 : c + 1].some(q =>
+      q >= 0 && q < N * N && siteLand(S, (q % N) * CS + CS / 2, Math.floor(q / N) * CS + CS / 2)
+    ))) continue;
+    const here = g.home.x < x ? approaches[0] : approaches[1];
+    if (!reach(S, g.home.x, g.home.y, here.x, here.y)) continue;
+    const traffic = Math.min(S.wear[lo], S.wear[hi], 450) / 12;
+    const ford = ws.some(c => S.ford[c]) ? 42 : 0;
+    const v = -ws.length * 60 - d / 4 + (S.road[lo] + S.road[hi]) * 20 + ford + traffic;
+    if (v > bv) { bv = v; best = { kind: 'bridge', cells: ws, approaches, ...here, prog: 0, need: 120 + ws.length * 40, wood: 8 + ws.length * 4 }; }
   }
   return best;
 }
 function planOf(S, g) {
-  if (g.plan) return g.plan;
+  if (g.plan) { if (!g.plan.street) g.plan.street = streetFor(S, g); return g.plan; }
   let ang;
   if (riverDist(S, g.home.x, g.home.y) < 220) ang = Math.PI / 2 + gauss(S) * 0.25;
   else { const fc = nearestForest(S, g.home, g); ang = fc !== null ? Math.atan2(Math.floor(fc / N) * CS + 10 - g.home.y, (fc % N) * CS + 10 - g.home.x) : rnd(S) * Math.PI; }
-  g.plan = { ux: Math.cos(ang), uy: Math.sin(ang), k: 0 };
+  const approach = streetApproach(S, g);
+  if (approach) ang = Math.atan2(approach.y - g.home.y, approach.x - g.home.x);
+  g.plan = { ux: Math.cos(ang), uy: Math.sin(ang), k: 0, toward: approach?.toward };
+  g.plan.street = streetFor(S, g);
   return g.plan;
 }
 function plotPos(g, k) {
@@ -175,12 +190,16 @@ function plotPos(g, k) {
   const ux = street ? -P.uy : P.ux, uy = street ? P.ux : P.uy, along = dir * (slot * 17 - 4) + (street ? 0 : 0), perp = side * 12, off = street ? 26 : 0;
   return { x: g.home.x + ux * along - uy * perp + (street ? P.ux * off : 0), y: g.home.y + uy * along + ux * perp + (street ? P.uy * off : 0) };
 }
-function plotOk(S, g, p) {
-  if (p.x < 12 || p.y < 12 || p.x > 988 || p.y > 988) return false;
-  const t = S.ter[cellAt(p.x, p.y)]; if (t === 'w' || t === 'h' || t === 's' || riverDist(S, p.x, p.y) < 24) return false;
-  for (const h of g.houses) if (Math.hypot(h.x - p.x, h.y - p.y) < 11) return false;
-  for (const b of [g.workshop, g.granary, g.shrine]) if (b && Math.hypot(b.x - p.x, b.y - p.y) < 14) return false;
-  return true;
+function plotOk(S, g, p, radius = 6) {
+  if (riverDist(S, p.x, p.y) < 24 || !streetClear(g, p, radius)) return false;
+  for (const [dx, dy] of [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+    const x = p.x + dx * radius, y = p.y + dy * radius;
+    if (!siteLand(S, x, y) || S.occ[cellAt(x, y)]) return false;
+  }
+  if (!reach(S, g.home.x, g.home.y, p.x, p.y)) return false;
+  for (const h of g.houses) if (dist(h, p) < radius + 5) return false;
+  for (const b of [g.workshop, g.granary, g.shrine, g.well]) if (b && dist(b, p) < radius + 8) return false;
+  return !g.wallPlan || g.wallPlan.segments.every(({ a, b }) => distanceToSegment(p, a, b) >= radius + 2);
 }
 
 function riverDist(S, x, y) { const r = S.river; if (!r) return 1e9; const k = clamp(Math.round((y + 20) / 20), 0, r.length - 1); return Math.abs(x - r[k][0]); }

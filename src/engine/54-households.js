@@ -67,8 +67,9 @@ function householdsMonth(S) {
         owned.add(h.id); h.owner = H.id; h.oname = H.name; h.emptyT = null;
         const sp = H.spouse && S._a.get(H.spouse); h.spouseOf = sp ? sp.id : null;
         for (const m of ms) { m.house = h.id; m.lodger = false; }
-        bio(S, H, 'house', `Получает свой дом в «${g.name}»${sp ? ` и живёт там с ${fem(sp, 'мужем', 'женой')} ${sp.name}` : ''}`);
-        if (sp) bio(S, sp, 'house', `Переезжает с ${fem(H, 'мужем', 'женой')} ${H.name} в свой дом в «${g.name}»`);
+        const wed = H.marryEv && eventById(S, H.marryEv) ? H.marryEv : undefined;
+        bio(S, H, 'house', `Получает свой дом в «${g.name}»${sp ? ` и живёт там с ${fem(sp, 'мужем', 'женой')} ${sp.name}` : ''}`, sp ? wed : undefined);
+        if (sp) bio(S, sp, 'house', `Переезжает с ${fem(H, 'мужем', 'женой')} ${H.name} в свой дом в «${g.name}»`, wed);
         continue;
       }
       // no free house: lodge with the husband's parents, else the wife's, else any kin, else wherever there is room

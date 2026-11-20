@@ -48,7 +48,7 @@ function drawMini(W0, c, st) {
       const fill = hueC(g.hue, 1, C.dark ? -6 : 12), roof = hueC(g.hue, 1, C.dark ? -22 : -14);
       for (const hh of g.houses) houseGlyph(hh.x, hh.y, 14, fill, roof, false, px);
       if (g.workshop) workshopGlyph(g.workshop.x, g.workshop.y, fill, roof, false, false, px, now);
-      if (g.walls) { const R0 = Math.max(26, ...g.houses.map(hh => Math.hypot(hh.x - g.home.x, hh.y - g.home.y) + 12)); ctx.strokeStyle = C.dark ? '#7a5a36' : '#8a6234'; ctx.lineWidth = px(2.5); ctx.setLineDash([px(3), px(2)]); ctx.beginPath(); ctx.arc(g.home.x, g.home.y, R0, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+      drawWall(g, px);
       const lord = g.lord && W0._g.get(g.lord);
       if (lord && lord.home) { ctx.strokeStyle = hueC(lord.hue, .9); ctx.lineWidth = px(2); ctx.setLineDash([px(1), px(4)]); ctx.beginPath(); ctx.moveTo(g.home.x, g.home.y); ctx.lineTo(lord.home.x, lord.home.y); ctx.stroke(); ctx.setLineDash([]); }
     }
