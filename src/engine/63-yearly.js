@@ -1,4 +1,5 @@
 function yearly(S) {
+  archiveGC(S);
   droughtYear(S);
   roadsYear(S);
   for (const g of S.groups) { g.cross12 = g.cross || 0; g.cross = 0; }
@@ -87,5 +88,5 @@ function shock(S, kind) {
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
 function restore(str) { const S = JSON.parse(str); index(S); return S; }
 
-return { MODEL, bondLabel, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, bondLabel, eventById, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 

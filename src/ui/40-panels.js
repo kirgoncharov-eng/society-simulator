@@ -85,7 +85,7 @@ const BOND_ORDER = { enemy: 0, love: 1, sworn: 2, rival: 3, debt: 4, friend: 5, 
 function bondsTxt(a) {
   const bs = Object.entries(a.bonds || {}).map(([id, b]) => [S._a.get(+id), b]).filter(([o]) => o).sort((x, y) => BOND_ORDER[x[1][0]] - BOND_ORDER[y[1][0]] || y[1][2] - x[1][2]);
   if (!bs.length) return '';
-  return `<p class="rel"><b>Связи</b><br>${bs.map(([o, b]) => `${esc(o.name)} — ${esc(SIM.bondLabel(a, o, b[0]))}: ${esc(b[3])}, г. ${yr(b[1])}`).join('<br>')}</p>`;
+  return `<p class="rel"><b>Связи</b><br>${bs.map(([o, b]) => `${esc(o.name)} — ${esc(SIM.bondLabel(a, o, b[0]))}: ${esc(b[3])}, г. ${yr(b[1])}${evLink(b[5])}`).join('<br>')}</p>`;
 }
 function card() {
   const el = $('card');

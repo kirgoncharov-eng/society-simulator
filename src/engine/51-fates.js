@@ -1,23 +1,25 @@
 /* ---------- fates: life chronicle, memory, motives ---------- */
 const BW = { theft: 1.5, quit: 1.5, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
-function bio(S, a, k, s) {
+// ref: id of the event this line refers to (see the linked chronicle in 00-core)
+function bio(S, a, k, s, ref) {
   if (!a) return;
   const b = a.bio || (a.bio = []);
   // the same turn of fate repeated within five years matters less each time
   let rep = 0; for (let i = b.length - 1; i >= 0 && S.tick - b[i][0] < 360 * 5; i--) if (b[i][1] === k) rep++;
-  b.push([S.tick, k, s]);
+  b.push(ref ? [S.tick, k, s, cite(S, ref)] : [S.tick, k, s]);
   if (b.length > 46) b.splice(6, b.length - 46);
   a.drama = (a.drama || 0) + (BW[k] || 1) / (1 + rep);
 }
 function groupName(S, id) { const g = S._g.get(id); return g ? g.name : (S.arch && S.arch[id] ? S.arch[id].name : 'исчезнувшей деревни'); }
 const AID_MEMORY_MIN = 2 * 360, AID_MEMORY_MAX = 15 * 360;
-function rememberGrain(S, a, helper) {
+// ev: the id of the event in which the grain was given; the memory, the chronicle line and the tie all point to it
+function rememberGrain(S, a, helper, ev) {
   const memories = (a.grainMemories || []).filter(m => S.tick - m.tick <= AID_MEMORY_MAX);
   if (memories.some(m => m.helper === helper.id)) return;
-  memories.push({ helper: helper.id, tick: S.tick });
+  memories.push(ev ? { helper: helper.id, tick: S.tick, ev: cite(S, ev) } : { helper: helper.id, tick: S.tick });
   a.grainMemories = memories.slice(-4);
-  bio(S, a, 'aidReceived', `В голод получает зерно. Помогает ${helper.name}`);
-  bond(S, a, helper, 'debt', `${fem(helper, 'прислал', 'прислала')} зерно в голод`, 0.6);
+  bio(S, a, 'aidReceived', `В голод получает зерно. Помогает ${helper.name}`, ev);
+  bond(S, a, helper, 'debt', `${fem(helper, 'прислал', 'прислала')} зерно в голод`, 0.6, false, ev);
 }
 function rememberedGrain(S, witness, villageId, minAge) {
   for (const memory of witness.grainMemories || []) {
@@ -43,8 +45,8 @@ function repayGrain(S, village, obligation) {
     const a = S._a.get(id);
     if (a.grainMemories) a.grainMemories = a.grainMemories.filter(m => m.helper !== obligation.helper.id);
   }
-  const { witness, helper } = obligation;
-  bio(S, witness, 'aidReturned', `Деревня делится зерном в ответ на давнюю помощь. Тогда зерно присылает ${helper.name}`);
+  const { witness, helper, memory } = obligation;
+  bio(S, witness, 'aidReturned', `Деревня делится зерном в ответ на давнюю помощь. Тогда зерно присылает ${helper.name}`, memory && memory.ev);
 }
 function kinOf(S, a) { return S.agents.filter(o => o !== a && kin(o, a) && o.spouse !== a.id || o.id === a.spouse); }
 function legend(S, a, why) {
