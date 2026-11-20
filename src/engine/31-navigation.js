@@ -18,7 +18,12 @@ function passCost(S, c) {
 function navigationCosts(S) {
   if (S._costs && S._costsVersion === S.navV) return S._costs;
   const costs = S._costs || (S._costs = new Float64Array(N * N));
-  for (let c = 0; c < costs.length; c++) costs[c] = passCost(S, c);
+  const drag = S._moveDrag || (S._moveDrag = new Float64Array(costs.length));
+  for (let c = 0; c < costs.length; c++) {
+    const cost = passCost(S, c);
+    costs[c] = cost;
+    drag[c] = Math.pow(Math.max(0.5, cost || 3), 0.4);
+  }
   S._costsVersion = S.navV;
   return costs;
 }
@@ -30,8 +35,36 @@ function aStar(S, c0, c1) {
   S._stamp = (S._stamp || 0) + 1; const stamp = S._stamp;
   const tx = c1 % N, ty = (c1 / N) | 0, h = c => { const dx = Math.abs(c % N - tx), dy = Math.abs(((c / N) | 0) - ty); return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 0.5; };
   const heap = [], hf = [];
-  const push = (c, f) => { heap.push(c); hf.push(f); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (hf[p] <= hf[i]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; [hf[p], hf[i]] = [hf[i], hf[p]]; i = p; } };
-  const pop = () => { const top = heap[0], lc = heap.pop(), lf = hf.pop(); if (heap.length) { heap[0] = lc; hf[0] = lf; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && hf[l] < hf[m]) m = l; if (r < heap.length && hf[r] < hf[m]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; [hf[m], hf[i]] = [hf[i], hf[m]]; i = m; } } return top; };
+  const push = (cell, priority) => {
+    let i = heap.length;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (hf[parent] <= priority) break;
+      heap[i] = heap[parent];
+      hf[i] = hf[parent];
+      i = parent;
+    }
+    heap[i] = cell;
+    hf[i] = priority;
+  };
+  const pop = () => {
+    const top = heap[0];
+    const last = heap.pop(), priority = hf.pop();
+    const size = heap.length;
+    if (!size) return top;
+    let i = 0;
+    for (let child = 2 * i + 1; child < size; child = 2 * i + 1) {
+      const right = child + 1;
+      if (right < size && hf[right] < hf[child]) child = right;
+      if (hf[child] >= priority) break;
+      heap[i] = heap[child];
+      hf[i] = hf[child];
+      i = child;
+    }
+    heap[i] = last;
+    hf[i] = priority;
+    return top;
+  };
   seen[c0] = stamp; gS[c0] = 0; from[c0] = -1; push(c0, h(c0));
   const closed = S._closed || (S._closed = new Int32Array(NN));
   let it = 0;
