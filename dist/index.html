@@ -2690,7 +2690,7 @@ function customsYear(S) {
       const im = imitP(S, g, o => !!(o.customs || {})[kind]);
       if (!im.from || rnd(S) > im.p * 6) continue;
       const o = im.from, outcome = o.customs[kind];
-      const text = kind === 'blood' ? `«${g.name}» перенимает у «${o.name}» обычай виры` : `«${g.name}» перенимает у «${o.name}» обычай наследства: ${CASE_LABEL.inherit[outcome]}`;
+      const text = kind === 'blood' ? `«${g.name}» перенимает у «${o.name}» ${outcome === 'wergild' ? 'обычай виры: за кровь платят' : 'обычай мести: кровь за кровь'}` : `«${g.name}» перенимает у «${o.name}» обычай наследства: ${CASE_LABEL.inherit[outcome]}`;
       g.customs = g.customs || {}; g.customs[kind] = outcome; S.stats.customs = (S.stats.customs || 0) + 1; S.stats.customsCopied = (S.stats.customsCopied || 0) + 1;
       const L = S._a.get(g.leader);
       const ev = log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([`у «${o.name}» так заведено, и соседи видят, что это работает`, `связи между деревнями: торговля, союз или браки`, L ? `${L.name} вводит обычай у себя` : '']), who: L ? [L.id] : [], gs: [g.id, o.id], causes: (o.customEv || {})[kind] ? [o.customEv[kind]] : undefined });
