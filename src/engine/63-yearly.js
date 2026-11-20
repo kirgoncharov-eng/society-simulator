@@ -1,5 +1,6 @@
 function yearly(S) {
   archiveGC(S);
+  customsYear(S);
   droughtYear(S);
   roadsYear(S);
   for (const g of S.groups) { g.cross12 = g.cross || 0; g.cross = 0; }

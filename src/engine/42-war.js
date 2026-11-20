@@ -147,13 +147,13 @@ function battle(S, w, A, B, band) {
     why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол удвоил оборону' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
   }
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
-  log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
+  const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
   for (const m of band) { if (deadA.includes(m)) continue; bio(S, m, win ? 'battleW' : 'battleL', `Ходит в поход на «${B.name}»: ${win ? 'победа' : 'поражение'}`); if (m.exiledFrom === B.id && !m.returned) { m.returned = S.tick; bio(S, m, 'returned', `Возвращается к «${B.name}», откуда ${m.sex === 'f' ? 'её' : 'его'} изгнали, — с чужим войском`); } if (win && m.feud && !m.feud.done && m.feud.g === B.id) revengeDone(S, m, `Ходит в поход на «${B.name}» и побеждает`); }
   for (const m of defenders) { if (deadB.includes(m)) continue; bio(S, m, win ? 'battleL' : 'battleW', `Защищает «${B.name}» от войска «${A.name}»: ${win ? 'поражение' : 'победа'}`); if (!win && m.feud && !m.feud.done && m.feud.g === A.id) revengeDone(S, m, `Отбивает войско «${A.name}» у стен родной деревни`); }
   // a death in battle has a face: the kin will remember who struck the blow
   const aliveA = band.filter(m => !deadA.includes(m)), aliveB = defenders.filter(m => !deadB.includes(m));
-  for (const m of deadA) feudFor(S, m, B, `В походе на «${B.name}»`, aliveB.length ? aliveB[Math.floor(rnd(S) * aliveB.length)] : null);
-  for (const m of deadB) feudFor(S, m, A, `При набеге «${A.name}»`, aliveA.length ? aliveA[Math.floor(rnd(S) * aliveA.length)] : null);
+  for (const m of deadA) feudFor(S, m, B, `В походе на «${B.name}»`, aliveB.length ? aliveB[Math.floor(rnd(S) * aliveB.length)] : null, bev.id);
+  for (const m of deadB) feudFor(S, m, A, `При набеге «${A.name}»`, aliveA.length ? aliveA[Math.floor(rnd(S) * aliveA.length)] : null, bev.id);
   swornAfterBattle(S, win ? aliveA : aliveB, B.name);
   const killedL = deadB.find(m => m.id === B.leader) || deadA.find(m => m.id === A.leader);
   if (killedL) for (const o of S.agents) if (o.feud && !o.feud.done && o.feud.L === killedL.id && band.concat(defenders).includes(o)) revengeDone(S, o, `В битве гибнет ${killedL.name}, тот, кто вёл врагов`);

@@ -1,5 +1,5 @@
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, quit: 1.5, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 // ref: id of the event this line refers to (see the linked chronicle in 00-core)
 function bio(S, a, k, s, ref) {
   if (!a) return;
@@ -56,14 +56,14 @@ function legend(S, a, why) {
   S.legends.sort((x, y) => y.drama - x.drama);
   if (S.legends.length > 40) S.legends.length = 40;
 }
-function feudFor(S, victim, killers, how, killer) {
+function feudFor(S, victim, killers, how, killer, ev) {
   if (!killers) return;
   for (const o of S.agents) {
     if (o === victim || o.group === killers.id) continue;
     const rel = o.mother === victim.id || o.father === victim.id ? (victim.sex === 'f' ? 'мать' : 'отца') : victim.spouse === o.id ? (victim.sex === 'f' ? 'жену' : 'мужа') : (victim.mother && o.mother === victim.mother) || (victim.father && o.father === victim.father) ? (victim.sex === 'f' ? 'сестру' : 'брата') : null;
     if (!rel) continue;
     if (o.feud && S.tick - o.feud.t < 360 * 30) continue;
-    o.feud = { g: killers.id, gname: killers.name, L: killers.leader, Lname: (S._a.get(killers.leader) || {}).name || '', t: S.tick, v: victim.name, rel };
+    o.feud = { ev: cite(S, ev), g: killers.id, gname: killers.name, L: killers.leader, Lname: (S._a.get(killers.leader) || {}).name || '', t: S.tick, v: victim.name, rel };
     const NOM = { 'отца': 'отец', 'мать': 'мать', 'жену': 'жена', 'мужа': 'муж', 'брата': 'брат', 'сестру': 'сестра' };
     bio(S, o, 'feud', `${how} гибнет ${NOM[rel]} ${victim.name}${killer ? ` от руки ${killer.name}` : ''}. ${o.name} клянётся отомстить «${killers.name}»`);
     if (killer) bond(S, o, killer, 'enemy', `${fem(killer, 'убил', 'убила')} ${rel} ${victim.name} в бою`, 0.8);
@@ -74,7 +74,7 @@ function revengeDone(S, a, how) {
   a.feud.done = S.tick;
   bio(S, a, 'revenge', how);
   const first = !S.firstRevenge; S.firstRevenge = true;
-  log(S, 'revenge', `${a.name} мстит за ${a.feud.rel} ${a.feud.v}: ${how.charAt(0).toLowerCase() + how.slice(1)}`, a.x, a.y, (S._g.get(a.group) || {}).hue || 0, { first, why: `${yrs(Math.max(1, Math.round((S.tick - a.feud.t) / 360)))} назад «${a.feud.gname}» убили ${a.feud.rel === 'мать' ? 'мать' : a.feud.rel === 'жену' ? 'жену' : a.feud.rel === 'сестру' ? 'сестру' : a.feud.rel === 'мужа' ? 'мужа' : a.feud.rel === 'брата' ? 'брата' : 'отца'} ${a.name}. С тех пор ${a.sex === 'f' ? 'она' : 'он'} ждал${a.sex === 'f' ? 'а' : ''} своего часа.`, who: [a.id] });
+  return log(S, 'revenge', `${a.name} мстит за ${a.feud.rel} ${a.feud.v}: ${how.charAt(0).toLowerCase() + how.slice(1)}`, a.x, a.y, (S._g.get(a.group) || {}).hue || 0, { first, why: `${yrs(Math.max(1, Math.round((S.tick - a.feud.t) / 360)))} назад «${a.feud.gname}» убили ${a.feud.rel === 'мать' ? 'мать' : a.feud.rel === 'жену' ? 'жену' : a.feud.rel === 'сестру' ? 'сестру' : a.feud.rel === 'мужа' ? 'мужа' : a.feud.rel === 'брата' ? 'брата' : 'отца'} ${a.name}. С тех пор ${a.sex === 'f' ? 'она' : 'он'} ждал${a.sex === 'f' ? 'а' : ''} своего часа.`, who: [a.id] });
 }
 function fatesMonth(S) {
   for (const g of S.groups) {
@@ -90,15 +90,18 @@ function fatesMonth(S) {
       // killer's leader lives in this very village: blood for blood
       const KL = S._a.get(m.feud.L);
       if (KL && KL.group === g.id && KL !== m && m.ambition > 0.4 && m.age > 17 && rnd(S) < (m.feud.personal ? 0.02 : 0.012)) {
+        // the elders may still turn blood into blood money
+        if (bloodOrWergild(S, g, m, KL)) break;
         const wasL = KL === L;
         bio(S, KL, 'death', `${KL.sex === 'f' ? 'Убита' : 'Убит'}: ${m.name} мстит за ${m.feud.v}`);
-        revengeDone(S, m, `Убивает ${KL.name}${wasL ? `, вождя «${g.name}»` : ''}`);
+        const rev = revengeDone(S, m, `Убивает ${KL.name}${wasL ? `, вождя «${g.name}»` : ''}`), revId = rev && rev.id;
         bio(S, m, 'murder', `Своими руками убивает ${KL.name}`);
         S.stats.murders = (S.stats.murders || 0) + 1;
         for (const o of kinOf(S, KL)) bond(S, o, m, 'enemy', `${fem(m, 'убил', 'убила')} ${KL.name}`, 0.9);
-        for (const o of kinOf(S, KL)) if (!o.feud || o.feud.done) { o.feud = { g: g.id, gname: g.name, L: m.id, Lname: m.name, t: S.tick, v: KL.name, rel: o.mother === KL.id || o.father === KL.id ? (KL.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: m.id }; bio(S, o, 'feud', `${m.name} убивает ${KL.name}. ${o.name} клянётся отомстить`); }
+        for (const o of kinOf(S, KL)) if (!o.feud || o.feud.done) { o.feud = { g: g.id, gname: g.name, L: m.id, Lname: m.name, t: S.tick, v: KL.name, rel: o.mother === KL.id || o.father === KL.id ? (KL.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: m.id, ev: cite(S, revId) }; bio(S, o, 'feud', `${m.name} убивает ${KL.name}. ${o.name} клянётся отомстить`); }
         removeAgent(S, KL, 'killed');
         if (g.dead) break;
+        bloodShed(S, g, revId);
         if (!wasL && m.group === g.id && L.coop > 0.4 && rnd(S) < 0.6) { leave(S, m, 'move'); m.x += 50; bio(S, m, 'exiled', `За убийство ${m.sex === 'f' ? 'изгнана' : 'изгнан'} из «${g.name}»`); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; }
         break;
       }
