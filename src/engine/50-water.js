@@ -42,7 +42,8 @@ function waterMonth(S) {
     // wells
     const L = S._a.get(g.leader);
     if (!g.site && !g.well && L && n >= 5 && g.wd > 110 && g.wood >= 4 && (g.wTry || 0) < S.tick && seasonOf(S.tick) !== 0) {
-      g.wood -= 4; g.wTry = S.tick + 360 * 4; g.site = { kind: 'well', x: g.home.x + (planOf(S, g).uy * 10), y: g.home.y - (planOf(S, g).ux * 10), prog: 0, need: 60 + (wellOk(S, g.home.x, g.home.y) < 0.5 ? 60 : 0) };
+      const site = specialSpot(S, g, 'well');
+      if (site) { g.wood -= 4; g.wTry = S.tick + 360 * 4; g.site = site; }
     }
   }
   // drought conflicts over shared springs
