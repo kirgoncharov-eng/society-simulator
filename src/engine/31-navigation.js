@@ -34,7 +34,8 @@ function aStar(S, c0, c1) {
   const NN = N * N, gS = S._gS || (S._gS = new Float64Array(NN)), from = S._from || (S._from = new Int32Array(NN)), seen = S._seen || (S._seen = new Int32Array(NN));
   S._stamp = (S._stamp || 0) + 1; const stamp = S._stamp;
   const tx = c1 % N, ty = (c1 / N) | 0, h = c => { const dx = Math.abs(c % N - tx), dy = Math.abs(((c / N) | 0) - ty); return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 0.5; };
-  const heap = [], hf = [];
+  const heap = S._pathHeap || (S._pathHeap = []), hf = S._pathPriorities || (S._pathPriorities = []);
+  heap.length = hf.length = 0;
   const push = (cell, priority) => {
     let i = heap.length;
     while (i > 0) {
@@ -95,12 +96,28 @@ function getPath(S, c0, c1) {
 function comps(S) {
   const key = S.navV + '|' + (S.frozen ? 1 : 0);
   if (S._comp && S._compK === key) return S._comp;
-  const C = S._comp || (S._comp = new Int32Array(N * N)); C.fill(0); let id = 0; const st = [];
-  for (let c0 = 0; c0 < N * N; c0++) {
-    if (C[c0] || !passCost(S, c0)) continue; id++; C[c0] = id; st.push(c0);
-    while (st.length) { const c = st.pop(), cx = c % N, cy = (c / N) | 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue; const q = ny * N + nx; if (!C[q] && passCost(S, q)) { C[q] = id; st.push(q); } } }
+  const costs = navigationCosts(S);
+  const C = S._comp || (S._comp = new Int32Array(N * N));
+  C.fill(0);
+  let id = 0;
+  const stack = [];
+  const visit = c => {
+    if (!C[c] && costs[c]) { C[c] = id; stack.push(c); }
+  };
+  for (let c = 0; c < N * N; c++) {
+    if (C[c] || !costs[c]) continue;
+    id++;
+    visit(c);
+    while (stack.length) {
+      const next = stack.pop(), x = next % N;
+      if (x < N - 1) visit(next + 1);
+      if (x > 0) visit(next - 1);
+      if (next < N * (N - 1)) visit(next + N);
+      if (next >= N) visit(next - N);
+    }
   }
-  S._compK = key; return C;
+  S._compK = key;
+  return C;
 }
 function reach(S, x0, y0, x1, y1) { const C = comps(S), a = C[cellAt(x0, y0)], b = C[cellAt(x1, y1)]; return !!a && a === b; }
 function blocked(S, x0, y0, x1, y1) {
@@ -129,13 +146,20 @@ function toLand(S, a) {
     a.x = x * CS + 10 + gauss(S) * 3; a.y = y * CS + 10 + gauss(S) * 3; a.path = null; return;
   }
 }
-function navStep(S, a, ca, ct) {
+function nextPathCell(S, a, ca, ct) {
   if (a.pc !== ct || a.pv !== S.navV || !a.path) { a.path = getPath(S, ca, ct); a.pc = ct; a.pv = S.navV; a.pi = 0; }
-  const P = a.path; if (!P) return null;
-  for (let k = a.pi; k < Math.min(P.length, a.pi + 6); k++) if (P[k] === ca) { a.pi = k; break; }
-  if (P[a.pi] !== ca && !P.includes(ca)) { a.path = getPath(S, ca, ct); a.pi = 0; if (!a.path) return null; }
-  const nx = a.path[Math.min(a.pi + 1, a.path.length - 1)], j = ((a.id * 13) % 7) - 3;
-  return { x: (nx % N) * CS + 10 + j, y: ((nx / N) | 0) * CS + 10 + j };
+  const path = a.path;
+  if (!path) return -1;
+  if (path[a.pi] !== ca) {
+    const end = Math.min(path.length, a.pi + 6);
+    for (let k = a.pi + 1; k < end; k++) if (path[k] === ca) { a.pi = k; break; }
+    if (path[a.pi] !== ca && !path.includes(ca)) {
+      a.path = getPath(S, ca, ct);
+      a.pi = 0;
+      if (!a.path) return -1;
+    }
+  }
+  return a.path[Math.min(a.pi + 1, a.path.length - 1)];
 }
 function roadsYear(S) {
   let ch = 0;
