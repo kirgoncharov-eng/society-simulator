@@ -53,7 +53,7 @@ function move(S) {
     : day >= 90 && day < 150 ? 0.008 : 0.00025;
   const guardPost = Math.floor(tick / 160), guardWall = Math.floor(tick / 120);
   const storm = S.weather?.kind === 'storm';
-  const costs = navigationCosts(S), drag = S._moveDrag;
+  const costs = navigationCosts(S), drag = S._moveDrag, walls = wallCells(S);
   for (const a of A) {
     let tx, ty;
     const gH = a.group && S._groupsById[a.group];
@@ -67,7 +67,7 @@ function move(S) {
       if (a.haul && a.load) p = storeOf(g, a.lk);
       else if (a.job === 'farm' && g.fields.length) p = g.fields[(a.slot || 0) % g.fields.length];
       else if (a.job === 'wood' && g.woodCell !== null) p = { x: (g.woodCell % 50) * 20 + 10, y: Math.floor(g.woodCell / 50) * 20 + 10 };
-      else if (a.job === 'build' && g.site) p = g.site;
+      else if (a.job === 'build' && g.site) p = siteTarget(g, a);
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
@@ -77,18 +77,18 @@ function move(S) {
       else if (a.job === 'guard') {
         const bc = g.bcells || [];
         if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + guardPost) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
-        else if (g.wallPlan) {
-          const segments = g.wallPlan.segments;
-          const { a: from, b: to } = segments[(a.id + guardWall) % segments.length];
-          p = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-        }
-        else { const ang = a.id * 1.7 + tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
+        else if (g.fortifications?.length) {
+          const wall = g.fortifications[(a.id + guardWall) % g.fortifications.length];
+          const { a: from, b: to } = wall.segments[a.id % wall.segments.length];
+          p = { x: (from.x + to.x) / 2 - (wall.facing?.x || 0) * 5, y: (from.y + to.y) / 2 - (wall.facing?.y || 0) * 5 };
+        } else { const ang = a.id * 1.7 + tick / 140; p = { x: g.home.x + Math.cos(ang) * 34, y: g.home.y + Math.sin(ang) * 34 }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
       if (a.rite && tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
-      tx = p.x + j * (a.job === 'gather' ? 3 : 1.2); ty = p.y + j2 * (a.job === 'gather' ? 3 : 1.2);
+      const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
+      tx = p.x + j * spread; ty = p.y + j2 * spread;
     } else if (a.group) {
       const g = S._groupsById[a.group];
       if (a.role === 'leader') {
@@ -143,8 +143,9 @@ function move(S) {
     let nx = a.x + dx / d * sp + walkNoise(rng);
     let ny = a.y + dy / d * sp + walkNoise((rng + 3 * RNG_STEP) | 0);
     S.rng = (rng + 6 * RNG_STEP) | 0;
-    const nc = cellAt(nx, ny);
-    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; }
+    if (walls[ca]) { const next = wallWalk(a, { x: nx, y: ny }, { x: tx, y: ty }, walls[ca]); nx = next.x; ny = next.y; }
+    let nc = cellAt(nx, ny);
+    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; nc = ca; }
     a.x = nx; a.y = ny;
     if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
     if (nc !== a.lc) {
@@ -157,11 +158,11 @@ function move(S) {
     }
   }
   if (S._drown && S._drown.length) { for (const a of S._drown) drown(S, a); S._drown = []; }
-  meet(S, A);
+  meet(S, A, walls);
   for (const a of A) { a.x = clamp(a.x, 6, 994); a.y = clamp(a.y, 6, 994); }
 }
 
-function meet(S, agents) {
+function meet(S, agents, walls) {
   // Agents are appended in ID order. Use that same tie order even when the
   // previous day's list makes the sort largely incremental.
   const tail = agents[agents.length - 1];
@@ -205,10 +206,17 @@ function meet(S, agents) {
       const d2 = dx * dx + dy * dy;
       if (d2 < 81) {
         const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
-        a.x = ax -= dx * f;
-        a.y = ay -= dy * f;
-        order[j].x = xs[j] += dx * f;
-        order[j].y = ys[j] += dy * f;
+        const b = order[j];
+        const nearA = walls[cellAt(ax, ay)], nearB = walls[cellAt(xs[j], ys[j])];
+        const shiftX = dx * f, shiftY = dy * f;
+        if (!nearA?.some(w => lineCrossing(a, { x: ax - shiftX, y: ay - shiftY }, w.a, w.b) !== null)) {
+          a.x = ax -= shiftX;
+          a.y = ay -= shiftY;
+        }
+        if (!nearB?.some(w => lineCrossing(b, { x: xs[j] + shiftX, y: ys[j] + shiftY }, w.a, w.b) !== null)) {
+          b.x = xs[j] += shiftX;
+          b.y = ys[j] += shiftY;
+        }
       }
       if (d2 < 3025 && randomAt(rng = (rng + RNG_STEP) | 0) < 0.02) {
         S.rng = rng;
@@ -305,8 +313,7 @@ function produce(S) {
         const c = g.woodCell;
         if (c !== null && S.wood[c] > 1 && within(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10), 30)) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
       } else if (m.job === 'build') {
-        const st = g.site;
-        if (st && within(m.x - st.x, m.y - st.y, 26)) { st.prog += e * syn; worked = true; if (st.prog >= st.need) finishSite(S, g); }
+        worked = !!g.site && workSite(S, g, m, e * syn);
       } else if (m.job === 'stone') {
         const c = g.stoneCell;
         if (c !== null && within(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10), 30)) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }

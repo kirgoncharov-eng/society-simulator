@@ -177,6 +177,7 @@ function bridgeSpot(S, g) {
   for (let j = 0; j < N; j++) {
     const ws = []; for (let i = 0; i < N; i++) if (S.ter[j * N + i] === 'w') ws.push(j * N + i);
     if (!ws.length || ws.some(c => S.bridge[c])) continue;
+    if (S.groups.some(o => o !== g && o.site?.kind === 'bridge' && o.site.cells.some(c => ws.includes(c)))) continue;
     const y = j * CS + 10, x = (ws[0] % N) * CS + 10, d = Math.hypot(x - g.home.x, y - g.home.y);
     if (d > 320) continue;
     let near = false; for (const c in S.bridge) if (Math.abs(((+c / N) | 0) - j) < 6) near = true;
@@ -210,9 +211,16 @@ function planOf(S, g) {
   return g.plan;
 }
 function plotPos(g, k) {
-  const P = g.plan, street = k < 32 ? 0 : 1, kk = street ? k - 32 : k, slot = (kk >> 2) + 1, dir = (kk >> 1) & 1 ? -1 : 1, side = kk & 1 ? -1 : 1;
-  const ux = street ? -P.uy : P.ux, uy = street ? P.ux : P.uy, along = dir * (slot * 17 - 4) + (street ? 0 : 0), perp = side * 12, off = street ? 26 : 0;
-  return { x: g.home.x + ux * along - uy * perp + (street ? P.ux * off : 0), y: g.home.y + uy * along + ux * perp + (street ? P.uy * off : 0) };
+  const street = g.plan.street;
+  const side = k % 2 ? -1 : 1, row = (k >> 1) % 2 ? -1 : 1, slot = (k >> 2) + 1;
+  const variation = ((g.id * 17 + k * 31) % 11) - 5;
+  const frontage = alongStreet(g, row * (slot * 18 - 7) + variation);
+  if (distanceToSegment(frontage, street.a, street.b) > 1) return null;
+  const setback = 13 + ((g.id + k * 3) % 6);
+  const angle = Math.atan2(g.plan.uy, g.plan.ux);
+  const at = alongStreet(g, row * (slot * 18 - 7) + variation, side * setback);
+  const entrance = { x: at.x + side * g.plan.uy * 5, y: at.y - side * g.plan.ux * 5 };
+  return { ...at, angle, entrance, frontage };
 }
 function plotOk(S, g, p, radius = 6) {
   if (riverDist(S, p.x, p.y) < 24 || !streetClear(g, p, radius)) return false;
@@ -224,7 +232,7 @@ function plotOk(S, g, p, radius = 6) {
   for (const h of g.houses) if (dist(h, p) < radius + 5) return false;
   for (const b of [g.workshop, g.granary, g.shrine, g.well]) if (b && dist(b, p) < radius + 8) return false;
   if (g.cemetery && dist(g.cemetery, p) < radius + 14) return false;
-  return !g.wallPlan || g.wallPlan.segments.every(({ a, b }) => distanceToSegment(p, a, b) >= radius + 2);
+  return !g.fortifications?.some(w => w.segments.some(({ a, b }) => distanceToSegment(p, a, b) < radius + 2));
 }
 
 function riverDist(S, x, y) { const r = S.river; if (!r) return 1e9; const k = clamp(Math.round((y + 20) / 20), 0, r.length - 1); return Math.abs(x - r[k][0]); }
