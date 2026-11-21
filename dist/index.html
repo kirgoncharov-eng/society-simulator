@@ -5223,8 +5223,8 @@ function ui(force) {
   const big = S.groups.reduce((m, g) => g.members.length > (m ? m.members.length : 0) ? g : m, null);
   const st = S.stats, maxD = S.groups.reduce((m, g) => Math.max(m, g.depth), 0);
   $('tally').textContent = `В группах ${S.agents.length ? pct(inG / S.agents.length) : 0}% агентов. Крупнейшая: ${big ? `«${big.name}», ${big.members.length}` : 'нет'}. Поселений ${S.groups.filter(g => g.home).length}, домов ${S.groups.reduce((s, g) => s + g.houses.length, 0)}, полей ${S.groups.reduce((s, g) => s + g.fields.length, 0)}, мастерских ${S.groups.filter(g => g.workshop).length}, руин ${(S.ruins || []).length}. Мастеров ${S.agents.filter(a => a.master && a.master !== 'gather').length}. Государств сейчас ${(S.states || []).length} (возникало ${st.states || 0}). Походов ${st.wars || 0}, битв ${st.battles || 0}, завоеваний ${st.conquests || 0}, восстаний ${st.revolts || 0}, грабежей караванов ${st.raids || 0}; в боях погибло ${st.war || 0}; стража прогоняла чужаков ${st.border || 0} раз; монета в ${S.groups.filter(g => g.coin).length} дер., займов ${st.loans || 0}, в кабале сейчас ${S.agents.filter(a => a.bond).length}, списаний долгов ${st.jubilees || 0}, восстаний должников ${st.debtRevolts || 0}; данников сейчас ${S.groups.filter(g => g.lord).length}. Караванов в пути ${S.agents.filter(a => a.car).length}, торговых путей ${Object.keys(S.routes || {}).length}, сделок ${S.stats.trades || 0}. Иерархия до ${maxD || 1} ур. За всё время: переворотов ${st.coups}, расколов ${st.schisms}, стычек ${st.conflicts}, слияний ${st.merges}, реформ ${st.reforms}.`;
-  if (force || S.events[0] !== lastEvt) {
-    lastEvt = S.events[0];
+  if (force || S.events[0]?.id !== lastEvt) {
+    lastEvt = S.events[0]?.id;
     const list = S.events.map((e, i) => [e, i]).filter(([e]) => logAll || isKey(e)).slice(0, 50);
     $('log').innerHTML = list.map(([e, i]) => `<li><button class="ev${isMajor(e) ? ' big' : ''}${e.type === 'era' ? ' era' : ''}" data-i="${i}"><i style="background:${typeColor(e.type, 1, e.hue)}"></i><span><time>${SIM.date(e.t)} · ${TL[e.type] || ''}</time>${esc(e.text)}${(isMajor(e) || e.type === 'era' || e.type === 'law' || e.type === 'faith') && e.why ? `<small>${esc(e.why)}</small>` : ''}</span></button></li>`).join('') || '<li class="empty">Пока ничего важного.</li>';
   }
@@ -5648,7 +5648,8 @@ function rebuildStatic(W0, now) {
     V3.trees.count = V3.trunks.count = n; V3.trees.instanceMatrix.needsUpdate = V3.trunks.instanceMatrix.needsUpdate = true;
   }
   const xk = `${Math.floor(W0.tick / 30)}|${C.dark}|${W0.groups.length}|${(W0.states || []).length}|${W0.frozen}|${W0.roadV}|${Object.keys(W0.bridge || {}).length}`;
-  if (xk !== V3.texKey || now - V3.texAt > 8000) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
+  const texAge = now - V3.texAt;
+  if (!V3.texKey || texAge > 8000 || (xk !== V3.texKey && texAge >= 200)) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
   if (now - V3.objAt < 500) return;
   V3.objAt = now;
   let h = 0, b = 0, s = 0, sp = 0;
@@ -6073,6 +6074,7 @@ $('fates').addEventListener('click', e => {
 let follow = false;
 
 { const M = SIM.MODEL, [y, m, d] = M.date.split('-'); $('ver').textContent = `модель ${M.v} · ${+d} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][m - 1]} ${y}`; $('ver').title = M.note; }
+let lastPaint = -Infinity;
 function frame(now) {
   const dt = Math.min(100, now - last); last = now;
   if (ATL.on) { requestAnimationFrame(frame); return; }
@@ -6104,8 +6106,12 @@ function frame(now) {
       });
     }
   }
-  updateDailyView();
-  if (V3.on && V3.ready) render3D(now); else draw(now);
+  // At high speed leave time for controls and snapshots between canvas draws.
+  if (dayWatch || speed < 16 || now - lastPaint >= 32) {
+    updateDailyView();
+    if (V3.on && V3.ready) render3D(now); else draw(now);
+    lastPaint = now;
+  }
   if (now - lastUi > 350) { ui(); lastUi = now; }
   requestAnimationFrame(frame);
 }
