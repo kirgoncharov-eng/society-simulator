@@ -471,7 +471,7 @@ ul.arcs em.out-done{color:var(--slate);font-weight:600}ul.arcs em.out-failed,ul.
 
 <p class="band foot wrap solo" id="seedline"></p>
 
-<script>
+<script id="sim-source">
 const SIM = (() => {
 const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан','ис','ор','ну','са','вел','ин','то','ри','ла','мэ','зор','ан','ви','лей','дар','ми','ту','ре','ол','фа','ям','бо','се','ха','ют'];
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
@@ -4798,6 +4798,7 @@ function world(seed) {
   resetView();
 }
 function resetView() {
+  mainRunner.reset();
   D = new Map(); F = []; sel = null; closeFocus(true);
   acc = dayWatch ? dawnFraction() : 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
@@ -4805,6 +4806,80 @@ function resetView() {
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, распределение добычи, иерархия по охвату управления, энтропия от размера, уровней, обид и бюрократии.`;
 }
 
+// A single-file page can use the same engine in its workers, including when opened from disk.
+function engineSource() { return $('sim-source').textContent; }
+function stepWorlds(worlds, days, deadline = Infinity) {
+  for (let day = 0; day < days; day++) {
+    for (const world of worlds) SIM.step(world);
+    if (performance.now() >= deadline) break;
+  }
+}
+
+function backgroundWorlds(read, display) {
+  let worker, pending, revision = 0;
+  function reset() {
+    pending?.finish(false);
+    pending = null;
+    revision++;
+    if (worker) worker.postMessage({ revision, snapshots: read().map(SIM.serialize) });
+  }
+  function fallback() {
+    worker?.terminate();
+    worker = null;
+    pending?.finish(false);
+    pending = null;
+  }
+  if (typeof Worker !== 'undefined') {
+    const code = `
+      let worlds;
+      ${stepWorlds.toString()}
+      onmessage = ({ data }) => {
+        if (data.snapshots) {
+          worlds = data.snapshots.map(SIM.restore);
+          return;
+        }
+        worlds.forEach((world, i) => { world.params = data.params[i]; });
+        stepWorlds(worlds, data.days);
+        postMessage({ revision: data.revision, snapshots: worlds.map(SIM.serialize) });
+      };
+    `;
+    const url = URL.createObjectURL(new Blob([engineSource(), code], { type: 'text/javascript' }));
+    try {
+      worker = new Worker(url);
+      worker.onerror = fallback;
+      worker.onmessageerror = fallback;
+      worker.onmessage = ({ data }) => {
+        if (data.revision !== revision || !pending) return;
+        const old = read();
+        const worlds = data.snapshots.map((snapshot, i) => {
+          const world = SIM.restore(snapshot);
+          world.params = old[i].params;
+          return world;
+        });
+        const request = pending;
+        pending = null;
+        display(worlds);
+        request.finish(true);
+      };
+    } catch (error) { fallback(); }
+    finally { URL.revokeObjectURL(url); }
+  }
+  return {
+    reset,
+    get busy() { return !!pending; },
+    advance(days, finish) {
+      if (worker) {
+        pending = { finish };
+        worker.postMessage({ revision, days, params: read().map(world => world.params) });
+      } else {
+        stepWorlds(read(), days, performance.now() + 8);
+        finish(true);
+      }
+    },
+  };
+}
+
+const mainRunner = backgroundWorlds(() => [S], ([world]) => { S = world; });
 /* ---------- focus: auto-stop, camera, explanation ---------- */
 // linked chronicle: the events that led to this one, each can be opened (even years later, after it left the feed)
 function causesHtml(e) {
@@ -4816,7 +4891,11 @@ function evLink(id) { return id && SIM.eventById(S, id) ? ` <button class="evlin
 document.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('[data-ev]'); if (!b) return; const e = SIM.eventById(S, +b.dataset.ev); if (e) { ev.preventDefault(); focus(e, true); } });
 function focus(e, pause) {
   focusEv = e;
-  if (pause) { playing = false; syncPlay(); }
+  if (pause) {
+    playing = false;
+    if (mainRunner.busy) mainRunner.reset();
+    syncPlay();
+  }
   if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; if (!V3.on) $('camZoom').value = Math.round(100 * Math.log(z) / Math.log(5)); fly3D(e.x, e.y); }
   else vt = { x: 500, y: 500, z: 1 };
   const box = $('focus');
@@ -5727,8 +5806,8 @@ function ui(force) {
   const big = S.groups.reduce((m, g) => g.members.length > (m ? m.members.length : 0) ? g : m, null);
   const st = S.stats, maxD = S.groups.reduce((m, g) => Math.max(m, g.depth), 0);
   $('tally').textContent = `В группах ${S.agents.length ? pct(inG / S.agents.length) : 0}% агентов. Крупнейшая: ${big ? `«${big.name}», ${big.members.length}` : 'нет'}. Поселений ${S.groups.filter(g => g.home).length}, домов ${S.groups.reduce((s, g) => s + g.houses.length, 0)}, полей ${S.groups.reduce((s, g) => s + g.fields.length, 0)}, мастерских ${S.groups.filter(g => g.workshop).length}, руин ${(S.ruins || []).length}. Мастеров ${S.agents.filter(a => a.master && a.master !== 'gather').length}. Государств сейчас ${(S.states || []).length} (возникало ${st.states || 0}). Походов ${st.wars || 0}, битв ${st.battles || 0}, завоеваний ${st.conquests || 0}, восстаний ${st.revolts || 0}, грабежей караванов ${st.raids || 0}; в боях погибло ${st.war || 0}; стража прогоняла чужаков ${st.border || 0} раз; монета в ${S.groups.filter(g => g.coin).length} дер., займов ${st.loans || 0}, в кабале сейчас ${S.agents.filter(a => a.bond).length}, списаний долгов ${st.jubilees || 0}, восстаний должников ${st.debtRevolts || 0}; данников сейчас ${S.groups.filter(g => g.lord).length}. Караванов в пути ${S.agents.filter(a => a.car).length}, торговых путей ${Object.keys(S.routes || {}).length}, сделок ${S.stats.trades || 0}. Иерархия до ${maxD || 1} ур. За всё время: переворотов ${st.coups}, расколов ${st.schisms}, стычек ${st.conflicts}, слияний ${st.merges}, реформ ${st.reforms}.`;
-  if (force || S.events[0] !== lastEvt) {
-    lastEvt = S.events[0];
+  if (force || S.events[0]?.id !== lastEvt) {
+    lastEvt = S.events[0]?.id;
     const list = S.events.map((e, i) => [e, i]).filter(([e]) => logAll || isKey(e)).slice(0, 50);
     $('log').innerHTML = list.map(([e, i]) => `<li><button class="ev${isMajor(e) ? ' big' : ''}${e.type === 'era' ? ' era' : ''}" data-i="${i}"><i style="background:${typeColor(e.type, 1, e.hue)}"></i><span><time>${SIM.date(e.t)} · ${TL[e.type] || ''}</time>${esc(e.text)}${(isMajor(e) || e.type === 'era' || e.type === 'law' || e.type === 'faith') && e.why ? `<small>${esc(e.why)}</small>` : ''}</span></button></li>`).join('') || '<li class="empty">Пока ничего важного.</li>';
   }
@@ -5830,6 +5909,7 @@ function syncPlay() { $('play').textContent = playing ? 'Пауза' : 'Пуск
 
 /* ---------- two worlds ---------- */
 const EX = { on: false, A: null, B: null, k: 'scarcity', va: 0.3, vb: 0.8, playing: true, speed: 16, acc: 0, seed: null, tA: { terr: document.createElement('canvas'), key: '', at: 0, id: 'A' }, tB: { terr: document.createElement('canvas'), key: '', at: 0, id: 'B' }, lastUi: 0 };
+const experimentRunner = backgroundWorlds(() => [EX.A, EX.B], ([a, b]) => { EX.A = a; EX.B = b; });
 const XK = { scarcity: 'дефицит', inflow: 'приток', synergy: 'синергия', memory: 'память', ambition: 'амбиции', noise: 'только случайность', landPriv: 'частная земля', assembly: 'вече', coin: 'монета', usury: 'проценты' };
 const BOOL = { landPriv: ['разрешена', 'запрещена'], assembly: ['разрешено', 'запрещено'], coin: ['разрешена', 'запрещена'], usury: ['разрешены', 'запрещены'] };
 const xval = v => BOOL[EX.k] ? (v >= 0.5 ? BOOL[EX.k][0] : BOOL[EX.k][1]) : pct(v) + '%';
@@ -5841,6 +5921,7 @@ function exStart() {
   if (EX.k !== 'noise') { pa[EX.k] = EX.va; pb[EX.k] = EX.vb; }
   EX.A = SIM.newWorld(seed, pa); EX.B = SIM.newWorld(seed, pb);
   if (EX.k === 'noise') EX.B.rng = (EX.B.rng ^ 0x5bd1e995) | 0;
+  experimentRunner.reset();
   EX.acc = 0; EX.playing = true; EX.tA.key = EX.tB.key = '';
   $('xplay').textContent = 'Пауза';
   exUi(true);
@@ -5963,7 +6044,11 @@ $('xa').addEventListener('input', e => { EX.va = +e.target.value; syncX(); });
 $('xb').addEventListener('input', e => { EX.vb = +e.target.value; syncX(); });
 $('xgo').addEventListener('click', exStart);
 $('xmap').addEventListener('click', () => { EX.seed = (Math.random() * 99999) | 0; exStart(); });
-$('xplay').addEventListener('click', () => { EX.playing = !EX.playing; $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск'; });
+$('xplay').addEventListener('click', () => {
+  EX.playing = !EX.playing;
+  if (!EX.playing && experimentRunner.busy) experimentRunner.reset();
+  $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск';
+});
 document.querySelectorAll('input[name=xs]').forEach(r => r.addEventListener('change', e => { EX.speed = +e.target.value; }));
 syncX();
 
@@ -5978,12 +6063,23 @@ function set3D(on) {
   document.body.classList.toggle('flat', !on);
   V3.wanted = on;
   if (!on) { V3.on = false; $('camZoom').value = Math.round(100 * Math.log(vt.z) / Math.log(5)); cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
-  if (V3.ready) { V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
+  if (V3.ready) { $('v3msg').hidden = true; V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
   if (V3.loading) return;
   V3.loading = true; $('v3msg').hidden = false; $('v3msg').textContent = 'Загружаю 3D…';
   (async () => {
-    try { if (!window.THREE) await loadScript(URL3[0]); if (!THREE.OrbitControls) await loadScript(URL3[1]); init3D(); V3.ready = true; $('v3msg').hidden = true; set3D(V3.wanted); }
-    catch (e) { $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.'; V3.loading = false; }
+    try {
+      if (!window.THREE) await loadScript(URL3[0]);
+      if (!THREE.OrbitControls) await loadScript(URL3[1]);
+      if (V3.wanted) {
+        init3D();
+        V3.ready = true;
+        set3D(true);
+      }
+    } catch (e) {
+      $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.';
+    } finally {
+      V3.loading = false;
+    }
   })();
 }
 function cellH(t) { return t === 's' ? -16 : t === 'b' ? 0.2 : t === 'h' ? 26 : t === 'f' ? 3 : t === 'w' ? -9 : t === 'r' ? 0.5 : 1.5; }
@@ -6160,7 +6256,8 @@ function rebuildStatic(W0, now) {
     V3.trees.count = V3.trunks.count = n; V3.trees.instanceMatrix.needsUpdate = V3.trunks.instanceMatrix.needsUpdate = true;
   }
   const xk = `${Math.floor(W0.tick / 30)}|${C.dark}|${W0.groups.length}|${(W0.states || []).length}|${W0.frozen}|${W0.roadV}|${Object.keys(W0.bridge || {}).length}`;
-  if (xk !== V3.texKey || now - V3.texAt > 8000) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
+  const texAge = now - V3.texAt;
+  if (!V3.texKey || texAge > 8000 || (xk !== V3.texKey && texAge >= 200)) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
   if (now - V3.objAt < 500) return;
   V3.objAt = now;
   let h = 0, b = 0, s = 0, sp = 0;
@@ -6527,7 +6624,6 @@ function packWorld(seed, snaps, eras) {
 }`;
 const ATLRUN = { on: false, workers: [], queue: [], done: 0, total: 0, t0: 0, res: [], params: null, years: 60, fb: null };
 const MODEL_V = SIM.MODEL.v;
-function atlSrc() { for (const s of document.scripts) { const t = s.textContent || ''; if (t.includes('const SIM = (() =>') && !t.includes('function atlSrc')) return t; } return null; }
 function atlStart() {
   const n = +$('atlN').value, years = +$('atlY').value, own = $('atlOwn').checked;
   const base = 1 + ((Math.random() * 900000) | 0);
@@ -6535,7 +6631,7 @@ function atlStart() {
   ATLRUN.params = own && S ? Object.assign({}, S.params) : null;
   ATLRUN.queue = Array.from({ length: n }, (_, i) => ({ i, seed: base + i * 7919 }));
   $('atlGo').hidden = true; $('atlStop').hidden = false; atlProg();
-  const src = atlSrc(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+  const src = engineSource(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
   let ok = false;
   if (src && typeof Worker !== 'undefined') {
     try {
@@ -6670,36 +6766,54 @@ $('fates').addEventListener('click', e => {
 let follow = false;
 
 { const M = SIM.MODEL, [y, m, d] = M.date.split('-'); $('ver').textContent = `модель ${M.v} · ${+d} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][m - 1]} ${y}`; $('ver').title = M.note; }
+let lastPaint = -Infinity;
 function frame(now) {
   const dt = Math.min(100, now - last); last = now;
   if (ATL.on) { requestAnimationFrame(frame); return; }
   if (EX.on) {
     if (EX.playing && EX.A) {
-      EX.acc += dt * 12 * EX.speed / 1000;
-      const n = Math.min(Math.floor(EX.acc), 500); EX.acc -= n; if (EX.acc > 40) EX.acc = 0;
-      const t1 = performance.now(); for (let i = 0; i < n; i++) { SIM.step(EX.A); SIM.step(EX.B); if ((i & 7) === 7 && performance.now() - t1 > 14) { EX.acc = 0; break; } }
+      EX.acc = Math.min(60, EX.acc + dt * 12 * EX.speed / 1000);
+      const days = Math.floor(EX.acc);
+      if (!experimentRunner.busy && days >= Math.max(1, EX.speed / 4)) {
+        EX.acc -= days;
+        experimentRunner.advance(days, () => {});
+      }
     }
     if (EX.A) { drawMini(EX.A, $('mA'), EX.tA); drawMini(EX.B, $('mB'), EX.tB); }
     if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
     requestAnimationFrame(frame); return;
   }
-  const t0b = performance.now();
   if (playing) {
-    acc += dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000);
-    let n = Math.min(Math.floor(acc), 900); acc -= n; if (acc > 60) acc = 0;
-    for (let i = 0; i < n; i++) {
-      SIM.step(S);
-      if (S.tick % 30 === 0) { checkStops(now); if (!playing) { acc = 0; break; } }
-      if ((i & 7) === 7 && performance.now() - t0b > 14) { acc = 0; break; }
+    acc = Math.min(60, acc + dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000));
+    // Stop at the same monthly checkpoints as the synchronous simulation.
+    const checkpoint = 30 - S.tick % 30;
+    const days = Math.min(Math.floor(acc), checkpoint);
+    const batch = dayWatch ? 1 : Math.min(checkpoint, Math.max(1, speed / 2));
+    if (!mainRunner.busy && days >= batch) {
+      acc -= days;
+      mainRunner.advance(days, completed => {
+        if (!completed || S.tick % 30) return;
+        checkStops(performance.now());
+        if (!playing) acc = 0;
+      });
     }
   }
-  updateDailyView();
-  if (V3.on && V3.ready) render3D(now); else draw(now);
+  // At high speed leave time for controls and snapshots between canvas draws.
+  if (dayWatch || speed < 16 || now - lastPaint >= 32) {
+    updateDailyView();
+    if (V3.on && V3.ready) render3D(now); else draw(now);
+    lastPaint = now;
+  }
   if (now - lastUi > 350) { ui(); lastUi = now; }
   requestAnimationFrame(frame);
 }
 
-$('play').addEventListener('click', () => { playing = !playing; if (playing && focusEv) closeFocus(); syncPlay(); });
+$('play').addEventListener('click', () => {
+  playing = !playing;
+  if (!playing && mainRunner.busy) mainRunner.reset();
+  if (playing && focusEv) closeFocus();
+  syncPlay();
+});
 document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
   dayWatch = e.target.value === 'day';
   if (!dayWatch) speed = +e.target.value;
@@ -6717,7 +6831,7 @@ $('back').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
-  SIM.shock(S, b.dataset.shock); seenEv = S.evId || 0; ui(true);
+  SIM.shock(S, b.dataset.shock); mainRunner.reset(); seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
 }));
 $('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
@@ -6810,6 +6924,18 @@ function start(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 window.__lab = () => S; window.__v3 = () => V3;
+window.__labAdvance = async days => {
+  playing = false;
+  if (mainRunner.busy) mainRunner.reset();
+  syncPlay();
+  const target = S.tick + days;
+  while (S.tick < target) {
+    const completed = await new Promise(resolve => mainRunner.advance(Math.min(360, target - S.tick), resolve));
+    if (!completed) throw new Error('World advance interrupted');
+  }
+  seenEv = S.evId || 0;
+  ui(true);
+};
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 }
 
