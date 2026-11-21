@@ -1,0 +1,30 @@
+name: 1.12 verification
+on:
+  push:
+    branches: [codex/check-1.12]
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python -u tools/page_check.py
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: |
+          nproc
+          taskset -pc $$
+          time SOCIETY_WORKERS=1 node tools/audit.mjs > /tmp/audit1.txt
+          time SOCIETY_WORKERS=4 node tools/audit.mjs > /tmp/audit4.txt
+          cmp /tmp/audit1.txt /tmp/audit4.txt
