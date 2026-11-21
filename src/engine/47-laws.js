@@ -4,7 +4,7 @@
 // three opponents get chronicle lines; the losers turn rivals of the author. Boehm 1993: a coalition of the rank and file
 // keeps the ambitious in check; Blanton & Fargher 2008: a ruler who lives on his own people has to deal with them.
 const LAW_CAUSE = {
-  assembly: ['coup', 'crisis', 'battle', 'conquest', 'famine', 'revolt', 'schism', 'exodus', 'debt'],
+  assembly: ['tyranny', 'tax', 'coup', 'crisis', 'battle', 'conquest', 'famine', 'revolt', 'schism', 'exodus', 'debt'],
   dissolve: ['battle', 'conquest', 'famine', 'exodus', 'raid'],
   hered: ['succession', 'coup', 'crisis', 'found', 'colony'],
   land: ['famine', 'debt', 'land', 'case', 'law'],
@@ -64,3 +64,46 @@ function rivalHeads(S, g, lin) {
   const strong = hs.filter(h => linShare(S, g, linOf(S, h)) >= 0.1);
   return topBy(strong.length ? strong : hs, h => h.status, 2);
 }
+/* ---------- power in daily life (П3): the right to bread, the leader's share, the memory of tyranny ---------- */
+// Scott 1976: people rise not because much is taken but because the ruler breaks the right to subsistence. In a hungry
+// winter the leader either opens his store or keeps taking his share; both go to the chronicle with the famine as the cause.
+function breadTest(S, g, L, mem, famEv) {
+  const hungry = mem.filter(m => m !== L && m.wealth < 0 && !kin(m, L));
+  if (!hungry.length) return;
+  const avgW = mem.reduce((s, m) => s + Math.max(0, m.wealth), 0) / Math.max(1, mem.length);
+  if (L.wealth > 6 && (L.coop > 0.55 || g.gov === 'assembly')) {
+    const give = Math.min(L.wealth * 0.5, hungry.length * 3); L.wealth -= give;
+    for (const m of hungry) { m.wealth += give / hungry.length; bump(m, L, 0.15); }
+    L.rep = clamp((L.rep || 0) + 0.1, -1, 1); g.legit = clamp(g.legit + 0.1, 0, 1); L.status += 1;
+    const ev = log(S, 'aid', `Голодная зима в «${g.name}»: вождь ${L.name} открывает свой амбар`, g.home.x, g.home.y, g.hue, { why: sent([`голодают ${hungry.length} ${pl(hungry.length, 'человек', 'человека', 'человек')}`, `${L.name} ${fem(L, 'раздаёт', 'раздаёт')} ${qty(give, 'food')} из своего запаса`, 'щедрость в голод — то, за что вождя и терпят']), who: [L.id, ...hungry.slice(0, 4).map(m => m.id)], gs: [g.id], causes: famEv ? [famEv] : undefined });
+    bio(S, L, 'feedAll', `В голод открывает свой амбар для «${g.name}»`, ev.id);
+    for (const m of topBy(hungry, m => m.status, 3)) bio(S, m, 'fedByLeader', `В голод получает зерно из амбара вождя ${L.name}`, ev.id);
+    S.stats.breadKept = (S.stats.breadKept || 0) + 1;
+    return;
+  }
+  if (g.take < 0.15 || L.wealth < Math.max(6, avgW * 3)) return;
+  const ev = log(S, 'tyranny', `Голодная зима в «${g.name}», а вождь ${L.name} не уменьшает свою долю: ${P0(g.take)} общего хлеба`, g.home.x, g.home.y, g.hue, { why: sent([`голодают ${hungry.length} ${pl(hungry.length, 'человек', 'человека', 'человек')}`, `у ${L.name} запас ${Math.round(L.wealth)} — в ${Math.round(L.wealth / Math.max(0.5, avgW))} ${pl(Math.round(L.wealth / Math.max(0.5, avgW)), 'раз', 'раза', 'раз')} больше, чем у обычной семьи`, 'вождь, который берёт хлеб у голодных, нарушает право на пропитание; такое не прощают']), who: [L.id, ...hungry.slice(0, 4).map(m => m.id)], gs: [g.id], causes: famEv ? [famEv] : undefined });
+  g.tyr = { t: S.tick, ev: cite(S, ev.id), L: L.id, lin: linOf(S, L), name: L.name };
+  L.rep = clamp((L.rep || 0) - 0.15, -1, 1); g.legit = clamp(g.legit - 0.15, 0.1, 1);
+  for (const m of hungry) { m.res = clamp(m.res + 0.25, 0, 1); m.trust[L.id] = clamp((m.trust[L.id] || 0) - 0.15, -1, 1); }
+  const heads = topBy(hungry, m => m.status + (m.spouse ? 2 : 0), 4);
+  for (const m of heads) bio(S, m, 'tyranny', `Голодает, пока вождь ${L.name} берёт свою долю хлеба`, ev.id);
+  if (heads[0]) bond(S, heads[0], L, 'enemy', 'брал хлеб у голодных', 0.6, false, ev.id);
+  S.stats.breadBroken = (S.stats.breadBroken || 0) + 1;
+}
+// the leader's share felt by families: the first time a ruler takes a third of the common harvest, the heads of the other
+// lines note it (once per ruler)
+function shareFelt(S, g, L) {
+  if (g.take < 0.33 || g.taxL === L.id || !g.home || g.members.length < 8) return;
+  g.taxL = L.id;
+  const heads = lineHeads(S, g).filter(h => h !== L && linOf(S, h) !== linOf(S, L));
+  if (!heads.length) return;
+  const ev = (g.members.length >= 15 ? log : note)(S, 'tax', `Вождь ${L.name} забирает уже ${P0(g.take)} общего урожая «${g.name}»`, g.home.x, g.home.y, g.hue, { why: sent([`с каждой семьи — треть и больше`, `главы родов недовольны: ${heads.slice(0, 3).map(h => h.name).join(', ')}`]), who: [L.id, ...heads.slice(0, 3).map(h => h.id)], gs: [g.id], causes: g.powerEv && eventById(S, g.powerEv) ? [g.powerEv] : undefined });
+  // only the chronicle: the grievance itself already grows every month from the unfair share (no double count)
+  for (const h of heads.slice(0, 5)) bio(S, h, 'tax', `Отдаёт вождю ${L.name} ${P0(g.take)} урожая своей семьи`, ev.id);
+}
+// a tyrant's line is remembered: its candidates lose votes for thirty years
+const tyrantLine = (S, g, c) => g.tyr && S.tick - g.tyr.t < 360 * 30 && linOf(S, c) === g.tyr.lin;
+// Hirschman 1970: exit is costly, and more so each time: whoever has already left a village or two puts up with the next
+// one longer (a house, fields and kin to lose again). The first exit is as before: it is the repeats that become rarer
+function exitCost(S, a, g) { const quits = (a.kc && a.kc.quit) || 0; return 1 / (1 + 2 * quits); }
