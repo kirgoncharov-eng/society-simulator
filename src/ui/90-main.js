@@ -1,4 +1,5 @@
 { const M = SIM.MODEL, [y, m, d] = M.date.split('-'); $('ver').textContent = `модель ${M.v} · ${+d} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][m - 1]} ${y}`; $('ver').title = M.note; }
+let lastPaint = -Infinity;
 function frame(now) {
   const dt = Math.min(100, now - last); last = now;
   if (ATL.on) { requestAnimationFrame(frame); return; }
@@ -30,8 +31,12 @@ function frame(now) {
       });
     }
   }
-  updateDailyView();
-  if (V3.on && V3.ready) render3D(now); else draw(now);
+  // At high speed leave time for controls and snapshots between canvas draws.
+  if (dayWatch || speed < 16 || now - lastPaint >= 32) {
+    updateDailyView();
+    if (V3.on && V3.ready) render3D(now); else draw(now);
+    lastPaint = now;
+  }
   if (now - lastUi > 350) { ui(); lastUi = now; }
   requestAnimationFrame(frame);
 }

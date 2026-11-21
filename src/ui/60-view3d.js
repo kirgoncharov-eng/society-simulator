@@ -178,7 +178,8 @@ function rebuildStatic(W0, now) {
     V3.trees.count = V3.trunks.count = n; V3.trees.instanceMatrix.needsUpdate = V3.trunks.instanceMatrix.needsUpdate = true;
   }
   const xk = `${Math.floor(W0.tick / 30)}|${C.dark}|${W0.groups.length}|${(W0.states || []).length}|${W0.frozen}|${W0.roadV}|${Object.keys(W0.bridge || {}).length}`;
-  if (xk !== V3.texKey || now - V3.texAt > 8000) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
+  const texAge = now - V3.texAt;
+  if (!V3.texKey || texAge > 8000 || (xk !== V3.texKey && texAge >= 200)) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
   if (now - V3.objAt < 500) return;
   V3.objAt = now;
   let h = 0, b = 0, s = 0, sp = 0;
