@@ -39,8 +39,8 @@ function goalEnd(S, a, x, out, txt, ev, quiet) {
   const k = 'arc_' + x.k + '_' + out; S.stats[k] = (S.stats[k] || 0) + 1;
 }
 // a life ends (or leaves the island): what was still wanted stays undone
-function goalsOnDeath(S, a, why) {
-  for (const x of a.goals || []) if (!x.end) { x.end = S.tick; const away = why === 'emigr' || why === 'move'; x.out = away ? 'abandoned' : 'died'; x.endTxt = away ? 'уплывает с острова, так и не добившись своего' : 'умирает, так и не добившись своего'; const k = 'arc_' + x.k + '_' + x.out; S.stats[k] = (S.stats[k] || 0) + 1; }
+function goalsOnDeath(S, a, why, ev) {
+  for (const x of a.goals || []) if (!x.end) { x.end = S.tick; if (ev) x.endEv = cite(S, ev); const away = why === 'emigr' || why === 'move'; x.out = away ? 'abandoned' : 'died'; x.endTxt = away ? 'уплывает с острова, так и не добившись своего' : 'умирает, так и не добившись своего'; const k = 'arc_' + x.k + '_' + x.out; S.stats[k] = (S.stats[k] || 0) + 1; }
 }
 // the event of the line just written about a.leadership (a coup, a succession, a founding): the ending of a road to power
 function lastRef(a, kinds, since) { for (let i = (a.bio || []).length - 1; i >= 0 && a.bio[i][0] >= since; i--) if (kinds.includes(a.bio[i][1]) && a.bio[i][3]) return a.bio[i][3]; return null; }
@@ -136,7 +136,7 @@ function goalsMonth(S) {
     if (pw) {
       if (a.role === 'leader' && g && g.members.length >= 3 && S.tick > pw.t) {
         const ev = lastRef(a, ['leader', 'heir', 'coup', 'found', 'schism'], S.tick - 40);
-        goalEnd(S, a, pw, 'done', pw.back ? `Возвращает себе власть: снова во главе «${g.name}»` : `Добивается своего: во главе «${g.name}»`, ev, !!ev && !pw.back);
+        goalEnd(S, a, pw, 'done', pw.back ? (g.id === pw.g ? `Возвращает себе власть: снова во главе «${g.name}»` : `Снова у власти, теперь во главе «${g.name}»`) : `Добивается своего: во главе «${g.name}»`, ev, !!ev && !pw.back);
       } else if (a.exiled && Object.values(a.exiled).some(t => t > pw.t)) goalEnd(S, a, pw, 'failed', 'Изгнание кладёт конец надеждам на власть');
       else if (a.age > 62 || S.tick - pw.t > 360 * 25) goalEnd(S, a, pw, 'abandoned', 'Стареет и оставляет мечту о власти');
     }

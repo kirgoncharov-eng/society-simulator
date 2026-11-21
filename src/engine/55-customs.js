@@ -15,6 +15,7 @@ function ruling(S, g, kind, outcome, ev) {
   if (same.length >= 2 && same.length >= last.length - 1) setCustom(S, g, kind, outcome, same.map(c => c[3]).filter(Boolean), `решали так ${same.length} ${pl(same.length, 'раз', 'раза', 'раз')} из ${last.length}`);
 }
 function setCustom(S, g, kind, outcome, causes, how) {
+  causes = (causes || []).filter(id => eventById(S, id)); // only rulings whose events are still known
   g.customs = g.customs || {}; g.customs[kind] = outcome; S.stats.customs = (S.stats.customs || 0) + 1;
   const L = S._a.get(g.leader);
   g.customEv = g.customEv || {};

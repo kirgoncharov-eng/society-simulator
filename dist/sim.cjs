@@ -84,7 +84,7 @@ function archiveGC(S) {
   }
   for (const l of S.legends || []) { refs(l.bio); goalRefs(l.goals); }
   for (const id of S.secrets || []) keep.add(id);
-  for (const g of S.groups) for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+  for (const g of S.groups) { for (const k in g.customEv || {}) keep.add(g.customEv[k]); for (const c of g.cases || []) if (c[3]) keep.add(c[3]); }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
@@ -135,7 +135,9 @@ function homeEconomy(S, g, mem) {
     for (const m of fishers) {
       if (seas === 0 && !needy) continue;
       const c = 3.4 * (0.4 + m.energy * 0.6) * (0.3 + 0.7 * stock) * (seas === 0 ? 0.45 : 1) * seaOpen; catchT += c;
-      const risk = seas === 0 ? 0.0025 : seas === 3 ? 0.0012 : seas === 1 ? 0.0005 : 0.00025;
+      // an old hand reads the weather and the water: after three years of going out a fisher is lost half as often
+      m.seaM = (m.seaM || 0) + 1;
+      const risk = (seas === 0 ? 0.0025 : seas === 3 ? 0.0012 : seas === 1 ? 0.0005 : 0.00025) * (m.seaM > 36 ? 0.5 : 1);
       if (rnd(S) < risk * seaOpen) { if (rnd(S) < 0.4 && g.fboats) g.fboats--; if (!S.firstLost || S.tick - S.firstLost > 360 * 6) { log(S, 'drown', `Лодка из «${g.name}» не возвращается с моря: ${m.name} не вернул${m.sex === 'f' ? 'ась' : 'ся'}`, g.landing.x, g.landing.y, g.hue, { first: !S.firstLost, why: seas === 0 ? 'Зимние шторма: в это время в море выходят только от голода.' : 'Море опасно и летом: лодку могло опрокинуть ветром.', who: [m.id], gs: [g.id] }); S.firstLost = S.tick; } removeAgent(S, m, 'lostAtSea'); }
     }
     boatFriends(S, g, fishers.filter(m => S._a.has(m.id)));
@@ -2344,6 +2346,7 @@ function ruling(S, g, kind, outcome, ev) {
   if (same.length >= 2 && same.length >= last.length - 1) setCustom(S, g, kind, outcome, same.map(c => c[3]).filter(Boolean), `решали так ${same.length} ${pl(same.length, 'раз', 'раза', 'раз')} из ${last.length}`);
 }
 function setCustom(S, g, kind, outcome, causes, how) {
+  causes = (causes || []).filter(id => eventById(S, id)); // only rulings whose events are still known
   g.customs = g.customs || {}; g.customs[kind] = outcome; S.stats.customs = (S.stats.customs || 0) + 1;
   const L = S._a.get(g.leader);
   g.customEv = g.customEv || {};
@@ -2730,8 +2733,8 @@ function goalEnd(S, a, x, out, txt, ev, quiet) {
   const k = 'arc_' + x.k + '_' + out; S.stats[k] = (S.stats[k] || 0) + 1;
 }
 // a life ends (or leaves the island): what was still wanted stays undone
-function goalsOnDeath(S, a, why) {
-  for (const x of a.goals || []) if (!x.end) { x.end = S.tick; const away = why === 'emigr' || why === 'move'; x.out = away ? 'abandoned' : 'died'; x.endTxt = away ? 'уплывает с острова, так и не добившись своего' : 'умирает, так и не добившись своего'; const k = 'arc_' + x.k + '_' + x.out; S.stats[k] = (S.stats[k] || 0) + 1; }
+function goalsOnDeath(S, a, why, ev) {
+  for (const x of a.goals || []) if (!x.end) { x.end = S.tick; if (ev) x.endEv = cite(S, ev); const away = why === 'emigr' || why === 'move'; x.out = away ? 'abandoned' : 'died'; x.endTxt = away ? 'уплывает с острова, так и не добившись своего' : 'умирает, так и не добившись своего'; const k = 'arc_' + x.k + '_' + x.out; S.stats[k] = (S.stats[k] || 0) + 1; }
 }
 // the event of the line just written about a.leadership (a coup, a succession, a founding): the ending of a road to power
 function lastRef(a, kinds, since) { for (let i = (a.bio || []).length - 1; i >= 0 && a.bio[i][0] >= since; i--) if (kinds.includes(a.bio[i][1]) && a.bio[i][3]) return a.bio[i][3]; return null; }
@@ -2827,7 +2830,7 @@ function goalsMonth(S) {
     if (pw) {
       if (a.role === 'leader' && g && g.members.length >= 3 && S.tick > pw.t) {
         const ev = lastRef(a, ['leader', 'heir', 'coup', 'found', 'schism'], S.tick - 40);
-        goalEnd(S, a, pw, 'done', pw.back ? `Возвращает себе власть: снова во главе «${g.name}»` : `Добивается своего: во главе «${g.name}»`, ev, !!ev && !pw.back);
+        goalEnd(S, a, pw, 'done', pw.back ? (g.id === pw.g ? `Возвращает себе власть: снова во главе «${g.name}»` : `Снова у власти, теперь во главе «${g.name}»`) : `Добивается своего: во главе «${g.name}»`, ev, !!ev && !pw.back);
       } else if (a.exiled && Object.values(a.exiled).some(t => t > pw.t)) goalEnd(S, a, pw, 'failed', 'Изгнание кладёт конец надеждам на власть');
       else if (a.age > 62 || S.tick - pw.t > 360 * 25) goalEnd(S, a, pw, 'abandoned', 'Стареет и оставляет мечту о власти');
     }
@@ -3173,13 +3176,13 @@ function removeAgent(S, a, why) {
   if (why !== 'move' && why !== 'emigr') houseOwnerDies(S, a);
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
-  goalsOnDeath(S, a, why);
+  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why);
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
     if (why !== 'killed') bio(S, a, why === 'drown' || why === 'lostAtSea' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
     const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'lostAtSea' ? ', в море' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
-    { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); }
+    { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); goalsOnDeath(S, a, why, fev); }
     legend(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
     const w = Math.max(0, a.wealth), g = S._g.get(a.group);

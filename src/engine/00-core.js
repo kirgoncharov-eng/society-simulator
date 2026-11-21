@@ -83,7 +83,7 @@ function archiveGC(S) {
   }
   for (const l of S.legends || []) { refs(l.bio); goalRefs(l.goals); }
   for (const id of S.secrets || []) keep.add(id);
-  for (const g of S.groups) for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+  for (const g of S.groups) { for (const k in g.customEv || {}) keep.add(g.customEv[k]); for (const c of g.cases || []) if (c[3]) keep.add(c[3]); }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }

@@ -15,7 +15,7 @@ let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
 const age = { deaths: 0, sum: 0, eligible: 0, reached: 0, left: 0 };
 const lastBirthTick = Math.max(0, (Y - 60) * 360);
 const islandHistory = [];
-const arcs = { old: 0, lived: 0, closed: 0, linked: 0, open: 0, kinds: {} };
+const arcs = { old: 0, lived: 0, closed: 0, linked: 0, open: 0, lost: 0, kinds: {} };
 
 function newShelterLinks(S) {
   // Each memory-driven move increments aidMemoryMoves and emits one shelter event.
@@ -94,6 +94,7 @@ for (let i = 0; i < W; i++) {
   for (const a of S.agents) if (a.age > 40) { arcs.old++; if ((a.goals || []).some(x => x.end && x.out !== 'died')) arcs.lived++; }
   for (const G of S.agents.map(a => a.goals || []).concat((S.legends || []).map(l => l.goals || []))) for (const x of G) {
     if (!x.end) { arcs.open++; continue; }
+    if (x.out === 'died' && !x.endEv) { arcs.lost++; continue; } // died at sea or murdered: no funeral to point at
     arcs.closed++; if (x.ev && SIM.eventById(S, x.ev) && SIM.eventById(S, x.endEv)) arcs.linked++;
   }
   for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
@@ -112,7 +113,7 @@ console.log(`households: living houses per family ${(houseN / Math.max(1, famN))
   console.log(`linked chronicle (share with a cause): ${['coup', 'deposed', 'exiled', 'quit', 'feud', 'revenge', 'marry', 'house', 'inheritHouse', 'dispute', 'wergild', 'aidReceived', 'client'].map(k => pc(refK, k)).join(', ')}; ties: ${['enemy', 'sworn', 'rival', 'debt', 'love', 'friend'].map(k => pc(bondRef, k)).join(', ')}`); }
 console.log(`bonds: ${(bondN / Math.max(1, adultN)).toFixed(1)} per adult (${Object.entries(bondK).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}); enmities (trust < -0.3) with a named cause ${Math.round(feudsNamed / Math.max(1, feuds) * 100)}% of ${feuds}`);
 { const K = arcs.kinds, line = Object.keys(K).sort().map(k => `${k} ${Object.entries(K[k]).sort((p, q) => q[1] - p[1]).map(([o, n]) => `${o} ${n}`).join('/')}`).join('; ');
-  console.log(`arcs: adults over 40 with a finished arc ${percent(arcs.lived, arcs.old)} (${arcs.lived}/${arcs.old}); kept arcs with opening and ending in the chronicle ${coverage(arcs.linked, arcs.closed)}, still open ${arcs.open}; by kind and outcome: ${line}`); }
+  console.log(`arcs: adults over 40 with a finished arc ${percent(arcs.lived, arcs.old)} (${arcs.lived}/${arcs.old}); kept arcs with opening and ending in the chronicle ${coverage(arcs.linked, arcs.closed)}, still open ${arcs.open}, cut short by a death with no funeral ${arcs.lost}; by kind and outcome: ${line}`); }
 console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
 console.log(`grain memories: ${memoryMoves} moves changed (${sponsoredMoves} through sponsorship), ${aidReturned} gifts returned (${aidChanged} decisions changed)`);
 console.log(`mean adult age at death (15+): ${age.deaths ? (age.sum / age.deaths).toFixed(1) + ' years, n=' + age.deaths : 'n/a'}`);
