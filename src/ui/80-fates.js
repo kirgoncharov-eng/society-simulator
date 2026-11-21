@@ -28,11 +28,8 @@ function arcsHtml(goals, open) {
   return `<ul class="arcs">${G.map(x => `<li><b>${esc(SIM.GOAL_NAME[x.k] || x.k)}</b>${x.end ? ` · <em class="out-${x.out}">${esc(SIM.GOAL_OUT[x.out] || x.out)}</em>` : ' · <em>в пути</em>'}<br>${step('tie', x.t, x.txt, x.ev)}${(x.turns || []).map(t => ' → ' + step('turn', t[0], t[1], t[2])).join('')}${x.end ? ' → ' + step('end', x.end, x.endTxt, x.endEv) : ''}</li>`).join('')}</ul>`;
 }
 function fateList() {
-  const alive = S.agents.filter(a => a.bio && (a.drama || 0) >= 9).map(a => ({ id: a.id, name: a.name, sex: a.sex, bio: a.bio, goals: a.goals, drama: a.drama, alive: true, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, g: a.group }));
-  const dead = (S.legends || []).map(l => Object.assign({ alive: false }, l));
-  const all = alive.concat(dead).map(p => Object.assign(p, { arc: arcOf(p), kinds: new Set(p.bio.map(b => b[1])).size }));
-  all.sort((x, y) => (y.drama * (0.6 + y.kinds / 12)) - (x.drama * (0.6 + x.kinds / 12)));
-  return all.slice(0, 12);
+  // ranked in the engine by the weight of their turns, the same list the audit measures
+  return SIM.topFates(S, 12).map(p => Object.assign(p, { arc: arcOf(p) }));
 }
 let fateKey = '';
 function drawFates(force) {

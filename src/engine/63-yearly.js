@@ -106,5 +106,5 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, GOAL_NAME, GOAL_OUT, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, GOAL_NAME, GOAL_OUT, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 

@@ -2422,15 +2422,49 @@ function droughtYear(S) {
 
 /* ---------- fates: life chronicle, memory, motives ---------- */
 const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, goal: 1, goalTurn: 1.5, goalEnd: 2, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+// Drama counts turns of fate, not events. Everyday lines (a child born, a move, a house of one's own) are part of the
+// chronicle but weigh nothing; the same turn again over the whole life weighs 1/(n+1)² of the first, so repeats add up to
+// at most 1.64 of one turn; a turn that undoes an
+// earlier one (the fall after the rise, the return after the exile, freedom after bondage) weighs half as much again.
+const EVERYDAY = new Set(['born', 'child', 'move', 'house', 'apprentice', 'inherit', 'inheritHouse', 'aidReceived', 'aidReturned', 'death', 'goal']);
+const RISE = ['leader', 'heir', 'coup', 'found', 'schism'], LOW = ['bond', 'client', 'orphan', 'exiled', 'deposed'];
+const REVERSAL = { deposed: RISE, exiled: RISE, returned: ['exiled', 'quit'], freed: ['bond', 'client'], reconcile: ['enemy', 'rival', 'betrayed'], revenge: ['feud'], wergild: ['feud'], battleW: ['battleL'], leader: LOW, heir: LOW, coup: LOW, found: LOW, betrayed: ['sworn'], spouseDied: ['marry'] };
+const turnKind = k => !EVERYDAY.has(k);
+function turnWeight(a, k) {
+  if (EVERYDAY.has(k)) return 0;
+  const kc = a.kc || (a.kc = {}), n = kc[k] || 0;
+  const back = REVERSAL[k] && REVERSAL[k].some(x => kc[x]);
+  return (BW[k] || 1) / ((1 + n) * (1 + n)) * (back ? 1.5 : 1);
+}
 // ref: id of the event this line refers to (see the linked chronicle in 00-core)
 function bio(S, a, k, s, ref) {
   if (!a) return;
   const b = a.bio || (a.bio = []);
-  // the same turn of fate repeated within five years matters less each time
-  let rep = 0; for (let i = b.length - 1; i >= 0 && S.tick - b[i][0] < 360 * 5; i--) if (b[i][1] === k) rep++;
+  a.drama = (a.drama || 0) + turnWeight(a, k);
+  const kc = a.kc || (a.kc = {}); kc[k] = (kc[k] || 0) + 1;
   b.push(ref ? [S.tick, k, s, cite(S, ref)] : [S.tick, k, s]);
   if (b.length > 46) b.splice(6, b.length - 46);
-  a.drama = (a.drama || 0) + (BW[k] || 1) / (1 + rep);
+}
+// the lives the Fates tab shows: the living and the legends of the dead, by the weight of their turns
+const FATE_MIN = 9;
+function topFates(S, n) {
+  const alive = S.agents.filter(a => a.bio && (a.drama || 0) >= FATE_MIN).map(a => ({ id: a.id, name: a.name, sex: a.sex, bio: a.bio, goals: a.goals, drama: a.drama, alive: true, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, g: a.group }));
+  const dead = (S.legends || []).map(l => Object.assign({ alive: false }, l));
+  return alive.concat(dead).sort((x, y) => y.drama - x.drama).slice(0, n);
+}
+// how good the drama of the top lives is: how varied their turns, how many lived an arc to its end, how much repeats
+function dramaMeasure(lives) {
+  let lines = 0, repeats = 0, kindSum = 0, arcs = 0; const all = {};
+  for (const p of lives) {
+    const seen = new Set();
+    for (const b of p.bio) { if (!turnKind(b[1])) continue; lines++; if (seen.has(b[1])) repeats++; seen.add(b[1]); all[b[1]] = (all[b[1]] || 0) + 1; }
+    kindSum += seen.size;
+    if ((p.goals || []).some(x => x.end && x.out !== 'died')) arcs++;
+  }
+  const top = Object.entries(all).sort((x, y) => y[1] - x[1])[0];
+  // loops: a turn that comes back three times or more in one life shows where the world goes round in circles
+  const loops = {}; for (const p of lives) { const c = {}; for (const b of p.bio) if (turnKind(b[1])) c[b[1]] = (c[b[1]] || 0) + 1; for (const k in c) if (c[k] >= 3) loops[k] = (loops[k] || 0) + 1; }
+  return { loops, lives: lives.length, kinds: lives.length ? kindSum / lives.length : 0, distinct: Object.keys(all).length, repeats: lines ? repeats / lines : 0, arcs: lives.length ? arcs / lives.length : 0, topKind: top ? top[0] : null, topShare: top && lines ? top[1] / lines : 0 };
 }
 // attach a reference once the event exists: to a chronicle line written this very tick, or to a tie
 function refLast(S, a, kind, id) { if (!a || !a.bio || !id) return; for (let i = a.bio.length - 1; i >= 0 && a.bio[i][0] === S.tick; i--) if (a.bio[i][1] === kind && !a.bio[i][3]) { a.bio[i][3] = cite(S, id); return; } }
@@ -4566,7 +4600,7 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, GOAL_NAME, GOAL_OUT, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, GOAL_NAME, GOAL_OUT, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {
@@ -6494,11 +6528,8 @@ function arcsHtml(goals, open) {
   return `<ul class="arcs">${G.map(x => `<li><b>${esc(SIM.GOAL_NAME[x.k] || x.k)}</b>${x.end ? ` · <em class="out-${x.out}">${esc(SIM.GOAL_OUT[x.out] || x.out)}</em>` : ' · <em>в пути</em>'}<br>${step('tie', x.t, x.txt, x.ev)}${(x.turns || []).map(t => ' → ' + step('turn', t[0], t[1], t[2])).join('')}${x.end ? ' → ' + step('end', x.end, x.endTxt, x.endEv) : ''}</li>`).join('')}</ul>`;
 }
 function fateList() {
-  const alive = S.agents.filter(a => a.bio && (a.drama || 0) >= 9).map(a => ({ id: a.id, name: a.name, sex: a.sex, bio: a.bio, goals: a.goals, drama: a.drama, alive: true, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, g: a.group }));
-  const dead = (S.legends || []).map(l => Object.assign({ alive: false }, l));
-  const all = alive.concat(dead).map(p => Object.assign(p, { arc: arcOf(p), kinds: new Set(p.bio.map(b => b[1])).size }));
-  all.sort((x, y) => (y.drama * (0.6 + y.kinds / 12)) - (x.drama * (0.6 + x.kinds / 12)));
-  return all.slice(0, 12);
+  // ranked in the engine by the weight of their turns, the same list the audit measures
+  return SIM.topFates(S, 12).map(p => Object.assign(p, { arc: arcOf(p) }));
 }
 let fateKey = '';
 function drawFates(force) {
