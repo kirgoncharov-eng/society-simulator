@@ -83,7 +83,8 @@ async def main():
         b = await p.chromium.launch(args=['--disable-gpu-compositing', '--enable-unsafe-swiftshader'])
         bad = 0
         for w, h, name in [(1440, 900, 'desktop'), (390, 844, 'mobile')]:
-            pg = await b.new_page(viewport={'width': w, 'height': h})
+            context = await b.new_context(viewport={'width': w, 'height': h})
+            pg = await context.new_page()
             errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
             await pg.emulate_media(reduced_motion='reduce')
             await pg.add_init_script(HOLD_REPLIES)
@@ -132,7 +133,7 @@ async def main():
                 await v3.click(); await pg.wait_for_timeout(2500)
                 await pg.screenshot(path=os.path.join(ROOT, 'tmp', f'{name}-3d.png'))
             print(name, 'errors:', errs[:5] or 'none'); bad += len(errs)
-            await pg.close()
+            await context.close()
         await b.close()
         sys.exit(1 if bad else 0)
 asyncio.run(main())
