@@ -104,6 +104,11 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
 .vt{display:flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden}
 .vt button{border:0;border-radius:0;min-width:54px}
 .vt button.on{background:var(--slate);color:#fff}
+.camera-tools{display:flex;align-items:center;gap:8px}
+.camera-tools label{display:flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap}
+.camera-tools input{width:clamp(64px,14vw,140px);accent-color:var(--slate)}
+body.flat #cv{touch-action:none;cursor:grab}
+body.flat #cv:active{cursor:grabbing}
 .view{position:relative;max-width:calc(100svh - 150px)}
 .focus{position:absolute;z-index:4;left:10px;right:10px;bottom:10px;max-height:64%;overflow:auto;background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-left:5px solid var(--c,var(--ink));border-radius:4px;padding:12px 14px;font-size:15px;line-height:1.45;cursor:default}
 .focus[hidden]{display:none}
@@ -382,6 +387,10 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
   </div>
     <div class="bar">
       <div class="vt" role="group" aria-label="Вид"><button id="v2d" class="on" aria-pressed="true">Карта</button><button id="v3d" aria-pressed="false">3D</button></div>
+      <div class="camera-tools" role="group" aria-label="Камера">
+        <button type="button" id="camIsland">Весь остров</button>
+        <label for="camZoom">Зум <input id="camZoom" type="range" min="0" max="100" value="0"></label>
+      </div>
       <button class="main" id="play">Пауза</button>
       <div class="seg" role="radiogroup" aria-label="Скорость">
         <input type="radio" name="sp" id="spDay" value="day"><label for="spDay" title="Около 16 секунд на день">Сутки</label>
@@ -396,7 +405,7 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
       <label class="chk"><input type="checkbox" id="fly" checked>эффект бабочки</label>
       <button id="reset">Новый мир</button>
     </div>
-  <details class="howto"><summary>Как читать мир</summary><p><b>Остров.</b> Мир — остров посреди моря. Первые люди приплывают на лодках в год 0, за ними ещё несколько лодок в первые десятилетия, а потом изредка новые переселенцы. У берега есть рыбные места (рыбки на карте): их ловят, как собирают ягоды, и их можно выловить. Когда рыба у берега кончается, деревни строят рыбацкие лодки и уходят в море: там рыбы больше, но в шторм лодки не возвращаются. При каждом доме есть огород, его кормят женщины, дети и старики. Ремесленники делают орудия (в мастерской), горшки и ткань из козьей шерсти (прямо дома): с посудой запасы хранятся дольше и воду носить легче, в тёплой одежде зимой болеют реже, а в деревне с мастерской дома и лодки обходятся дешевле. Первые лодки привезли коз: стада пасутся у деревень, дают молоко, в голод их режут, а при набеге угоняют. Уйти с острова можно только морем: когда в деревне тесно, голодно или нет воды, семья строит лодку и уплывает навсегда. В центре острова холмы, оттуда течёт река к морю.</p><p><b>Питьевая вода.</b> Людям нужно пить. Вода есть в реке, в родниках у подножия холмов (голубые круги) и в колодцах, которые деревни копают сами. Чем дальше вода, тем больше людей весь день носят её вёдрами (синие вёдра в руках) и не работают в поле. Колодец в низине у реки докапывается легко, на возвышенности часто впустую. В засушливый год малые родники и мелкие колодцы пересыхают, урожай падает, а деревни у одного родника ссорятся. В тесной деревне колодец загрязняется, а ниже по реке от большой деревни вода грязная: там чаще болеют, и оттуда чаще начинается мор. Где воды нет совсем, люди слабеют от жажды и уходят.</p><p><b>Земля и вода.</b> Люди ходят по рельефу: в обход холмов, медленнее через лес, быстрее по дорогам. Дороги не рисуются заранее: тропа появляется там, где часто ходят, а наезженная тропа становится дорогой. Реку можно перейти только по мосту, вброд (серые камни на воде) или зимой по льду. Брод и лёд опасны, особенно в весеннее половодье: люди тонут. Деревня, жители которой часто ходят на тот берег, строит мост. Новую деревню закладывают по плану: дома встают вдоль улицы, поля примыкают друг к другу. Брошенная деревня остаётся на земле руинами, и кочевники могут занять её и починить дома.</p><p><b>Судьбы.</b> Каждый житель помнит свою жизнь. За убитого в бою родича дети и супруг клянутся отомстить: давят на вождя, рвутся в поход и ликуют, когда обидчик падёт. Дети свергнутого вождя затаивают обиду на того, кто сверг отца, и иногда убивают его. Влюблённые из враждующих деревень бегут и заводят свой дом. Изгнанники возвращаются с чужим войском, ученики перенимают ремесло у мастеров. Всё это записывается в летопись жизни, а самые драматичные судьбы собраны во вкладке «Судьбы».</p><p><b>Люди.</b> У каждого есть пол, семья и слава. Взрослые женятся, чаще внутри своей деревни, а брак детей вождей мирит соседей и скрепляет союз. Дети растут 15 лет и едят из общих запасов; в голод и мор они умирают первыми. Наследство уходит детям, поэтому богатство и власть копятся в семьях. О человеке судят по слухам: щедрого и храброго встречают с доверием, лентяя и обманщика могут выгнать. В голодную зиму богатый кормит бедного и делает его своим клиентом, а богатый вождь держит дружину, и её почти невозможно свергнуть. Уйти от плохого вождя можно, только если вокруг есть свободная земля: в тесной долине вождь забирает себе всё больше. Новшества вроде монеты и веча редко изобретают, чаще перенимают у богатых соседей. Чем теснее живут и чем больше торгуют, тем вероятнее мор; после него рабочих рук мало, и простые люди требуют больших долей. Вожди ошибаются в оценке врага и иногда начинают войны, которые нельзя выиграть.</p><p>Шестьдесят кочевников на земле с рекой, лесом и холмами. Они сами решают, где осесть, что строить и производить, с кем торговать и воевать, во что верить, как делить урожай и кому подчиняться. Вы только меняете вводные.</p><p>В 3D видна вся жизнь: лесорубы несут брёвна, каменотёсы — глыбы, земледельцы — мешки с зерном к амбару; дома растут из лесов, поля зеленеют весной и желтеют осенью, на вырубке остаются пни, зимой из труб идёт дым, у угодий пасутся олени. Нажмите на деревню в списке или портрете, и камера полетит к ней. На карте: точка — человек, размер — статус, кольцо — лидер. Домики и поля окрашены в цвет группы. Широкий дом с трубой — мастерская (дымит, когда делает орудия), домик с острой крышей — амбар, груда камней у холмов — каменоломня. Серые постройки — руины. Телега рядом с человеком — купец с грузом, светло-коричневые линии — дороги: чем чаще ходят караваны, тем дорога шире. <span style="color:var(--red)">Красная стрелка — поход</span>, флаг — войско, копьё у точки — воин или стража, коричневое кольцо вокруг деревни — частокол, пунктир цвета хозяина — дорога дани. Острая башенка — святилище, корона у имени — династия, под именем деревни — её строй. Цветные клетки — владения деревни, сплошная линия — граница, <span style="color:var(--red)">красный пунктир — спорная межа</span>, где земли соседей соприкасаются. Толстая линия — рубеж государства, крупная надпись — его имя. Стража с копьями ходит вдоль границы. Золотой кружок у имени — у деревни есть монета, квадратик вокруг точки — человек в долговой кабале. <span style="color:var(--slate)">Пунктир — союз</span>, <span style="color:var(--red)">красное — вражда</span>, дрожащая граница — энтропия группы, кусты с ягодами в пунктирном круге — дикие угодья, где собирают и охотятся (процент показывает, сколько там осталось еды; выбранные угодья зарастают заново). Зимой карта белеет. В режиме 3D мир можно вращать пальцем или мышью, приближать колёсиком или щипком, а нажатие на человека открывает его карточку. При 1× год идёт полминуты, при 64× век проходит за минуту. Стоп-кадры останавливают мир на крупных событиях и объясняют их причину.</p></details>
+  <details class="howto"><summary>Как читать мир</summary><p><b>Остров.</b> Мир — остров посреди моря. Первые люди приплывают на лодках в год 0, за ними ещё несколько лодок в первые десятилетия, а потом изредка новые переселенцы. У берега есть рыбные места (рыбки на карте): их ловят, как собирают ягоды, и их можно выловить. Когда рыба у берега кончается, деревни строят рыбацкие лодки и уходят в море: там рыбы больше, но в шторм лодки не возвращаются. При каждом доме есть огород, его кормят женщины, дети и старики. Ремесленники делают орудия (в мастерской), горшки и ткань из козьей шерсти (прямо дома): с посудой запасы хранятся дольше и воду носить легче, в тёплой одежде зимой болеют реже, а в деревне с мастерской дома и лодки обходятся дешевле. Первые лодки привезли коз: стада пасутся у деревень, дают молоко, в голод их режут, а при набеге угоняют. Уйти с острова можно только морем: когда в деревне тесно, голодно или нет воды, семья строит лодку и уплывает навсегда. В центре острова холмы, оттуда течёт река к морю.</p><p><b>Питьевая вода.</b> Людям нужно пить. Вода есть в реке, в родниках у подножия холмов (голубые круги) и в колодцах, которые деревни копают сами. Чем дальше вода, тем больше людей весь день носят её вёдрами (синие вёдра в руках) и не работают в поле. Колодец в низине у реки докапывается легко, на возвышенности часто впустую. В засушливый год малые родники и мелкие колодцы пересыхают, урожай падает, а деревни у одного родника ссорятся. В тесной деревне колодец загрязняется, а ниже по реке от большой деревни вода грязная: там чаще болеют, и оттуда чаще начинается мор. Где воды нет совсем, люди слабеют от жажды и уходят.</p><p><b>Земля и вода.</b> Люди ходят по рельефу: в обход холмов, медленнее через лес, быстрее по дорогам. Дороги не рисуются заранее: тропа появляется там, где часто ходят, а наезженная тропа становится дорогой. Реку можно перейти только по мосту, вброд (серые камни на воде) или зимой по льду. Брод и лёд опасны, особенно в весеннее половодье: люди тонут. Деревня, жители которой часто ходят на тот берег, строит мост. Новую деревню закладывают по плану: дома встают вдоль улицы, поля примыкают друг к другу. Брошенная деревня остаётся на земле руинами, и кочевники могут занять её и починить дома.</p><p><b>Судьбы.</b> Каждый житель помнит свою жизнь. За убитого в бою родича дети и супруг клянутся отомстить: давят на вождя, рвутся в поход и ликуют, когда обидчик падёт. Дети свергнутого вождя затаивают обиду на того, кто сверг отца, и иногда убивают его. Влюблённые из враждующих деревень бегут и заводят свой дом. Изгнанники возвращаются с чужим войском, ученики перенимают ремесло у мастеров. Всё это записывается в летопись жизни, а самые драматичные судьбы собраны во вкладке «Судьбы».</p><p><b>Люди.</b> У каждого есть пол, семья и слава. Взрослые женятся, чаще внутри своей деревни, а брак детей вождей мирит соседей и скрепляет союз. Дети растут 15 лет и едят из общих запасов; в голод и мор они умирают первыми. Наследство уходит детям, поэтому богатство и власть копятся в семьях. О человеке судят по слухам: щедрого и храброго встречают с доверием, лентяя и обманщика могут выгнать. В голодную зиму богатый кормит бедного и делает его своим клиентом, а богатый вождь держит дружину, и её почти невозможно свергнуть. Уйти от плохого вождя можно, только если вокруг есть свободная земля: в тесной долине вождь забирает себе всё больше. Новшества вроде монеты и веча редко изобретают, чаще перенимают у богатых соседей. Чем теснее живут и чем больше торгуют, тем вероятнее мор; после него рабочих рук мало, и простые люди требуют больших долей. Вожди ошибаются в оценке врага и иногда начинают войны, которые нельзя выиграть.</p><p>Шестьдесят кочевников на земле с рекой, лесом и холмами. Они сами решают, где осесть, что строить и производить, с кем торговать и воевать, во что верить, как делить урожай и кому подчиняться. Вы только меняете вводные.</p><p>В 3D видна вся жизнь: лесорубы несут брёвна, каменотёсы — глыбы, земледельцы — мешки с зерном к амбару; дома растут из лесов, поля зеленеют весной и желтеют осенью, на вырубке остаются пни, зимой из труб идёт дым, у угодий пасутся олени. Нажмите на деревню в списке или портрете, и камера полетит к ней. На карте: точка — человек, размер — статус, кольцо — лидер. Домики и поля окрашены в цвет группы. Широкий дом с трубой — мастерская (дымит, когда делает орудия), домик с острой крышей — амбар, груда камней у холмов — каменоломня. Серые постройки — руины. Телега рядом с человеком — купец с грузом, светло-коричневые линии — дороги: чем чаще ходят караваны, тем дорога шире. <span style="color:var(--red)">Красная стрелка — поход</span>, флаг — войско, копьё у точки — воин или стража, прямые коричневые участки — частокол, пунктир — стройка, пунктир цвета хозяина — дорога дани. Острая башенка — святилище, корона у имени — династия, под именем деревни — её строй. Цветные клетки — владения деревни, сплошная линия — граница, <span style="color:var(--red)">красный пунктир — спорная межа</span>, где земли соседей соприкасаются. Толстая линия — рубеж государства, крупная надпись — его имя. Стража с копьями ходит вдоль границы. Золотой кружок у имени — у деревни есть монета, квадратик вокруг точки — человек в долговой кабале. <span style="color:var(--slate)">Пунктир — союз</span>, <span style="color:var(--red)">красное — вражда</span>, дрожащая граница — энтропия группы, кусты с ягодами в пунктирном круге — дикие угодья, где собирают и охотятся (процент показывает, сколько там осталось еды; выбранные угодья зарастают заново). Зимой карта белеет. В 3D вращайте камеру мышью или пальцем. Масштаб регулируется ползунком, колёсиком или щипком. Кнопка «Весь остров» возвращает общий вид. Нажатие на человека открывает его карточку. При 1× год идёт полминуты, при 64× век проходит за минуту. Стоп-кадры останавливают мир на крупных событиях и объясняют их причину.</p></details>
 </div></main>
 
 <section class="band solo panes"><div class="wrap wide">
@@ -463,7 +472,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm22', date: '2026-11-21', note: 'обряды: свадебный пир, похороны и кладбище, праздник урожая' };
+const MODEL = { v: 'm23', date: '2026-11-21', note: 'стройплощадки с доставкой и этапами, частокол по отдельным участкам' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -541,7 +550,10 @@ function archiveGC(S) {
   }
   for (const l of S.legends || []) refs(l.bio);
   for (const id of S.secrets || []) keep.add(id);
-  for (const g of S.groups) for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+  for (const g of S.groups) {
+    for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+    for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
+  }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
@@ -740,7 +752,8 @@ function dissolve(S, g, silent) {
   if (S.arch && S.arch[g.id]) S.arch[g.id].end = S.tick;
   if (g.home) {
     S.ruins = S.ruins || [];
-    S.ruins.push({ name: g.name, t: S.tick, x: g.home.x, y: g.home.y, houses: g.houses.concat([g.workshop, g.granary].filter(Boolean)).map(h => ({ x: h.x, y: h.y })), fields: g.fields.map(f => ({ x: f.x, y: f.y })), plan: g.plan || null });
+    S.ruins.push({ name: g.name, t: S.tick, x: g.home.x, y: g.home.y, houses: g.houses.concat([g.workshop, g.granary].filter(Boolean)).map(({ x, y, angle, footprint, entrance, frontage, earth, built }) => ({ x, y, angle, footprint, entrance, frontage, earth, built })), fields: g.fields.map(f => ({ x: f.x, y: f.y })), plan: g.plan || null, fortifications: g.fortifications });
+    if (g.fortifications?.length) S.wallV = (S.wallV || 0) + 1;
     if (S.ruins.length > 14) S.ruins.shift();
     for (const f of g.fields) delete S.occ[f.c];
     if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === g.id) S.own[c] = 0;
@@ -1065,6 +1078,7 @@ function bridgeSpot(S, g) {
   for (let j = 0; j < N; j++) {
     const ws = []; for (let i = 0; i < N; i++) if (S.ter[j * N + i] === 'w') ws.push(j * N + i);
     if (!ws.length || ws.some(c => S.bridge[c])) continue;
+    if (S.groups.some(o => o !== g && o.site?.kind === 'bridge' && o.site.cells.some(c => ws.includes(c)))) continue;
     const y = j * CS + 10, x = (ws[0] % N) * CS + 10, d = Math.hypot(x - g.home.x, y - g.home.y);
     if (d > 320) continue;
     let near = false; for (const c in S.bridge) if (Math.abs(((+c / N) | 0) - j) < 6) near = true;
@@ -1098,9 +1112,16 @@ function planOf(S, g) {
   return g.plan;
 }
 function plotPos(g, k) {
-  const P = g.plan, street = k < 32 ? 0 : 1, kk = street ? k - 32 : k, slot = (kk >> 2) + 1, dir = (kk >> 1) & 1 ? -1 : 1, side = kk & 1 ? -1 : 1;
-  const ux = street ? -P.uy : P.ux, uy = street ? P.ux : P.uy, along = dir * (slot * 17 - 4) + (street ? 0 : 0), perp = side * 12, off = street ? 26 : 0;
-  return { x: g.home.x + ux * along - uy * perp + (street ? P.ux * off : 0), y: g.home.y + uy * along + ux * perp + (street ? P.uy * off : 0) };
+  const street = g.plan.street;
+  const side = k % 2 ? -1 : 1, row = (k >> 1) % 2 ? -1 : 1, slot = (k >> 2) + 1;
+  const variation = ((g.id * 17 + k * 31) % 11) - 5;
+  const frontage = alongStreet(g, row * (slot * 18 - 7) + variation);
+  if (distanceToSegment(frontage, street.a, street.b) > 1) return null;
+  const setback = 13 + ((g.id + k * 3) % 6);
+  const angle = Math.atan2(g.plan.uy, g.plan.ux);
+  const at = alongStreet(g, row * (slot * 18 - 7) + variation, side * setback);
+  const entrance = { x: at.x + side * g.plan.uy * 5, y: at.y - side * g.plan.ux * 5 };
+  return { ...at, angle, entrance, frontage };
 }
 function plotOk(S, g, p, radius = 6) {
   if (riverDist(S, p.x, p.y) < 24 || !streetClear(g, p, radius)) return false;
@@ -1112,7 +1133,7 @@ function plotOk(S, g, p, radius = 6) {
   for (const h of g.houses) if (dist(h, p) < radius + 5) return false;
   for (const b of [g.workshop, g.granary, g.shrine, g.well]) if (b && dist(b, p) < radius + 8) return false;
   if (g.cemetery && dist(g.cemetery, p) < radius + 14) return false;
-  return !g.wallPlan || g.wallPlan.segments.every(({ a, b }) => distanceToSegment(p, a, b) >= radius + 2);
+  return !g.fortifications?.some(w => w.segments.some(({ a, b }) => distanceToSegment(p, a, b) < radius + 2));
 }
 
 function riverDist(S, x, y) { const r = S.river; if (!r) return 1e9; const k = clamp(Math.round((y + 20) / 20), 0, r.length - 1); return Math.abs(x - r[k][0]); }
@@ -1142,6 +1163,10 @@ function settle(S, g) {
     g.houses = r.houses.slice(0, 16).map(h => ({ ...h, ruined: true }));
     for (const f of r.fields) { const c = cellAt(f.x, f.y); if (S.occ[c] || (S.own && S.own[c])) continue; S.occ[c] = g.id; g.fields.push({ x: f.x, y: f.y, c, fert: S.ter[c] === 'r' ? 0.9 : 0.55 }); }
     if (r.plan) g.plan = Object.assign({}, r.plan);
+    if (r.fortifications?.length) {
+      g.fortifications = r.fortifications; g.walls = true;
+      S.wallV = (S.wallV || 0) + 1;
+    }
     claim(S, g, 20, 20); pickTarget(S, g);
     S.settledOnce = true;
     log(S, 'settle', `«${g.name}» занимает заброшенную деревню «${r.name}» и чинит дома`, r.x, r.y, g.hue, { why: sent([`деревня пустует ${yrs(Math.max(1, Math.round((S.tick - r.t) / 360)))}`, `там стоят ${g.houses.length} ${pl(g.houses.length, 'дом', 'дома', 'домов')} без крыш${g.fields.length ? ` и ${g.fields.length} ${pl(g.fields.length, 'заросшее поле', 'заросших поля', 'заросших полей')}` : ''}`, 'починить старый дом вдвое быстрее, чем построить новый', 'место уже проверено: здесь когда-то жили']), gs: [g.id] });
@@ -1172,11 +1197,13 @@ function settle(S, g) {
 }
 function houseSpot(S, g) {
   const plan = planOf(S, g);
-  const angle = Math.atan2(plan.uy, plan.ux);
-  for (let t = 0; t < 64; t++) {
+  for (let t = 0; t < 32; t++) {
     const p = plotPos(g, plan.k);
-    plan.k = (plan.k + 1) % 64;
-    if (plotOk(S, g, p)) return { kind: 'house', ...p, angle, prog: 0, need: 50 };
+    plan.k = (plan.k + 1) % 32;
+    if (p && plotOk(S, g, p) && lineOnLand(S, p.entrance, p.frontage)
+      && !g.fortifications?.some(w => w.segments.some(({ a, b }) => lineCrossing(p.entrance, p.frontage, a, b) !== null))) {
+      return { kind: 'house', ...p, prog: 0, need: 50 };
+    }
   }
   return specialSpot(S, g, 'house');
 }
@@ -1191,7 +1218,7 @@ function fieldSpot(S, g) {
     if (d < 48 || d > 170 || !streetClear(g, { x, y }, 10)) continue;
     if (g.houses.some(h => Math.abs(h.x - x) < 16 && Math.abs(h.y - y) < 16)
       || [g.well, g.workshop, g.granary, g.shrine].some(p => p && dist(p, { x, y }) < 17)) continue;
-    if (g.wallPlan?.segments.some(({ a, b }) => distanceToSegment({ x, y }, a, b) < 10)) continue;
+    if (g.fortifications?.some(w => w.segments.some(({ a, b }) => distanceToSegment({ x, y }, a, b) < 10))) continue;
     if (!reach(S, g.home.x, g.home.y, x, y)) continue;
     let adj = 0; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const q = c + ox + oy * N; if (S.occ[q] === g.id) adj++; }
     const fert = t === 'r' ? 1 : 0.6, v = fert * 2 - d / 110 + adj * 0.45 - (S.road[c] ? 1 : 0);
@@ -1203,21 +1230,23 @@ function fieldSpot(S, g) {
 function finishSite(S, g) {
   const st = g.site; g.site = null;
   if (st.kind === 'house') {
-    g.houses.push({ ...placedSite(st), ...(st.earth ? { earth: true } : {}) });
+    g.houses.push({ ...placedSite(st), built: S.tick, ...(st.earth ? { earth: true } : {}) });
     const k = g.houses.length;
-    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Каждый дом — это 6 брёвен из леса и месяцы работы строителей.`, gs: [g.id] });
+    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Для последнего дома строители принесли ${st.materials?.wood ?? 6} заготовок дерева и отработали на площадке.`, gs: [g.id] });
   } else if (st.kind === 'workshop') {
-    g.workshop = placedSite(st);
+    g.workshop = { ...placedSite(st), built: S.tick };
     const first = !S.firstWorkshop; S.firstWorkshop = true;
     log(S, 'tech', first ? `Первая мастерская в мире: «${g.name}» начинает делать орудия` : `«${g.name}» строит мастерскую`, st.x, st.y, g.hue, { first, why: `Камень с холмов и брёвна из леса превращаются в орудия. С орудием любая работа идёт на половину быстрее, но орудия изнашиваются, и камень с деревом нужны постоянно. Холмы у «${g.name}» в ${cells(g.stoneDist)} от поселения.`, gs: [g.id] });
-  } else if (st.kind === 'walls') {
-    const expanded = g.walls;
+  } else if (st.kind === 'palisade') {
+    (g.fortifications ||= []).push({ id: st.id, kind: st.kind, ...st.layout, started: st.started, built: S.tick, materials: st.materials });
     g.walls = true;
-    g.wallPlan = st.layout || wallPlan(S, g);
-    if (g.wallPlan) g.wallPlan.built = S.tick;
-    log(S, 'tech', `«${g.name}» ${expanded ? 'расширяет частокол' : 'обносит жильё частоколом'}`, g.home.x, g.home.y, g.hue, { why: sent([`угроза от соседей ${P0(Math.min(1, g.threat || 0))}`, S.tick - g.raided < 720 ? 'недавно был набег' : '', g.wallPlan ? `ограда по жилой части деревни, ${Math.round(g.wallPlan.length)} шагов и ${st.wood} брёвен` : 'дома оградили частоколом']), gs: [g.id] });
+    S.wallV = (S.wallV || 0) + 1;
+    log(S, 'tech', `«${g.name}» заканчивает участок частокола`, st.x, st.y, g.hue, {
+      why: sent([`ограда прикрывает жилые дворы со стороны «${st.layout.threatName}»`, `${st.layout.posts} кольев из ${st.wood} заготовок дерева`, st.layout.gates.length ? 'на улице оставили проезд' : 'тропы остались открыты']),
+      gs: [g.id],
+    });
   } else if (st.kind === 'shrine') {
-    g.shrine = placedSite(st);
+    g.shrine = { ...placedSite(st), built: S.tick };
     S.faiths = S.faiths || {};
     const partner = S.groups.find(o => o !== g && o.faith && o.home && (S.routes[key(o.id, g.id)] || (S.hostility[key(o.id, g.id)] || 0) < 0.2 && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300));
     const why0 = sent([g.famY !== undefined ? 'голодные зимы' : '', g.warsLost ? 'проигранные битвы' : '', 'люди ищут смысл в бедах', 'святилище утешает: обиды копятся на треть медленнее, а лидер выглядит законнее', 'жрец кормится подношениями']);
@@ -1236,7 +1265,7 @@ function finishSite(S, g) {
     }
   } else if (st.kind === 'bridge') {
     for (const c of st.cells) S.bridge[c] = g.id; S.navV++; g.bridgeAt = S.tick;
-    if (st.approaches) (S.bridgePlans ||= []).push({ cells: st.cells, approaches: st.approaches });
+    if (st.approaches) (S.bridgePlans ||= []).push({ ...placedSite(st), cells: st.cells, approaches: st.approaches, built: S.tick });
     const first = !S.firstBridge; S.firstBridge = true;
     log(S, 'bridge', first ? `Первый мост в мире: «${g.name}» перекидывает мост через реку` : `«${g.name}» строит мост через реку`, st.x, st.y, g.hue, { first, why: sent([`за год жители ${g.cross12 || 0} ${pl(g.cross12 || 0, 'раз', 'раза', 'раз')} переходили реку вброд или по льду`, g.drowned ? `${g.drowned} ${pl(g.drowned, 'человек утонул', 'человека утонули', 'человек утонули')}` : 'брод опасен, особенно в половодье', 'мост — это брёвна и месяцы работы, зато по нему ходят без риска и вдвое быстрее', 'теперь по мосту пойдут и чужие: торговцы и войска']), gs: [g.id] });
   } else if (st.kind === 'fboat') {
@@ -1244,13 +1273,13 @@ function finishSite(S, g) {
     if (!S.firstFboat) { S.firstFboat = true; log(S, 'tech', `Первая рыбацкая лодка: «${g.name}» выходит в море`, st.x, st.y, g.hue, { first: true, why: 'Рыба у берега быстро кончается, а в море её больше. На лодке двое рыбаков ловят за день столько, сколько с берега за неделю. Но море опасно: в шторм лодки не возвращаются.', gs: [g.id] }); }
   } else if (st.kind === 'well') {
     const ok = rnd(S) < wellOk(S, st.x, st.y);
-    if (ok) { g.well = { x: st.x, y: st.y, t: S.tick, depth: wellOk(S, st.x, st.y) > 0.9 ? 1 : 0.5, dry: false }; }
+    if (ok) { g.well = { ...placedSite(st), t: S.tick, depth: wellOk(S, st.x, st.y) > 0.9 ? 1 : 0.5, dry: false }; }
     const first = ok && !S.firstWell; if (ok) S.firstWell = true;
     log(S, 'well', ok ? (first ? `Первый колодец в мире: «${g.name}» копает свой колодец` : `«${g.name}» копает колодец`) : `«${g.name}» копает колодец, но до воды не докапывается`, st.x, st.y, g.hue, { first, why: sent([`до воды ${Math.round(g.wd || 0)} шагов: каждый день ${g.wNeed || 0} ${pl(g.wNeed || 0, 'человек', 'человека', 'человек')} только носят воду`, ok ? 'теперь вода прямо в деревне, и руки освобождаются для полей' : 'здесь глубоко до воды: в низине у реки копать легче', ok && wellOk(S, st.x, st.y) < 0.9 ? 'колодец неглубокий и в засуху может пересохнуть' : '']), gs: [g.id] });
   } else if (st.kind === 'repair') {
     const hh = g.houses[st.idx]; if (hh) hh.ruined = false;
   } else if (st.kind === 'granary') {
-    g.granary = placedSite(st);
+    g.granary = { ...placedSite(st), built: S.tick };
     const first = !S.firstGranary; S.firstGranary = true;
     log(S, 'tech', first ? `Первый амбар в мире: «${g.name}» учится хранить урожай` : `«${g.name}» строит амбар`, st.x, st.y, g.hue, { why: `Без амбара запасы гниют: полтора процента в месяц. В амбаре — в пять раз медленнее, и урожай доживает до весны. В «${g.name}» скопилось ${Math.round(g.treasury)} еды.`, gs: [g.id] });
   } else g.fields.push({ x: st.x, y: st.y, c: st.c, fert: st.fert });
@@ -1260,8 +1289,8 @@ function nearestHill(S, p, g) {
   for (let c = 0; c < S.ter.length; c++) { if (S.ter[c] !== 'h' || !usable(S, c, g)) continue; const d = Math.hypot((c % N) * CS + 10 - p.x, Math.floor(c / N) * CS + 10 - p.y); if (d < bd) { bd = d; best = c; } }
   return bd < 360 ? { c: best, d: bd } : { c: null, d: bd };
 }
-function placedSite({ x, y, angle }) {
-  return { x, y, ...(angle === undefined ? {} : { angle }) };
+function placedSite({ x, y, angle, footprint, entrance, frontage, id, started, materials, approvedBy }) {
+  return { x, y, angle, footprint, entrance, frontage, id, started, materials, approvedBy };
 }
 function specialSpot(S, g, kind) {
   const plan = planOf(S, g);
@@ -1375,55 +1404,190 @@ function streetClear(g, p, width) {
   const street = g.plan?.street;
   return !street || distanceToSegment(p, street.a, street.b) >= street.width / 2 + width;
 }
-function wallPlan(S, g) {
-  planOf(S, g);
-  const point = (x, y) => alongStreet(g, x, y);
-  const buildings = g.houses.filter(h => !h.ruined);
-  buildings.sort((a, b) => dist(a, g.home) - dist(b, g.home));
-  if (g.granary) buildings.unshift(g.granary);
-  const occupied = buildings.concat([g.well, g.shrine, g.workshop].filter(Boolean));
-  // Draw one fixed perimeter around the occupied core, with gates where the street crosses it.
-  for (let count = Math.min(8, buildings.length); count >= Math.min(2, buildings.length); count--) {
-    let left = -17, right = 17, lower = -17, upper = 17;
-    for (const b of buildings.slice(0, count)) {
-      const dx = b.x - g.home.x, dy = b.y - g.home.y;
-      const along = dx * g.plan.ux + dy * g.plan.uy, across = -dx * g.plan.uy + dy * g.plan.ux;
-      left = Math.min(left, along - 9); right = Math.max(right, along + 9);
-      lower = Math.min(lower, across - 9); upper = Math.max(upper, across + 9);
+function lineCrossing(a, b, c, d) {
+  const x = b.x - a.x, y = b.y - a.y, u = d.x - c.x, v = d.y - c.y;
+  const den = x * v - y * u;
+  if (Math.abs(den) < 1e-8) return null;
+  const dx = c.x - a.x, dy = c.y - a.y;
+  const t = (dx * v - dy * u) / den, q = (dx * y - dy * x) / den;
+  return t > 0 && t < 1.000001 && q >= 0 && q <= 1 ? t : null;
+}
+
+function wallSite(S, g) {
+  const existing = g.fortifications || [];
+  if (existing.length && S.tick - existing[existing.length - 1].built < 360) return null;
+  const candidates = S.groups.filter(o => o !== g && o.home && !allied(S, g.id, o.id) && dist(g.home, o.home) < 460)
+    .map(o => ({ o, threat: S.wars.some(w => w.att === o.id && w.def === g.id) ? 2 : S.hostility[key(g.id, o.id)] || 0 }))
+    .filter(({ threat }) => threat > 0.6)
+    .sort((a, b) => b.threat - a.threat || dist(g.home, a.o.home) - dist(g.home, b.o.home));
+  if (!candidates.length) return null;
+  const street = planOf(S, g).street;
+  const core = g.houses.filter(h => !h.ruined && dist(h, g.home) < 50);
+  if (g.granary && dist(g.granary, g.home) < 65) core.push(g.granary);
+  const buildings = g.houses.concat([g.well, g.granary, g.workshop, g.shrine].filter(Boolean));
+  for (const { o } of candidates) {
+    const d = dist(g.home, o.home), ux = (o.home.x - g.home.x) / d, uy = (o.home.y - g.home.y) / d;
+    if (existing.some(w => w.facing && w.facing.x * ux + w.facing.y * uy > 0.7)) continue;
+    const forward = p => (p.x - g.home.x) * ux + (p.y - g.home.y) * uy;
+    const side = p => (p.y - g.home.y) * ux - (p.x - g.home.x) * uy;
+    const beyond = Math.max(15, ...core.map(forward)) + 9;
+    const center = core.length ? core.reduce((sum, p) => sum + side(p), 0) / core.length : 0;
+    let best = null, bestScore = -Infinity;
+    for (const extra of [0, 10, 20]) for (const offset of [0, -8, 8]) {
+      for (const bend of [0, -8, 8]) for (const half of [20, 27]) {
+        const point = (front, across) => ({ x: g.home.x + ux * front - uy * across, y: g.home.y + uy * front + ux * across });
+        const a = point(beyond + extra - bend, center + offset - half);
+        const b = point(beyond + extra + bend, center + offset + half);
+        const length = dist(a, b);
+        if (!lineOnLand(S, a, b)) continue;
+        const at = t => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        const crossing = lineCrossing(a, b, street.a, street.b);
+        const gap = 9 / length;
+        if (crossing !== null && (crossing < gap || crossing > 1 - gap)) continue;
+        const segments = crossing === null ? [{ a, b }] : [
+          { a, b: at(crossing - gap / 2) }, { a: at(crossing + gap / 2), b },
+        ];
+        const gates = crossing === null ? [] : [{ ...at(crossing), width: 9, angle: Math.atan2(b.y - a.y, b.x - a.x) }];
+        const work = gates[0] || at(0.5);
+        if (!usable(S, cellAt(work.x, work.y), g) || !reach(S, g.home.x, g.home.y, work.x, work.y)) continue;
+        if (buildings.some(p => distanceToSegment(p, a, b) < (p.footprint ? Math.hypot(p.footprint.width, p.footprint.depth) / 2 + 2 : 10))) continue;
+        if (g.fields.some(p => distanceToSegment(p, a, b) < 13)) continue;
+        if (g.cemetery && distanceToSegment(g.cemetery, a, b) < 14) continue;
+        if (existing.some(w => w.segments.some(p => lineCrossing(a, b, p.a, p.b) !== null ||
+          Math.min(distanceToSegment(p.a, a, b), distanceToSegment(p.b, a, b)) < 6))) continue;
+        let hardGround = 0, roadConflict = false;
+        for (const segment of segments) {
+          const steps = Math.ceil(dist(segment.a, segment.b) / 4);
+          for (let i = 0; i <= steps; i++) {
+            const f = i / steps, p = { x: segment.a.x + (segment.b.x - segment.a.x) * f, y: segment.a.y + (segment.b.y - segment.a.y) * f };
+            const cell = cellAt(p.x, p.y);
+            if (!usable(S, cell, g) || (S.road[cell] && distanceToSegment(p, street.a, street.b) > 10)) roadConflict = true;
+            if (S.ter[cell] === 'f') hardGround++;
+          }
+        }
+        if (roadConflict) continue;
+        const cover = core.filter(p => Math.abs(side(p) - center - offset) < half).length;
+        const score = cover * 12 - extra * 0.5 - Math.abs(offset) * 0.3 - Math.abs(bend) * 0.2 - length * 0.14 - hardGround;
+        if (score <= bestScore) continue;
+        bestScore = score;
+        const posts = segments.reduce((n, s) => n + Math.ceil(dist(s.a, s.b) / 1.55), 0);
+        const layout = { segments, gates, facing: { x: ux, y: uy }, posts, height: 11, threatId: o.id, threatName: o.name };
+        best = { kind: 'palisade', ...work, prog: 0, need: 22 + posts * 3, wood: Math.ceil(posts / 3) + (gates.length ? 2 : 0), layout };
+      }
     }
-    const points = [point(left, lower), point(right, lower), point(right, upper), point(left, upper)];
-    const edges = points.map((a, i) => ({ a, b: points[(i + 1) % points.length] }));
-    if (!edges.every(({ a, b }) => lineOnLand(S, a, b))) continue;
-    if (occupied.some(p => edges.some(({ a, b }) => distanceToSegment(p, a, b) < 7))) continue;
-    const street = g.plan.street;
-    const segments = [edges[0], edges[2]], gates = [];
-    for (const along of [left, right]) {
-      const at = point(along, 0);
-      if (distanceToSegment(at, street.a, street.b) < 1) {
-        gates.push({ ...at, width: 9 });
-        segments.push({ a: point(along, lower), b: point(along, -4.5) }, { a: point(along, 4.5), b: point(along, upper) });
-      } else segments.push({ a: point(along, lower), b: point(along, upper) });
-    }
-    if (!gates.length) continue;
-    return { points, segments, gates, bounds: { left, right, lower, upper }, length: segments.reduce((n, { a, b }) => n + dist(a, b), 0) };
+    if (best) return best;
   }
   return null;
 }
-function insideWall(g, wall, point) {
-  const dx = point.x - g.home.x, dy = point.y - g.home.y;
-  const x = dx * g.plan.ux + dy * g.plan.uy, y = -dx * g.plan.uy + dy * g.plan.ux;
-  const { left, right, lower, upper } = wall.bounds;
-  return x > left && x < right && y > lower && y < upper;
+
+function wallCover(g, from) {
+  if (!from || !g.home) return false;
+  return g.fortifications?.some(wall => wall.segments.some(({ a, b }) => lineCrossing(g.home, from, a, b) !== null));
 }
-function wallSite(S, g) {
-  const prior = g.wallPlan;
-  const outside = prior ? g.houses.filter(h => !h.ruined && !insideWall(g, prior, h)) : [];
-  if (g.walls && (!prior || outside.length < 3 || S.tick - prior.built < 360 * 6)) return null;
-  const layout = wallPlan(S, g);
-  if (!layout) return null;
-  if (prior && (layout.length <= prior.length || outside.filter(h => insideWall(g, layout, h)).length < 3)) return null;
-  return { kind: 'walls', ...g.home, prog: 0, need: Math.max(90, Math.round(layout.length * 0.5)),
-    wood: Math.max(8, Math.ceil(layout.length * 0.07)), layout };
+
+function wallCells(S) {
+  if (S._wallCells && S._wallV === S.wallV) return S._wallCells;
+  const cells = [];
+  for (const g of S.groups) for (const wall of g.fortifications || []) for (const segment of wall.segments) {
+    const { a, b } = segment;
+    const x0 = (cellAt(Math.min(a.x, b.x) - 6, 0) % N), x1 = (cellAt(Math.max(a.x, b.x) + 6, 0) % N);
+    const y0 = (cellAt(0, Math.min(a.y, b.y) - 6) / N) | 0, y1 = (cellAt(0, Math.max(a.y, b.y) + 6) / N) | 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) (cells[y * N + x] ||= []).push(segment);
+  }
+  S._wallV = S.wallV;
+  return S._wallCells = cells;
+}
+
+function wallWalk(a, to, goal, segments) {
+  const hit = segments.find(s => lineCrossing(a, to, s.a, s.b) !== null);
+  if (!hit) return to;
+  const { a: start, b: end } = hit, length = dist(start, end);
+  const from = dist(a, start) + dist(start, goal) < dist(a, end) + dist(end, goal) ? start : end;
+  const dir = from === start ? -1 : 1;
+  const target = { x: from.x + dir * (end.x - start.x) / length * 3, y: from.y + dir * (end.y - start.y) / length * 3 };
+  const d = dist(a, target) || 1, step = Math.min(d, dist(a, to));
+  const around = { x: a.x + (target.x - a.x) * step / d, y: a.y + (target.y - a.y) * step / d };
+  return segments.some(s => lineCrossing(a, around, s.a, s.b) !== null) ? a : around;
+}
+/* Building projects reserve stock, then require work and supplies at the plot. */
+const BUILD_FOOTPRINT = {
+  house: [10, 10], workshop: [18, 13], granary: [10, 10], shrine: [10, 10], well: [9, 9], fboat: [12, 5],
+};
+const BUILD_PHASES = {
+  house: [['ground', 0.22], ['frame', 0.65], ['roof', 1]],
+  workshop: [['ground', 0.25], ['frame', 0.72], ['roof', 1]],
+  granary: [['ground', 0.22], ['frame', 0.70], ['roof', 1]],
+  shrine: [['ground', 0.25], ['frame', 0.72], ['roof', 1]],
+  repair: [['clear', 0.25], ['frame', 0.65], ['roof', 1]],
+  well: [['dig', 0.68], ['lining', 0.92], ['finish', 1]],
+  bridge: [['ground', 0.22], ['supports', 0.68], ['deck', 1]],
+  palisade: [['dig', 0.32], ['posts', 0.88], ['finish', 1]],
+  fboat: [['ground', 0.16], ['frame', 0.70], ['finish', 1]],
+};
+function beginSite(S, g, site, wood = 0, stone = 0) {
+  if (!site || g.site || g.wood < wood || (g.stone || 0) < stone) return false;
+  if (wood) g.wood -= wood;
+  if (stone) g.stone -= stone;
+  const dims = BUILD_FOOTPRINT[site.kind];
+  if (dims) site.footprint = { width: dims[0], depth: dims[1] };
+  site.id = g.id + ':' + S.tick;
+  site.started = S.tick;
+  site.approvedBy = g.leader;
+  site.materials = { wood, stone };
+  site.delivered = { wood: 0, stone: 0 };
+  site.phase = BUILD_PHASES[site.kind]?.[0][0];
+  g.site = site;
+  return true;
+}
+function siteMaterial(site) {
+  if (!site.materials || site.prog < site.need * BUILD_PHASES[site.kind][0][1]) return null;
+  return site.delivered.wood < site.materials.wood ? 'wood' : site.delivered.stone < site.materials.stone ? 'stone' : null;
+}
+function nearSite(a, point, radius = 11) { return Math.hypot(a.x - point.x, a.y - point.y) < radius; }
+function siteTarget(g, worker) {
+  const site = g.site, material = siteMaterial(site);
+  if (!material) return site.kind === 'palisade' ? wallWorkPoint(site) : site;
+  return worker.siteTrip?.id === site.id && worker.siteTrip.kind === material ? site : storeOf(g, material);
+}
+function wallWorkPoint(site) {
+  const { segments } = site.layout;
+  const active = Math.min(segments.length - 1, Math.floor(site.prog / site.need * segments.length));
+  const { a, b } = segments[active];
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+function workSite(S, g, worker, effort) {
+  const site = g.site;
+  const material = siteMaterial(site);
+  if (material) {
+    if (worker.siteTrip?.id !== site.id || worker.siteTrip.kind !== material) {
+      if (!nearSite(worker, storeOf(g, material), 7)) return false;
+      worker.siteTrip = { id: site.id, kind: material };
+    } else {
+      if (!nearSite(worker, site, 7)) return false;
+      site.delivered[material] = Math.min(site.materials[material], site.delivered[material] + CAP[material]);
+      worker.siteTrip = null;
+      updateSitePhase(site);
+    }
+    return true;
+  }
+  if (!nearSite(worker, siteTarget(g, worker))) return false;
+  if (worker.siteTrip) worker.siteTrip = null;
+  const phases = BUILD_PHASES[site.kind];
+  if (!phases) { site.prog += effort; }
+  else {
+    const firstLimit = site.need * phases[0][1];
+    const next = Math.min(site.need, site.prog + effort);
+    site.prog = site.materials && site.prog < firstLimit ? Math.min(firstLimit, next) : next;
+    updateSitePhase(site);
+  }
+  if (site.prog >= site.need) finishSite(S, g);
+  return true;
+}
+
+function updateSitePhase(site) {
+  const phases = BUILD_PHASES[site.kind];
+  site.phase = siteMaterial(site) ? 'supply'
+    : phases.find(([, end]) => site.prog < site.need * end)?.[0] || phases[phases.length - 1][0];
 }
 /* ---------- weather and the agricultural year ---------- */
 const STORM_CHANCE = [0.09, 0.045, 0.02, 0.06];
@@ -1494,22 +1658,28 @@ function jobs(S, g) {
   const lean0 = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
   if (!g.site && lean0 && g.fields.length < wantF) g.site = fieldSpot(S, g);
   if (!g.site) {
-    if (threat > 0.6 && g.houses.length >= 3 && g.wood >= 8 && (site = wallSite(S, g)) && g.wood >= site.wood) { g.wood -= site.wood; g.site = site; }
-    else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8 && (site = specialSpot(S, g, 'shrine'))) { g.wood -= 8; g.site = site; }
-    else if (g.landing && (g.fboats || 0) < Math.ceil(n / 8) && g.houses.length >= 2 && g.wood >= 8 && n >= 4) { g.wood -= 8; g.site = { kind: 'fboat', x: g.landing.x, y: g.landing.y, prog: 0, need: 70 }; }
-    else if (g.houses.some(h => h.ruined) && livingHouses(g).length < wantH && g.wood >= 2) { const idx = g.houses.findIndex(h => h.ruined), hh = g.houses[idx]; g.wood -= 2; g.site = { kind: 'repair', idx, x: hh.x, y: hh.y, prog: 0, need: 20 }; }
-    else if (!g.bridgeAt && n >= 8 && g.houses.length >= 3 && g.wood >= 12 && ((g.cross12 || 0) >= 10 || (g.drowned || 0) >= 1) && (site = bridgeSpot(S, g)) && g.wood >= site.wood) { g.wood -= site.wood; g.site = site; g.bridgeAt = -1; }
-    else if (g.houses.length < wantH && g.wood >= (g.workshop ? 5 : 6) && (site = houseSpot(S, g))) { g.wood -= g.workshop ? 5 : 6; g.site = site; }
-    // no timber within reach: a family still gets a roof, an earth-and-wattle house that takes longer to raise
-    else if (g.wood < 6 && livingHouses(g).length < wantH && (g.woodCell === null || livingHouses(g).length <= wantH - 2) && (site = houseSpot(S, g))) { g.site = { ...site, need: 90, earth: true }; }
-    else if (g.fields.length < wantF && season !== 0 && (site = fieldSpot(S, g))) g.site = site;
-    else if (needGR && g.wood >= 8 && (site = specialSpot(S, g, 'granary'))) { g.wood -= 8; g.site = site; }
-    else if (needWS && g.wood >= 4 && g.stone >= 4 && (site = specialSpot(S, g, 'workshop'))) { g.wood -= 4; g.stone -= 4; g.site = site; }
+    if (threat > 0.6 && g.houses.length >= 3 && g.wood >= 8 && (site = wallSite(S, g)) && beginSite(S, g, site, site.wood)) {}
+    else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8 && (site = specialSpot(S, g, 'shrine'))) beginSite(S, g, site, 8);
+    else if (g.landing && (g.fboats || 0) < Math.ceil(n / 8) && g.houses.length >= 2 && g.wood >= 8 && n >= 4) {
+      beginSite(S, g, { kind: 'fboat', x: g.landing.x, y: g.landing.y, prog: 0, need: 70 }, 8);
+    } else if (g.houses.some(h => h.ruined) && livingHouses(g).length < wantH && g.wood >= 2) {
+      const idx = g.houses.findIndex(h => h.ruined), hh = g.houses[idx];
+      beginSite(S, g, { kind: 'repair', idx, x: hh.x, y: hh.y, angle: hh.angle, footprint: hh.footprint, prog: 0, need: 20 }, 2);
+    } else if (!g.bridgeAt && n >= 8 && g.houses.length >= 3 && g.wood >= 12 && ((g.cross12 || 0) >= 10 || (g.drowned || 0) >= 1)
+      && (site = bridgeSpot(S, g)) && beginSite(S, g, site, site.wood)) g.bridgeAt = -1;
+    else if (g.houses.length < wantH && g.wood >= (g.workshop ? 5 : 6) && (site = houseSpot(S, g))) beginSite(S, g, site, g.workshop ? 5 : 6);
+    // A wattle-and-earth house still needs a load of poles and longer work on site.
+    else if (g.wood >= 1 && g.wood < 6 && livingHouses(g).length < wantH
+      && (g.woodCell === null || livingHouses(g).length <= wantH - 2) && (site = houseSpot(S, g))) {
+      beginSite(S, g, { ...site, need: 90, earth: true }, 1);
+    } else if (g.fields.length < wantF && season !== 0 && (site = fieldSpot(S, g))) g.site = site;
+    else if (needGR && g.wood >= 8 && (site = specialSpot(S, g, 'granary'))) beginSite(S, g, site, 8);
+    else if (needWS && g.wood >= 4 && g.stone >= 4 && (site = specialSpot(S, g, 'workshop'))) beginSite(S, g, site, 4, 4);
   }
   const L = S._a.get(g.leader);
   const pool = mem.filter(m => !(m === L && n > 4) && !m.car && !m.war);
   if (L && n > 4) L.job = 'lead';
-  const woodNeed = g.houses.length < wantH || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
+  const woodNeed = g.houses.length < wantH || (threat > 0.6 && g.houses.length >= 3 && !g.walls && g.wood < 20) || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
   const stoneNeed = g.stoneCell !== null && ((needWS && g.stone < 4) || (g.workshop && g.stone < 6));
   const lean = lean0;
   const quota = {
@@ -1684,7 +1854,6 @@ function marketWatch(S) {
   }
 }
 
-const wallR = g => Math.max(26, ...g.houses.map(h => Math.hypot(h.x - g.home.x, h.y - g.home.y) + 12));
 function threatOf(S, g) {
   let t = 0;
   for (const o of S.groups) {
@@ -1697,10 +1866,10 @@ function threatOf(S, g) {
 }
 function toolCov(g) { return Math.min(1, (g.tools || 0) / Math.max(1, g.members.length * 0.6)); }
 function fightPow(m, g) { return m.skill * (0.3 + m.energy) * (1 + 0.5 * toolCov(g)) * (1 + 0.4 * Math.min(1, (m.xp && m.xp.guard) || 0)); }
-function defence(S, g) {
+function defence(S, g, approach) {
   let p = 0;
   for (const id of g.members) { const m = S._a.get(id); if (!m || m.car || m.war) continue; if (Math.hypot(m.x - g.home.x, m.y - g.home.y) > 160) continue; p += fightPow(m, g) * (m.job === 'guard' ? 1 : 0.45); }
-  return p * (g.walls ? 1.7 : 1);
+  return p * (wallCover(g, approach) ? 1.35 : 1);
 }
 function warTarget(S, a) {
   const w = S.wars.find(x => x.id === a.war);
@@ -1722,7 +1891,7 @@ function warMonth(S) {
       const d = Math.hypot(A.home.x - B.home.x, A.home.y - B.home.y); if (d > 460 || !reach(S, A.home.x, A.home.y, B.home.x, B.home.y)) continue;
       const fighters = warband(S, A);
       let pa = 0; for (const m of fighters) pa += fightPow(m, A);
-      const pdR = defence(S, B), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
+      const pdR = defence(S, B, A.home), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
       const prize = B.treasury + (B.tools || 0) * 4 + (A.lord === B.id ? 40 : 0);
       const v = odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
       if (odds > 0.42 && v > bv) { bv = v; best = { B, fighters, pa, pd: pdR, odds, oddsR, h, d, av }; }
@@ -1788,7 +1957,7 @@ function wars(S) {
 }
 function battle(S, w, A, B, band) {
   let pa = 0; for (const m of band) pa += fightPow(m, A);
-  let pd = defence(S, B);
+  let pd = defence(S, B, A.home);
   const st = B.state && (S.states || []).find(x => x.id === B.state);
   if (st && st.type === 'Конфедерация') for (const id of st.members) { const o = S._g.get(id); if (o && o !== B && o !== A && o.home && Math.hypot(o.home.x - B.home.x, o.home.y - B.home.y) < 420) pd += defence(S, o) * 0.35; }
   const win = rnd(S) < pa * pa / (pa * pa + pd * pd + 1e-6);
@@ -1823,14 +1992,14 @@ function battle(S, w, A, B, band) {
     for (const m of B.members.map(id => S._a.get(id))) if (m && m.id !== B.leader) { m.res = clamp(m.res + 0.12, 0, 1); if (LB) bump(m, LB, -0.1); }
     conquer = !B.lord && B.members.length < A.members.length && ratio > 1.3 && LA && LA.ambition > 0.5 && rnd(S) < 0.6;
     text = `Битва у «${B.name}»: войско «${A.name}» ${rout ? 'наголову разбивает защитников' : 'берёт верх'}, уносит ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${burnt ? ', один дом сожжён' : ''}${annexed ? `, отрезает ${annexed} ${pl(annexed, 'клетку', 'клетки', 'клеток')} земли` : ''}`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол не спас' : 'частокола у защитников не было', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
   } else {
     if (LA) { LA.status = Math.max(0, LA.status - 2); A.legit = Math.max(0.2, A.legit - 0.25); LA.rep = clamp((LA.rep || 0) - 0.12, -1, 1); }
     A.warsLost++; B.warsWon++; A.trauma++;
     for (const m of A.members.map(id => S._a.get(id))) if (m && m.id !== A.leader) { m.res = clamp(m.res + 0.15, 0, 1); if (LA) bump(m, LA, -0.12); }
     for (const m of defenders) { m.status += 0.4; m.xp.guard = (m.xp.guard || 0) + 0.25; }
     text = `Битва у «${B.name}»: защитники ${rout ? 'обращают в бегство' : 'отбивают'} войско «${A.name}»`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол удвоил оборону' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
   }
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
   const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
@@ -2225,7 +2394,7 @@ function waterMonth(S) {
     const L = S._a.get(g.leader);
     if (!g.site && !g.well && L && n >= 5 && g.wd > 110 && g.wood >= 4 && (g.wTry || 0) < S.tick && seasonOf(S.tick) !== 0) {
       const site = specialSpot(S, g, 'well');
-      if (site) { g.wood -= 4; g.wTry = S.tick + 360 * 4; g.site = site; }
+      if (beginSite(S, g, site, 4)) g.wTry = S.tick + 360 * 4;
     }
   }
   // drought conflicts over shared springs
@@ -3166,7 +3335,7 @@ function nodeOf(S, id) { for (const n of S.nodes) if (n.id === id) return n; ret
 
 function move(S) {
   const A = S.agents;
-  const costs = navigationCosts(S), drag = S._moveDrag;
+  const costs = navigationCosts(S), drag = S._moveDrag, walls = wallCells(S);
   for (const a of A) {
     let tx, ty;
     const gH = a.group && S._g.get(a.group);
@@ -3180,7 +3349,7 @@ function move(S) {
       if (a.haul && a.load) p = storeOf(g, a.lk);
       else if (a.job === 'farm' && g.fields.length) p = g.fields[(a.slot || 0) % g.fields.length];
       else if (a.job === 'wood' && g.woodCell !== null) p = { x: (g.woodCell % 50) * 20 + 10, y: Math.floor(g.woodCell / 50) * 20 + 10 };
-      else if (a.job === 'build' && g.site) p = g.site;
+      else if (a.job === 'build' && g.site) p = siteTarget(g, a);
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
@@ -3190,18 +3359,18 @@ function move(S) {
       else if (a.job === 'guard') {
         const bc = g.bcells || [];
         if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + Math.floor(S.tick / 160)) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
-        else if (g.wallPlan) {
-          const segments = g.wallPlan.segments;
-          const { a: from, b: to } = segments[(a.id + Math.floor(S.tick / 120)) % segments.length];
-          p = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-        }
-        else { const ang = a.id * 1.7 + S.tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
+        else if (g.fortifications?.length) {
+          const wall = g.fortifications[(a.id + Math.floor(S.tick / 120)) % g.fortifications.length];
+          const { a: from, b: to } = wall.segments[a.id % wall.segments.length];
+          p = { x: (from.x + to.x) / 2 - (wall.facing?.x || 0) * 5, y: (from.y + to.y) / 2 - (wall.facing?.y || 0) * 5 };
+        } else { const ang = a.id * 1.7 + S.tick / 140; p = { x: g.home.x + Math.cos(ang) * 34, y: g.home.y + Math.sin(ang) * 34 }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
       if (a.rite && S.tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
-      tx = p.x + j * (a.job === 'gather' ? 3 : 1.2); ty = p.y + j2 * (a.job === 'gather' ? 3 : 1.2);
+      const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
+      tx = p.x + j * spread; ty = p.y + j2 * spread;
     } else if (a.group) {
       const g = S._g.get(a.group);
       if (a.role === 'leader') {
@@ -3234,8 +3403,9 @@ function move(S) {
     const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
     const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
     let nx = a.x + dx / d * sp + gauss(S) * 0.5, ny = a.y + dy / d * sp + gauss(S) * 0.5;
-    const nc = cellAt(nx, ny);
-    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; }
+    if (walls[ca]) { const next = wallWalk(a, { x: nx, y: ny }, { x: tx, y: ty }, walls[ca]); nx = next.x; ny = next.y; }
+    let nc = cellAt(nx, ny);
+    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; nc = ca; }
     a.x = nx; a.y = ny;
     if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
     if (nc !== a.lc) {
@@ -3257,7 +3427,12 @@ function move(S) {
       if (dx > 55) break;
       if (dy > 55 || dy < -55) continue;
       const d2 = dx * dx + dy * dy;
-      if (d2 < 81) { const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d; a.x -= dx * f; a.y -= dy * f; b.x += dx * f; b.y += dy * f; }
+      if (d2 < 81) {
+        const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
+        const nearA = walls[cellAt(a.x, a.y)], nearB = walls[cellAt(b.x, b.y)];
+        if (!nearA?.some(w => lineCrossing(a, { x: a.x - dx * f, y: a.y - dy * f }, w.a, w.b) !== null)) { a.x -= dx * f; a.y -= dy * f; }
+        if (!nearB?.some(w => lineCrossing(b, { x: b.x + dx * f, y: b.y + dy * f }, w.a, w.b) !== null)) { b.x += dx * f; b.y += dy * f; }
+      }
       if (d2 < 3025 && rnd(S) < 0.02) interact(S, a, b);
     }
   }
@@ -3344,8 +3519,7 @@ function produce(S) {
         const c = g.woodCell;
         if (c !== null && S.wood[c] > 1 && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
       } else if (m.job === 'build') {
-        const st = g.site;
-        if (st && Math.hypot(m.x - st.x, m.y - st.y) < 26) { st.prog += e * syn; worked = true; if (st.prog >= st.need) finishSite(S, g); }
+        worked = !!g.site && workSite(S, g, m, e * syn);
       } else if (m.job === 'stone') {
         const c = g.stoneCell;
         if (c !== null && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }
@@ -4144,10 +4318,16 @@ function restore(str) {
   for (const g of S.groups) {
     if (!g.home) continue;
     if (g.plan && !g.plan.street) g.plan.street = streetFor(S, g);
-    if (g.walls && !g.wallPlan && g.plan) {
-      g.wallPlan = wallPlan(S, g);
-      if (g.wallPlan) g.wallPlan.built = S.tick;
+    if (g.wallPlan) {
+      const { segments, gates, built } = g.wallPlan;
+      if (segments.length) (g.fortifications ||= []).push({ id: 'old:' + g.id, kind: 'palisade', segments, gates, built, height: 5.5 });
+      delete g.wallPlan;
     }
+    if (g.site?.kind === 'walls') {
+      g.wood += g.site.wood || 0;
+      g.site = null;
+    }
+    g.walls = !!g.fortifications?.length;
   }
   return S;
 }
@@ -4256,7 +4436,7 @@ document.addEventListener('click', ev => { const b = ev.target.closest && ev.tar
 function focus(e, pause) {
   focusEv = e;
   if (pause) { playing = false; syncPlay(); }
-  if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; }
+  if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; if (!V3.on) $('camZoom').value = Math.round(100 * Math.log(z) / Math.log(5)); fly3D(e.x, e.y); }
   else vt = { x: 500, y: 500, z: 1 };
   const box = $('focus');
   box.style.setProperty('--c', typeColor(e.type, 1, e.hue));
@@ -4268,7 +4448,8 @@ function focus(e, pause) {
   if ($('follow')) $('follow').onclick = () => { sel = people[0].id; closeFocus(); playing = true; syncPlay(); card(); };
 }
 function closeFocus(silent) {
-  focusEv = null; vt = { x: 500, y: 500, z: 1 };
+  focusEv = null;
+  if (S) islandCamera();
   $('focus').hidden = true;
   if (!silent) lastStop = performance.now();
 }
@@ -4522,7 +4703,7 @@ function drawNet(c, W0, k = 1) {
     const street = g.plan?.street;
     if (!g.home || !street || !g.houses.length) continue;
     let lo = -8, hi = 8;
-    for (const h of [...g.houses, ...(g.wallPlan?.gates || [])]) {
+    for (const h of [...g.houses, ...(g.fortifications || []).flatMap(w => w.gates)]) {
       const x = h.x - g.home.x, y = h.y - g.home.y;
       if (Math.abs(y * g.plan.ux - x * g.plan.uy) > 22) continue;
       const t = x * g.plan.ux + y * g.plan.uy;
@@ -4561,11 +4742,33 @@ function bridgeSpans(W0) {
   return spans.concat([...rows.values()]);
 }
 function drawWall(g, px) {
-  if (!g.wallPlan) return;
-  ctx.strokeStyle = C.dark ? '#7a5a36' : '#8a6234'; ctx.lineWidth = px(3);
-  ctx.beginPath();
-  for (const { a, b } of g.wallPlan.segments) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
-  ctx.stroke();
+  const site = g.site?.kind === 'palisade' ? g.site : null;
+  for (const [walls, pending] of [[g.fortifications || [], false], [site ? [site.layout] : [], true]]) {
+    if (!walls.length) continue;
+    ctx.strokeStyle = pending ? C.muted : C.dark ? '#7a5a36' : '#8a6234';
+    ctx.lineWidth = px(pending ? 2 : 3);
+    ctx.setLineDash(pending ? [px(3), px(3)] : []);
+    ctx.beginPath();
+    for (const wall of walls) for (const { a, b } of wall.segments) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+function drawBuildingSite(st, px) {
+  if (!st || st.kind === 'palisade' || st.kind === 'field') return;
+  ctx.strokeStyle = C.muted;
+  ctx.lineWidth = px(1.6);
+  ctx.setLineDash(st.phase === 'ground' || st.phase === 'dig' ? [px(3), px(2)] : []);
+  if (st.kind === 'bridge' && st.approaches) {
+    const [a, b] = st.approaches;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  } else {
+    const { width, depth } = st.footprint || { width: 10, depth: 10 };
+    ctx.save(); ctx.translate(st.x, st.y); ctx.rotate(st.angle || 0);
+    ctx.strokeRect(-width / 2, -depth / 2, width, depth);
+    ctx.restore();
+  }
+  ctx.setLineDash([]);
 }
 function houseGlyph(x, y, sz, fill, roof, dashed, px) {
   ctx.beginPath(); ctx.rect(x - sz / 2, y - sz * .2, sz, sz * .7);
@@ -4694,16 +4897,13 @@ function draw(now) {
     for (const hh of g.houses) if (hh.ruined) { const ga = ctx.globalAlpha; ctx.globalAlpha = .5 * ga; houseGlyph(hh.x, hh.y, 12, rgba(C.muted, .5), rgba(C.muted, .8), true, px); ctx.globalAlpha = ga; } else houseGlyph(hh.x, hh.y, 13, hh.earth ? '#a7926e' : fill, roof, false, px);
     if (g.granary) granaryGlyph(g.granary.x, g.granary.y, fill, roof, false, px);
     if (g.shrine) { const f = S.faiths && S.faiths[g.faith], fc = f ? hueC(f.hue, 1, -4) : roof, x0 = g.shrine.x, y0 = g.shrine.y; ctx.fillStyle = fc; ctx.beginPath(); ctx.moveTo(x0 - 7, y0 + 5); ctx.lineTo(x0 + 7, y0 + 5); ctx.lineTo(x0 + 4, y0 - 1); ctx.lineTo(x0 + 2, y0 - 1); ctx.lineTo(x0, y0 - 9); ctx.lineTo(x0 - 2, y0 - 1); ctx.lineTo(x0 - 4, y0 - 1); ctx.closePath(); ctx.fill(); }
-    if (g.site && g.site.kind === 'shrine') { ctx.setLineDash([px(2), px(2)]); ctx.strokeStyle = roof; ctx.lineWidth = px(1); ctx.strokeRect(g.site.x - 6, g.site.y - 6, 12, 11); ctx.setLineDash([]); }
     if (g.workshop) workshopGlyph(g.workshop.x, g.workshop.y, fill, roof, false, g.members.some(id => { const m = S._a.get(id); return m && m.job === 'craft'; }), px, now);
-    if (g.site && g.site.kind === 'house') houseGlyph(g.site.x, g.site.y, 13, fill, roof, true, px);
-    if (g.site && g.site.kind === 'granary') granaryGlyph(g.site.x, g.site.y, fill, roof, true, px);
-    if (g.site && g.site.kind === 'workshop') workshopGlyph(g.site.x, g.site.y, fill, roof, true, false, px, now);
     ctx.globalAlpha = 1;
   }
   for (const g of S.groups) {
     if (!g.home) continue;
     drawWall(g, px);
+    drawBuildingSite(g.site, px);
     const lord = g.lord && S._g.get(g.lord);
     if (lord && lord.home) {
       ctx.strokeStyle = hueC(lord.hue, .9); ctx.lineWidth = px(2); ctx.setLineDash([px(1), px(4)]); ctx.lineCap = 'round';
@@ -5105,6 +5305,8 @@ rv.addEventListener('pointerdown', ev => {
 });
 
 /* ---------- panels ---------- */
+const BUILD_LABEL = { house: 'дом', workshop: 'мастерская', granary: 'амбар', shrine: 'святилище', well: 'колодец', bridge: 'мост', palisade: 'участок частокола', repair: 'починка дома', fboat: 'лодка', field: 'поле' };
+const BUILD_PHASE_LABEL = { ground: 'готовят площадку', clear: 'разбирают старое', dig: 'копают', supply: 'подвозят материалы', frame: 'собирают каркас', roof: 'кроют крышу', supports: 'ставят опоры', posts: 'ставят колья', deck: 'кладут настил', lining: 'укрепляют стенки', finish: 'заканчивают работу' };
 function spark(id, arr) {
   const c = $(id), dpr = Math.min(2, devicePixelRatio || 1), w = c.clientWidth, h = c.clientHeight;
   if (!w) return;
@@ -5153,7 +5355,7 @@ function ui(force) {
   $('groups').innerHTML = gs.length ? gs.map(g => {
     const L = S._a.get(g.leader), age = Math.floor((S.tick - g.founded) / 360);
     return `<button class="grp" data-a="${g.leader}"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}${g.home && g.members.length >= 5 && RC.get(g.id) ? ` · <span style="font-weight:400;color:var(--slate)">${esc(RC.get(g.id).type.toLowerCase())}</span>` : ''}</strong><span class="n">${g.members.length}</span>
-    <small>лидер ${esc(L ? L.name : '?')}${g.gen > 1 ? `, ${g.gen}-й по счёту` : ', основатель'} · ${age ? yrsTxt(age) : 'меньше года'} · ${g.home ? `домов ${g.houses.length}, полей ${g.fields.length}${g.workshop ? ', мастерская' : ''}${g.granary ? ', амбар' : ''}${g.walls ? ', частокол' : ''}${g.terr ? `, земли ${g.terr} кл.` : ''}${g.gov === 'assembly' ? ', вече' : ''}${g.land === 'private' ? ', частные поля' : ''}${g.coin ? ', монета' : ''}${g.lord && S._g.get(g.lord) ? ` · данник «${esc(S._g.get(g.lord).name)}»` : ''}${(() => { const v = S.groups.filter(o => o.lord === g.id); return v.length ? ` · данники: ${esc(v.map(o => o.name).join(', '))}` : ''; })()} · еда ${Math.round(g.treasury)}, лес ${Math.round(g.wood)}, камень ${Math.round(g.stone || 0)}, орудия ${Math.round(g.tools || 0)}${g.stoneCell === null ? ' · холмов рядом нет' : ''}` : 'кочует'} · ${g.depth} ур. · энтропия ${g.entropy.toFixed(2)}</small>
+    <small>лидер ${esc(L ? L.name : '?')}${g.gen > 1 ? `, ${g.gen}-й по счёту` : ', основатель'} · ${age ? yrsTxt(age) : 'меньше года'} · ${g.home ? `домов ${g.houses.length}, полей ${g.fields.length}${g.workshop ? ', мастерская' : ''}${g.granary ? ', амбар' : ''}${g.fortifications?.length ? `, участков частокола ${g.fortifications.length}` : ''}${g.terr ? `, земли ${g.terr} кл.` : ''}${g.site ? ` · стройка «${BUILD_LABEL[g.site.kind] || 'площадка'}», ${BUILD_PHASE_LABEL[g.site.phase] || 'в работе'}, ${Math.floor(100 * g.site.prog / g.site.need)}%` : ''}${g.gov === 'assembly' ? ', вече' : ''}${g.land === 'private' ? ', частные поля' : ''}${g.coin ? ', монета' : ''}${g.lord && S._g.get(g.lord) ? ` · данник «${esc(S._g.get(g.lord).name)}»` : ''}${(() => { const v = S.groups.filter(o => o.lord === g.id); return v.length ? ` · данники: ${esc(v.map(o => o.name).join(', '))}` : ''; })()} · еда ${Math.round(g.treasury)}, лес ${Math.round(g.wood)}, камень ${Math.round(g.stone || 0)}, орудия ${Math.round(g.tools || 0)}${g.stoneCell === null ? ' · холмов рядом нет' : ''}` : 'кочует'} · ${g.depth} ур. · энтропия ${g.entropy.toFixed(2)}</small>
     <span class="meter"><span style="width:${Math.min(100, g.entropy / 2.5 * 100)}%"></span></span></button>`;
   }).join('') : '<p class="empty">Групп пока нет: агенты ещё присматриваются друг к другу.</p>';
   drawRiver();
@@ -5295,6 +5497,7 @@ function drawMini(W0, c, st) {
       for (const hh of g.houses) houseGlyph(hh.x, hh.y, 14, fill, roof, false, px);
       if (g.workshop) workshopGlyph(g.workshop.x, g.workshop.y, fill, roof, false, false, px, now);
       drawWall(g, px);
+      drawBuildingSite(g.site, px);
       const lord = g.lord && W0._g.get(g.lord);
       if (lord && lord.home) { ctx.strokeStyle = hueC(lord.hue, .9); ctx.lineWidth = px(2); ctx.setLineDash([px(1), px(4)]); ctx.beginPath(); ctx.moveTo(g.home.x, g.home.y); ctx.lineTo(lord.home.x, lord.home.y); ctx.stroke(); ctx.setLineDash([]); }
     }
@@ -5391,12 +5594,13 @@ function set3D(on) {
   $('v2d').classList.toggle('on', !on); $('v3d').classList.toggle('on', on);
   $('v2d').setAttribute('aria-pressed', String(!on)); $('v3d').setAttribute('aria-pressed', String(on));
   document.body.classList.toggle('flat', !on);
-  if (!on) { V3.on = false; cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
-  if (V3.ready) { V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); return; }
+  V3.wanted = on;
+  if (!on) { V3.on = false; $('camZoom').value = Math.round(100 * Math.log(vt.z) / Math.log(5)); cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
+  if (V3.ready) { V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
   if (V3.loading) return;
   V3.loading = true; $('v3msg').hidden = false; $('v3msg').textContent = 'Загружаю 3D…';
   (async () => {
-    try { if (!window.THREE) await loadScript(URL3[0]); if (!THREE.OrbitControls) await loadScript(URL3[1]); init3D(); V3.ready = true; $('v3msg').hidden = true; set3D(true); }
+    try { if (!window.THREE) await loadScript(URL3[0]); if (!THREE.OrbitControls) await loadScript(URL3[1]); init3D(); V3.ready = true; $('v3msg').hidden = true; set3D(V3.wanted); }
     catch (e) { $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.'; V3.loading = false; }
   })();
 }
@@ -5434,7 +5638,9 @@ function init3D() {
   plate.insertBefore(V3.ren.domElement, $('v3lab'));
   V3.ctl = new T.OrbitControls(V3.cam, V3.ren.domElement);
   V3.ctl.target.set(500, 0, 520); V3.ctl.enableDamping = true; V3.ctl.dampingFactor = 0.08;
-  V3.ctl.maxPolarAngle = 1.32; V3.ctl.minDistance = 120; V3.ctl.maxDistance = 1900; V3.ctl.update();
+  V3.ctl.maxPolarAngle = 1.32; V3.ctl.minDistance = 110; V3.ctl.maxDistance = 3200; V3.ctl.update();
+  V3.ctl.addEventListener('start', () => { follow = false; V3.fly = null; });
+  V3.ctl.addEventListener('end', syncCameraZoom);
   V3.hemi = new T.HemisphereLight(0xffffff, 0x556644, 0.55); V3.scene.add(V3.hemi);
   V3.sun = new T.DirectionalLight(0xfff2dd, 0.6); V3.sun.position.set(-400, 900, 300); V3.scene.add(V3.sun);
   V3.texCv = document.createElement('canvas'); V3.texCv.width = V3.texCv.height = 2048;
@@ -5465,7 +5671,7 @@ function init3D() {
   const mk = (geo, mat, n) => { const m = new T.InstancedMesh(geo, mat, n); m.count = 0; V3.scene.add(m); return m; };
   V3.cargoW = mk(logG, lam(0x8a5a2b), 600); V3.cargoS = mk(new T.BoxGeometry(3.6, 3, 3.6), lam(0x9a968c), 600); V3.cargoF = mk(new T.SphereGeometry(2.5, 8, 6), lam(0xd9c38e), 600);
   V3.bridges = mk(new T.BoxGeometry(24, 2.2, 11), lam(0x8f6a40), 80); V3.rails = mk(new T.BoxGeometry(24, 2.5, 0.8), lam(0x6b4a2b), 160);
-  V3.sites = mk(new T.BoxGeometry(10, 8, 10), lam(0xd8b98a), 60); V3.scaf = mk(new T.CylinderGeometry(0.45, 0.45, 15, 4), lam(0x9b7647), 240);
+  V3.sites = mk(new T.BoxGeometry(1, 1, 1), lam(0xd8b98a), 600);
   V3.crops = mk(new T.BoxGeometry(3.2, 1, 3.2), lam(0xffffff), 900);
   V3.stumps = mk(new T.CylinderGeometry(1.3, 1.6, 2.2, 6), lam(0x7a5636), 2600);
   V3.smoke = mk(new T.SphereGeometry(2.3, 7, 5), new T.MeshLambertMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.5, depthWrite: false }), 360);
@@ -5490,21 +5696,42 @@ function init3D() {
   });
   new ResizeObserver(size3D).observe(plate);
   size3D();
-  const big = S.groups.filter(g => g.home).sort((a, b) => b.members.length - a.members.length)[0];
-  const landing = S.tick === 0 && firstLanding(S);
+  const landing = introOpen && firstLanding(S);
   if (landing) fly3D(landing.x1, landing.y1, true);
-  else if (big) fly3D(big.home.x, big.home.y, true);
+  else islandCamera(true);
 }
-function fly3D(x, z, now) {
+function overviewDistance() {
+  const vertical = V3.cam.fov * Math.PI / 360;
+  return Math.max(1350, 510 / Math.sin(Math.min(vertical, Math.atan(Math.tan(vertical) * V3.cam.aspect))));
+}
+function syncCameraZoom() {
+  if (!V3.on || !V3.ctl) return;
+  const max = overviewDistance(), range = $('camZoom');
+  const distance = V3.cam.position.distanceTo(V3.ctl.target);
+  range.value = Math.round(Math.max(0, Math.min(100, 100 * Math.log(max / distance) / Math.log(max / 110))));
+}
+function fly3D(x, z, now, distance = 420, overview = false) {
   if (!V3.ctl) return;
-  V3.fly = { x, z };
-  if (now) { V3.ctl.target.set(x, 0, z); V3.cam.position.set(x + 40, 260, z + 330); V3.ctl.update(); V3.fly = null; }
+  V3.fly = { x, z, distance, overview };
+  if (now || reduce) {
+    V3.ctl.target.set(x, 0, z);
+    V3.cam.position.set(x + distance * 0.07, distance * 0.73, z + distance * 0.68);
+    V3.ctl.update(); V3.fly = null; syncCameraZoom();
+  }
+}
+function islandCamera(now) {
+  follow = false;
+  vt = { x: 500, y: 500, z: 1 };
+  if (now || reduce) view = { ...vt };
+  $('camZoom').value = 0;
+  if (V3.ctl) fly3D(S.isle?.x ?? 500, S.isle?.y ?? 500, now, overviewDistance(), true);
 }
 function size3D() {
   if (!V3.ren) return;
   const w = plate.clientWidth, h = plate.clientHeight;
   V3.ren.setSize(w, h, false); V3.ren.domElement.style.width = w + 'px'; V3.ren.domElement.style.height = h + 'px';
-  V3.cam.aspect = w / Math.max(1, h); V3.cam.updateProjectionMatrix();
+  V3.cam.aspect = Math.max(1, w) / Math.max(1, h); V3.cam.updateProjectionMatrix();
+  V3.ctl.maxDistance = Math.max(3200, overviewDistance());
 }
 function hexOf(css) { V3.col.setStyle(css); return V3.col; }
 function hsl3(h, dl = 0) { return new THREE.Color().setHSL(((h % 360) + 360) % 360 / 360, 0.62, ((C.dark ? 62 : 42) + dl) / 100); }
@@ -5564,15 +5791,40 @@ function rebuildStatic(W0, now) {
     if (g.shrine && sp < 80) { const w = g.shrine, y = gh(w.x, w.y), f = W0.faiths && W0.faiths[g.faith]; setInst(V3.spires, sp, w.x, y + 11, w.y); V3.spires.setColorAt(sp, hsl3(f ? f.hue : g.hue, -4)); sp++; }
   }
   for (const r of W0.ruins || []) for (const hh of r.houses) { if (h >= 900) break; const y = gh(hh.x, hh.y); setInst(V3.houses, h, hh.x, y + 2, hh.y, 1, hh.x, 0.45); V3.houses.setColorAt(h, hexOf(rgba(C.muted, 1)).clone()); setInst(V3.roofs, h, hh.x, y - 20, hh.y, 0.01); V3.roofs.setColorAt(h, hexOf(rgba(C.muted, 1)).clone()); h++; }
-  let si = 0, sc = 0, cr = 0;
+  let si = 0, cr = 0;
+  const boxAt = (x, y, z, w, h, d, yaw = 0) => {
+    if (si >= V3.sites.instanceMatrix.count) return;
+    const o = V3.dummy; o.position.set(x, y, z); o.rotation.set(0, -yaw, 0); o.scale.set(w, h, d); o.updateMatrix();
+    V3.sites.setMatrixAt(si++, o.matrix);
+  };
   const season = Math.floor((W0.tick % 360) / 90), sh = [0, 0.35, 0.85, 1.1][season], ccol = season === 3 ? hexOf(C.dark ? '#b9963c' : '#d9b04a').clone() : hexOf(C.dark ? '#4f7a36' : '#7eae4e').clone();
   for (const g of W0.groups) {
     if (!g.home) continue;
     const st = g.site;
-    if (st && st.kind !== 'field' && st.kind !== 'walls' && si < 60) {
-      const p = Math.min(1, st.prog / st.need), y = gh(st.x, st.y), w = st.kind === 'workshop' ? 1.6 : st.kind === 'granary' ? 1 : 1;
-      setInst(V3.sites, si++, st.x, y + 4 * Math.max(0.08, p), st.y, w, -(st.angle || 0), Math.max(0.08, p));
-      for (const [dx, dz] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) if (sc < 240) setInst(V3.scaf, sc++, st.x + dx * w, y + 7.5, st.y + dz * w);
+    if (st && st.kind !== 'field' && st.kind !== 'palisade') {
+      const y = gh(st.x, st.y), angle = st.angle || 0;
+      const { width, depth } = st.footprint || { width: 10, depth: 10 };
+      if (st.kind === 'bridge' && st.approaches) {
+        const [a, b] = st.approaches;
+        for (const p of [a, b]) boxAt(p.x, gh(p.x, p.y) + 0.4, p.y, 6, 0.8, 10);
+        if (st.phase === 'supports' || st.phase === 'deck') {
+          const mid = (a.x + b.x) / 2, top = Math.max(gh(a.x, a.y), gh(b.x, b.y)) + 1;
+          for (const x of [a.x + (mid - a.x) * .6, b.x + (mid - b.x) * .6]) {
+            const base = gh(x, a.y);
+            boxAt(x, (top + base) / 2, a.y, 2.5, top - base, 10);
+          }
+          if (st.phase === 'deck') boxAt(mid, top, a.y, Math.abs(b.x - a.x) * (0.3 + 0.7 * (st.prog / st.need - .68) / .32), 1.2, 9);
+        }
+      } else {
+        boxAt(st.x, y + 0.16, st.y, width, .32, depth, angle);
+        if (st.phase === 'frame' || st.phase === 'roof') for (const dx of [-width * .43, width * .43]) for (const dz of [-depth * .43, depth * .43]) {
+          const x = st.x + dx * Math.cos(angle) - dz * Math.sin(angle), z = st.y + dx * Math.sin(angle) + dz * Math.cos(angle);
+          boxAt(x, gh(x, z) + 3, z, .8, 6, .8, angle);
+        }
+        if (st.phase === 'roof') boxAt(st.x, y + 6, st.y, width, .8, depth, angle);
+        if (st.phase === 'lining' || st.phase === 'finish') boxAt(st.x, y + .9, st.y, width, 1.8, depth, angle);
+        if (st.delivered?.wood) boxAt(st.x + width * .8, y + .6, st.y, 2.5, 1.2, 5);
+      }
     }
     if (sh > 0) for (const f of g.fields) for (let i = 0; i < 6 && cr < 900; i++) { const fx = f.x - 6 + (i % 3) * 6, fz = f.y - 3.5 + Math.floor(i / 3) * 7; setInst(V3.crops, cr, fx, gh(fx, fz) + sh * 2.2, fz, 1, 0, sh * 4.4); V3.crops.setColorAt(cr, ccol); cr++; }
   }
@@ -5586,18 +5838,54 @@ function rebuildStatic(W0, now) {
   }
   V3.bridges.count = bi; V3.rails.count = ri; V3.bridges.instanceMatrix.needsUpdate = true; V3.rails.instanceMatrix.needsUpdate = true;
   V3.water.material.color.set(W0.frozen ? (C.dark ? 0xb8c8d4 : 0xe4eef4) : 0x6fa8c8); V3.water.material.opacity = W0.frozen ? 0.96 : 0.93;
-  for (const [m, c] of [[V3.sites, si], [V3.scaf, sc], [V3.crops, cr]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  for (const [m, c] of [[V3.sites, si], [V3.crops, cr]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   for (const [m, c] of [[V3.houses, h], [V3.roofs, h], [V3.big, b], [V3.chim, b], [V3.silos, s], [V3.spires, sp]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-  const wk = JSON.stringify(W0.groups.filter(g => g.wallPlan).map(g => g.wallPlan.segments));
-  if (wk !== V3.wallsKey) {
-    V3.wallsKey = wk;
-    for (const ch of [...V3.wallG.children]) { V3.wallG.remove(ch); ch.geometry.dispose(); }
-    if (!V3.wallMaterial) V3.wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8a6234 });
-    for (const g of W0.groups) for (const { a, b } of g.wallPlan?.segments || []) {
-      const dx = b.x - a.x, dz = b.y - a.y, x = (a.x + b.x) / 2, z = (a.y + b.y) / 2;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(dx, dz), 7, 2), V3.wallMaterial);
-      m.rotation.y = -Math.atan2(dz, dx);
-      m.position.set(x, gh(x, z) + 3.5, z); V3.wallG.add(m);
+  updatePalisades3D(W0);
+}
+function updatePalisades3D(W0) {
+  const active = W0.groups.filter(g => g.site?.kind === 'palisade').map(g => g.site);
+  const wk = JSON.stringify([W0.seed, W0.wallV, active.map(st => [st.id, st.phase, Math.floor(20 * st.prog / st.need)])]);
+  if (wk === V3.wallsKey && W0 === V3.wallWorld) return;
+  V3.wallsKey = wk; V3.wallWorld = W0;
+  V3.wallG.clear();
+  const T = THREE;
+  V3.postG ||= new T.CylinderGeometry(.8, .94, 1, 7);
+  V3.pointG ||= new T.ConeGeometry(.8, 1, 7);
+  V3.wallMaterial ||= new T.MeshLambertMaterial({ color: 0x775232 });
+  V3.trenchMaterial ||= new T.MeshLambertMaterial({ color: 0x786852 });
+  V3.trenchG ||= new T.BoxGeometry(1, .35, 1);
+  const add = (geo, mat, x, y, z, w, h, d, yaw = 0) => {
+    const m = new T.Mesh(geo, mat);
+    m.position.set(x, y, z); m.scale.set(w, h, d); m.rotation.y = -yaw; V3.wallG.add(m);
+  };
+  const built = [...W0.groups, ...(W0.ruins || [])].flatMap(g => g.fortifications || []);
+  for (const [layout, site] of [...built.map(w => [w, null]), ...active.map(st => [st.layout, st])]) {
+    let remaining = site ? Math.max(0, Math.min(1, (site.prog / site.need - .32) / .56)) * layout.posts : Infinity;
+    for (const { a, b } of layout.segments) {
+      const len = Math.hypot(b.x - a.x, b.y - a.y), yaw = Math.atan2(b.y - a.y, b.x - a.x);
+      const count = Math.ceil(len / (layout.posts ? 1.55 : 1.8)), height = layout.height;
+      for (let i = 0; i < count; i++) {
+        const t = (i + .5) / count, x = a.x + (b.x - a.x) * t, z = a.y + (b.y - a.y) * t;
+        const y = gh(x, z);
+        if (site && remaining-- < 1) {
+          const dug = Math.min(1, site.prog / site.need / .32);
+          if (t > dug) continue;
+          add(V3.trenchG, V3.trenchMaterial, x, y + .15, z, len / count, 1, 1.6, yaw);
+        } else {
+          add(V3.postG, V3.wallMaterial, x, y + height / 2, z, 1, height, 1);
+          add(V3.pointG, V3.wallMaterial, x, y + height + .43, z, 1, .86, 1);
+        }
+      }
+    }
+    if (!site || site.phase === 'finish') for (const gate of layout.gates) {
+      if (gate.angle === undefined) continue;
+      const x0 = gate.x, z0 = gate.y, height = layout.height;
+      for (const side of [-1, 1]) {
+        const x = x0 + Math.cos(gate.angle) * side * gate.width / 2;
+        const z = z0 + Math.sin(gate.angle) * side * gate.width / 2;
+        add(V3.postG, V3.wallMaterial, x, gh(x, z) + height / 2, z, 1.4, height, 1.4);
+      }
+      add(V3.trenchG, V3.wallMaterial, x0, gh(x0, z0) + height, z0, gate.width + 1.1, 3, 1.6, gate.angle);
     }
   }
 }
@@ -5616,7 +5904,8 @@ function render3D(now) {
     V3.ids[i] = a.id;
     if (a.car && c < 80) { setInst(V3.carts, c++, d.x + 6, y + 3, d.y, 1, Math.atan2(a.x - d.x, a.y - d.y)); }
     if (a.job === 'water' && a.wc && bk < 200) setInst(V3.bucket, bk++, d.x + 2.5, y + 7 * s, d.y);
-    if (a.load > 0.3) { const m = a.lk === 'wood' ? V3.cargoW : a.lk === 'stone' ? V3.cargoS : V3.cargoF, k = m === V3.cargoW ? cw++ : m === V3.cargoS ? cs++ : cf++; if (k < 600) setInst(m, k, d.x, y + 12.5 * s, d.y, 1, a.id); }
+    const cargo = a.load > 0.3 ? a.lk : a.job === 'build' && a.siteTrip?.id === g?.site?.id ? a.siteTrip?.kind : null;
+    if (cargo) { const m = cargo === 'wood' ? V3.cargoW : cargo === 'stone' ? V3.cargoS : V3.cargoF, k = m === V3.cargoW ? cw++ : m === V3.cargoS ? cs++ : cf++; if (k < 600) setInst(m, k, d.x, y + 12.5 * s, d.y, 1, a.id); }
   }
   let sm = 0;
   const winter = Math.floor((W0.tick % 360) / 90) === 0, tt = reduce ? 0 : now / 1600;
@@ -5654,7 +5943,22 @@ function render3D(now) {
   { let si2 = 0, wi = 0; for (const sp of W0.springs || []) if (!sp.dry && si2 < 20) setInst(V3.springM, si2++, sp.x, gh(sp.x, sp.y) + 0.6, sp.y, sp.big ? 1.25 : 1); for (const g of W0.groups) if (g.well && wi < 80) { const y0 = gh(g.well.x, g.well.y); setInst(V3.wellM, wi, g.well.x, y0 + 2, g.well.y); setInst(V3.wellW, wi, g.well.x, g.well.dry ? -60 : y0 + 2.1, g.well.y); wi++; } V3.springM.count = si2; V3.wellM.count = wi; V3.wellW.count = wi; for (const m of [V3.springM, V3.wellM, V3.wellW]) m.instanceMatrix.needsUpdate = true; }
   for (const [m, k] of [[V3.bucket, bk], [V3.cargoW, cw], [V3.cargoS, cs], [V3.cargoF, cf], [V3.smoke, sm], [V3.deer, dr], [V3.deerH, dr]]) { m.count = Math.min(k, m.instanceMatrix.count); m.instanceMatrix.needsUpdate = true; }
   if (follow && sel && S._a.get(sel)) { const a = D.get(sel); V3.fly = { x: a.x, z: a.y }; }
-  if (V3.fly) { const tg = V3.ctl.target, dx = V3.fly.x - tg.x, dz = V3.fly.z - tg.z; tg.x += dx * 0.08; tg.z += dz * 0.08; V3.cam.position.x += dx * 0.08; V3.cam.position.z += dz * 0.08; if (Math.hypot(dx, dz) < 2) V3.fly = null; }
+  if (V3.fly) {
+    const { x, z, distance, overview } = V3.fly, tg = V3.ctl.target, pos = V3.cam.position;
+    const dx = x - tg.x, dz = z - tg.z, dy = -tg.y, f = reduce ? 1 : 0.10;
+    const current = pos.distanceTo(tg), range = distance ?? current;
+    tg.x += dx * f; tg.y += dy * f; tg.z += dz * f;
+    if (overview) {
+      pos.x += (x + range * 0.07 - pos.x) * f;
+      pos.y += (range * 0.73 - pos.y) * f;
+      pos.z += (z + range * 0.68 - pos.z) * f;
+    } else {
+      pos.x += dx * f; pos.y += dy * f; pos.z += dz * f;
+      pos.sub(tg).multiplyScalar((current + (range - current) * f) / current).add(tg);
+    }
+    const error = overview ? Math.hypot(x + range * 0.07 - pos.x, range * 0.73 - pos.y, z + range * 0.68 - pos.z) : Math.abs(range - current);
+    if (Math.hypot(dx, dy, dz) < 2 && error < 3) { V3.fly = null; syncCameraZoom(); }
+  }
   for (const w of W0.wars || []) {
     if (f >= 20) break;
     const band = (w.fighters || []).map(id => D.get(id)).filter(Boolean), A = W0._g.get(w.att); if (!band.length || !A) continue;
@@ -5662,7 +5966,6 @@ function render3D(now) {
     const y = gh(fx, fz); setInst(V3.poles, f, fx, y + 15, fz); setInst(V3.flags, f, fx + 3, y + 26, fz, 1, Math.PI / 2); V3.flags.setColorAt(f, hsl3(A.hue)); f++;
   }
   for (const [m, k] of [[V3.bodies, n], [V3.heads, n], [V3.carts, c], [V3.flags, f], [V3.poles, f]]) { m.count = k; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-  if (focusEv && focusEv.x !== undefined && focusEv.x !== null) { V3.ctl.target.x += (focusEv.x - V3.ctl.target.x) * 0.06; V3.ctl.target.z += (focusEv.y - V3.ctl.target.z) * 0.06; }
   V3.ctl.update();
   V3.ren.render(V3.scene, V3.cam);
   if (!V3.lf || now - V3.lf > 60) { labels3D(W0); V3.lf = now; }
@@ -6039,7 +6342,45 @@ $('lf1').addEventListener('click', () => { logAll = false; $('lf1').classList.ad
 $('lf2').addEventListener('click', () => { logAll = true; $('lf2').classList.add('on'); $('lf1').classList.remove('on'); ui(true); });
 $('groups').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
 $('log').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const ev = S.events[+b.dataset.i]; if (ev) { focus(ev, true); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
+let mapDrag;
+const zoom = $('camZoom');
+function zoomCamera(value) {
+  follow = false;
+  const fraction = Math.max(0, Math.min(100, value)) / 100;
+  if (!fraction) { islandCamera(); return; }
+  zoom.value = Math.round(fraction * 100);
+  if (V3.on && V3.ready) {
+    V3.fly = null;
+    const target = V3.ctl.target, pos = V3.cam.position, distance = overviewDistance() * (110 / overviewDistance()) ** fraction;
+    pos.sub(target).setLength(distance).add(target);
+    V3.ctl.update();
+  } else vt.z = 5 ** fraction;
+}
+$('camIsland').addEventListener('click', () => islandCamera());
+zoom.addEventListener('input', () => zoomCamera(+zoom.value));
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomCamera(+zoom.value - Math.sign(e.deltaY) * 6);
+}, { passive: false });
 cv.addEventListener('pointerdown', e => {
+  if (mapDrag || e.button !== 0) return;
+  mapDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (mapDrag?.id !== e.pointerId) return;
+  const dx = e.clientX - mapDrag.x, dy = e.clientY - mapDrag.y;
+  if (Math.hypot(dx, dy) < 5 && !mapDrag.moved) return;
+  mapDrag.moved = true; follow = false;
+  const scale = cv.width / Math.max(1, cv.clientWidth) / T.k, half = 500 / vt.z;
+  vt.x = Math.max(half, Math.min(1000 - half, mapDrag.vx - dx * scale));
+  vt.y = Math.max(half, Math.min(1000 - half, mapDrag.vy - dy * scale));
+});
+cv.addEventListener('pointercancel', () => { mapDrag = null; });
+cv.addEventListener('pointerup', e => {
+  if (mapDrag?.id !== e.pointerId) return;
+  const moved = mapDrag.moved; mapDrag = null;
+  if (moved) return;
   const r = cv.getBoundingClientRect(), dx = cv.width / r.width;
   const x = ((e.clientX - r.left) * dx - T.ox) / T.k, y = ((e.clientY - r.top) * dx - T.oy) / T.k;
   let best = null, bd = 32 / view.z;
@@ -6051,18 +6392,21 @@ cv.addEventListener('pointerdown', e => {
 new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
 
+let introOpen = false;
 function intro() {
+  introOpen = true;
   playing = false; acc = dayWatch ? dawnFraction() : 0; syncPlay();
   const landing = firstLanding(S);
   if (landing) {
     vt = { x: landing.x1, y: landing.y1, z: 1.65 };
     view = { ...vt };
+    zoom.value = Math.round(100 * Math.log(vt.z) / Math.log(5));
     fly3D(landing.x1, landing.y1, true);
   }
   const box = $('focus'); box.style.setProperty('--c', C.slate);
   box.innerHTML = `<em>Год 0</em><strong>После кораблекрушения</strong><p>Ночью шторм разбил корабль. К утру шлюпки прибило к берегам острова. Выжившие вынесли на сушу то, что удалось спасти. Теперь им нужно найти пресную воду и место для ночлега.</p><div class="acts"><button class="main" id="go">Смотреть</button></div>`;
   box.hidden = false;
-  $('go').onclick = () => { box.hidden = true; lastStop = performance.now() - 6000; playing = true; syncPlay(); };
+  $('go').onclick = () => { introOpen = false; box.hidden = true; islandCamera(); lastStop = performance.now(); playing = true; syncPlay(); };
 }
 function start(data) {
   readColors(); sizeCanvas();

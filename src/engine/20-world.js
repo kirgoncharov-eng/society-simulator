@@ -93,7 +93,8 @@ function dissolve(S, g, silent) {
   if (S.arch && S.arch[g.id]) S.arch[g.id].end = S.tick;
   if (g.home) {
     S.ruins = S.ruins || [];
-    S.ruins.push({ name: g.name, t: S.tick, x: g.home.x, y: g.home.y, houses: g.houses.concat([g.workshop, g.granary].filter(Boolean)).map(h => ({ x: h.x, y: h.y })), fields: g.fields.map(f => ({ x: f.x, y: f.y })), plan: g.plan || null });
+    S.ruins.push({ name: g.name, t: S.tick, x: g.home.x, y: g.home.y, houses: g.houses.concat([g.workshop, g.granary].filter(Boolean)).map(({ x, y, angle, footprint, entrance, frontage, earth, built }) => ({ x, y, angle, footprint, entrance, frontage, earth, built })), fields: g.fields.map(f => ({ x: f.x, y: f.y })), plan: g.plan || null, fortifications: g.fortifications });
+    if (g.fortifications?.length) S.wallV = (S.wallV || 0) + 1;
     if (S.ruins.length > 14) S.ruins.shift();
     for (const f of g.fields) delete S.occ[f.c];
     if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === g.id) S.own[c] = 0;

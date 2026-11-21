@@ -92,10 +92,16 @@ function restore(str) {
   for (const g of S.groups) {
     if (!g.home) continue;
     if (g.plan && !g.plan.street) g.plan.street = streetFor(S, g);
-    if (g.walls && !g.wallPlan && g.plan) {
-      g.wallPlan = wallPlan(S, g);
-      if (g.wallPlan) g.wallPlan.built = S.tick;
+    if (g.wallPlan) {
+      const { segments, gates, built } = g.wallPlan;
+      if (segments.length) (g.fortifications ||= []).push({ id: 'old:' + g.id, kind: 'palisade', segments, gates, built, height: 5.5 });
+      delete g.wallPlan;
     }
+    if (g.site?.kind === 'walls') {
+      g.wood += g.site.wood || 0;
+      g.site = null;
+    }
+    g.walls = !!g.fortifications?.length;
   }
   return S;
 }

@@ -170,7 +170,7 @@ function drawNet(c, W0, k = 1) {
     const street = g.plan?.street;
     if (!g.home || !street || !g.houses.length) continue;
     let lo = -8, hi = 8;
-    for (const h of [...g.houses, ...(g.wallPlan?.gates || [])]) {
+    for (const h of [...g.houses, ...(g.fortifications || []).flatMap(w => w.gates)]) {
       const x = h.x - g.home.x, y = h.y - g.home.y;
       if (Math.abs(y * g.plan.ux - x * g.plan.uy) > 22) continue;
       const t = x * g.plan.ux + y * g.plan.uy;
@@ -209,11 +209,33 @@ function bridgeSpans(W0) {
   return spans.concat([...rows.values()]);
 }
 function drawWall(g, px) {
-  if (!g.wallPlan) return;
-  ctx.strokeStyle = C.dark ? '#7a5a36' : '#8a6234'; ctx.lineWidth = px(3);
-  ctx.beginPath();
-  for (const { a, b } of g.wallPlan.segments) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
-  ctx.stroke();
+  const site = g.site?.kind === 'palisade' ? g.site : null;
+  for (const [walls, pending] of [[g.fortifications || [], false], [site ? [site.layout] : [], true]]) {
+    if (!walls.length) continue;
+    ctx.strokeStyle = pending ? C.muted : C.dark ? '#7a5a36' : '#8a6234';
+    ctx.lineWidth = px(pending ? 2 : 3);
+    ctx.setLineDash(pending ? [px(3), px(3)] : []);
+    ctx.beginPath();
+    for (const wall of walls) for (const { a, b } of wall.segments) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+function drawBuildingSite(st, px) {
+  if (!st || st.kind === 'palisade' || st.kind === 'field') return;
+  ctx.strokeStyle = C.muted;
+  ctx.lineWidth = px(1.6);
+  ctx.setLineDash(st.phase === 'ground' || st.phase === 'dig' ? [px(3), px(2)] : []);
+  if (st.kind === 'bridge' && st.approaches) {
+    const [a, b] = st.approaches;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  } else {
+    const { width, depth } = st.footprint || { width: 10, depth: 10 };
+    ctx.save(); ctx.translate(st.x, st.y); ctx.rotate(st.angle || 0);
+    ctx.strokeRect(-width / 2, -depth / 2, width, depth);
+    ctx.restore();
+  }
+  ctx.setLineDash([]);
 }
 function houseGlyph(x, y, sz, fill, roof, dashed, px) {
   ctx.beginPath(); ctx.rect(x - sz / 2, y - sz * .2, sz, sz * .7);
@@ -342,16 +364,13 @@ function draw(now) {
     for (const hh of g.houses) if (hh.ruined) { const ga = ctx.globalAlpha; ctx.globalAlpha = .5 * ga; houseGlyph(hh.x, hh.y, 12, rgba(C.muted, .5), rgba(C.muted, .8), true, px); ctx.globalAlpha = ga; } else houseGlyph(hh.x, hh.y, 13, hh.earth ? '#a7926e' : fill, roof, false, px);
     if (g.granary) granaryGlyph(g.granary.x, g.granary.y, fill, roof, false, px);
     if (g.shrine) { const f = S.faiths && S.faiths[g.faith], fc = f ? hueC(f.hue, 1, -4) : roof, x0 = g.shrine.x, y0 = g.shrine.y; ctx.fillStyle = fc; ctx.beginPath(); ctx.moveTo(x0 - 7, y0 + 5); ctx.lineTo(x0 + 7, y0 + 5); ctx.lineTo(x0 + 4, y0 - 1); ctx.lineTo(x0 + 2, y0 - 1); ctx.lineTo(x0, y0 - 9); ctx.lineTo(x0 - 2, y0 - 1); ctx.lineTo(x0 - 4, y0 - 1); ctx.closePath(); ctx.fill(); }
-    if (g.site && g.site.kind === 'shrine') { ctx.setLineDash([px(2), px(2)]); ctx.strokeStyle = roof; ctx.lineWidth = px(1); ctx.strokeRect(g.site.x - 6, g.site.y - 6, 12, 11); ctx.setLineDash([]); }
     if (g.workshop) workshopGlyph(g.workshop.x, g.workshop.y, fill, roof, false, g.members.some(id => { const m = S._a.get(id); return m && m.job === 'craft'; }), px, now);
-    if (g.site && g.site.kind === 'house') houseGlyph(g.site.x, g.site.y, 13, fill, roof, true, px);
-    if (g.site && g.site.kind === 'granary') granaryGlyph(g.site.x, g.site.y, fill, roof, true, px);
-    if (g.site && g.site.kind === 'workshop') workshopGlyph(g.site.x, g.site.y, fill, roof, true, false, px, now);
     ctx.globalAlpha = 1;
   }
   for (const g of S.groups) {
     if (!g.home) continue;
     drawWall(g, px);
+    drawBuildingSite(g.site, px);
     const lord = g.lord && S._g.get(g.lord);
     if (lord && lord.home) {
       ctx.strokeStyle = hueC(lord.hue, .9); ctx.lineWidth = px(2); ctx.setLineDash([px(1), px(4)]); ctx.lineCap = 'round';
