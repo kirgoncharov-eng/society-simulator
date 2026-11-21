@@ -3,7 +3,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm25', date: '2026-11-21', note: 'роды и партии: род от основателя, стороны в борьбе за власть, наследование в роду, вождь с советом' };
+const MODEL = { v: 'm26', date: '2026-11-21', note: 'закон с автором: у вече, свода правил, раздела земли, наследования, обычаев и списания долгов есть автор, противники и причина' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -99,6 +99,7 @@ function archiveGC(S) {
   for (const g of S.groups) {
     for (const k in g.customEv || {}) keep.add(g.customEv[k]);
     for (const c of g.cases || []) if (c[3]) keep.add(c[3]);
+    if (g.powerEv) keep.add(g.powerEv);
     for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
   }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
@@ -372,7 +373,7 @@ function succession(S, g, why, old) {
       g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = 0.7; g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
       const weak = W.skill < 0.45;
       const sev = log(S, 'succession', `${old.name} ${VERB[why] || 'уходит'}. ${child ? 'По праву рождения' : 'По праву рода'} «${g.name}» наследует ${W.name}, ${g.dynGen}-е поколение династии ${g.dynName}`, W.x, W.y, g.hue, { why: sent(['в деревне власть наследуется, поэтому выборов нет', child ? `${W.name} — старший ${fem(W, 'сын', 'дочь')} ${old.name}` : `своих детей у ${old.name} в деревне нет, и власть переходит к старшему в роду`, `наследнику ${Math.floor(W.age)} лет`, weak ? `способности средние (навык ${P0(W.skill)}): сильные соперники могут не смириться` : `навык ${P0(W.skill)}`]), who: [W.id, old.id], gs: [g.id] });
-      refLast(S, W, 'heir', sev.id);
+      refLast(S, W, 'heir', sev.id); powerEvent(S, g, sev.id);
       return;
     }
   }
@@ -401,11 +402,12 @@ function succession(S, g, why, old) {
     if (sup.length >= 4 && rnd(S) < Math.min(1, 0.2 + fissionP(S, g))) {
       const ng = createGroup(S, R, sup, g.id);
       S.hostility[key(g.id, ng.id)] = 0.7; S.stats.schisms++;
-      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ${R.name} уходят ${sidesTxt(S, sup)}`, `за ${W.name} остаются ${sidesTxt(S, backers.get(W.id))}`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], sides: 1 });
+      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ${R.name} уходят ${sidesTxt(S, sup)}`, `за ${W.name} остаются ${sidesTxt(S, backers.get(W.id))}`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
       return;
     }
   }
   const sev = log(S, 'succession', `${lead}. «${g.name}» возглавляет ${W.name}${g.gen > 2 ? `, ${g.gen}-й лидер со времён ${g.founder}` : ''}`, W.x, W.y, g.hue, { why: sent([`${W.name} набирает ${P0(share)} голосов`, backers.get(W.id).length ? `за ${fem(W, 'него', 'неё')} ${sidesTxt(S, backers.get(W.id))}` : '', R && backers.get(R.id).length ? `за ${R.name} — ${sidesTxt(S, backers.get(R.id))}` : '', share > 0.6 ? 'сильный мандат' : share < 0.4 ? 'мандат слабый, недовольство может вырасти' : '']), who: [W.id], gs: [g.id], sides: 1 });
+  powerEvent(S, g, sev.id);
   linSuccession(S, g, W, old, sev.id);
   if (R && R !== W) powerLost(S, R, g, W, sev.id);
 }
@@ -757,7 +759,7 @@ function settle(S, g) {
     }
     claim(S, g, 20, 20); pickTarget(S, g);
     S.settledOnce = true;
-    log(S, 'settle', `«${g.name}» занимает заброшенную деревню «${r.name}» и чинит дома`, r.x, r.y, g.hue, { why: sent([`деревня пустует ${yrs(Math.max(1, Math.round((S.tick - r.t) / 360)))}`, `там стоят ${g.houses.length} ${pl(g.houses.length, 'дом', 'дома', 'домов')} без крыш${g.fields.length ? ` и ${g.fields.length} ${pl(g.fields.length, 'заросшее поле', 'заросших поля', 'заросших полей')}` : ''}`, 'починить старый дом вдвое быстрее, чем построить новый', 'место уже проверено: здесь когда-то жили']), gs: [g.id] });
+    log(S, 'settle', `«${g.name}» занимает заброшенную деревню «${r.name}» и чинит дома`, r.x, r.y, g.hue, { why: sent([`деревня пустует ${yrs(Math.max(1, Math.round((S.tick - r.t) / 360)))}`, `там стоят ${g.houses.length} ${pl(g.houses.length, 'дом', 'дома', 'домов')} без крыш${g.fields.length ? ` и ${g.fields.length} ${pl(g.fields.length, 'заросшее поле', 'заросших поля', 'заросших полей')}` : ''}`, 'починить старый дом вдвое быстрее, чем построить новый', 'место уже проверено: здесь когда-то жили']), gs: [g.id] }); if (!g.powerEv) powerEvent(S, g, S.events[0].id);
     return;
   }
   best = null; bv = -1e9;
@@ -781,7 +783,7 @@ function settle(S, g) {
   claim(S, g, 20, 20);
   pickTarget(S, g);
   const first = !S.settledOnce; S.settledOnce = true;
-  log(S, 'settle', first ? `Первое поселение в мире: «${g.name}» перестаёт кочевать${info.water ? ' и оседает у реки' : ''}` : `«${g.name}» основывает поселение${info.water ? ' у реки' : ''}`, best.x, best.y, g.hue, { first, why: sent([info.fert ? `рядом ${info.fert} клеток плодородной земли под поля` : 'плодородной земли мало, придётся жить собирательством', info.forest ? `лес в шаге: ${info.forest} клеток на брёвна` : 'леса рядом нет, брёвна носить издалека', info.water ? 'вода под боком' : '', g.plan.toward ? `первая улица идёт к ${g.plan.toward}` : '', info.near < 1e8 ? `ближайшие соседи в ${cells(info.near)}` : 'соседей поблизости нет']), who: [L.id], gs: [g.id] });
+  log(S, 'settle', first ? `Первое поселение в мире: «${g.name}» перестаёт кочевать${info.water ? ' и оседает у реки' : ''}` : `«${g.name}» основывает поселение${info.water ? ' у реки' : ''}`, best.x, best.y, g.hue, { first, why: sent([info.fert ? `рядом ${info.fert} клеток плодородной земли под поля` : 'плодородной земли мало, придётся жить собирательством', info.forest ? `лес в шаге: ${info.forest} клеток на брёвна` : 'леса рядом нет, брёвна носить издалека', info.water ? 'вода под боком' : '', g.plan.toward ? `первая улица идёт к ${g.plan.toward}` : '', info.near < 1e8 ? `ближайшие соседи в ${cells(info.near)}` : 'соседей поблизости нет']), who: [L.id], gs: [g.id] }); if (!g.powerEv) powerEvent(S, g, S.events[0].id);
 }
 function houseSpot(S, g) {
   const plan = planOf(S, g);
@@ -1720,7 +1722,10 @@ function institutions(S, g, L) {
     const owners = mem.slice().sort((a, b) => b.status - a.status).slice(0, Math.max(2, Math.ceil(n * 0.4)));
     g.fields.forEach((f, i) => { f.owner = owners[i % owners.length].id; });
     const first = !S.firstLand; S.firstLand = true;
-    log(S, 'land', first ? `Впервые в мире: «${g.name}» делит поля в собственность` : `«${g.name}» делит поля в собственность`, g.home.x, g.home.y, g.hue, { first, why: sent([`в деревне ${n} человек и ${g.fields.length} ${pl(g.fields.length, 'поле', 'поля', 'полей')}`, g.dynasty ? `правит династия ${g.dynName}, и знать хочет закрепить землю за собой` : 'добычу и так делят по статусу, и статусные хотят закрепить поля за собой', `поля получили ${owners.length} самых влиятельных`, 'теперь хозяин поля забирает треть урожая, а остальные работают на чужой земле батраками', 'поля переходят по наследству детям']), who: owners.map(m => m.id), gs: [g.id] });
+    const landless = adultsOf(S, g).filter(m => !owners.includes(m)), heads = lineHeads(S, g);
+    const A = owners.includes(L) ? L : owners[0];
+    enact(S, g, { type: 'land', kind: 'land', author: A, backers: owners, against: topBy(landless.filter(m => heads.includes(m) || m.norm > 0.6), m => m.status + 5 * m.norm, 3), text: first ? `Впервые в мире: «${g.name}» делит поля в собственность` : `«${g.name}» делит поля в собственность`, extra: { first }, why: [`в деревне ${n} человек и ${g.fields.length} ${pl(g.fields.length, 'поле', 'поля', 'полей')}`, g.dynasty ? `правит династия ${g.dynName}, и знать хочет закрепить землю за собой` : 'добычу и так делят по статусу, и статусные хотят закрепить поля за собой', `поля получили ${owners.length} самых влиятельных`, 'теперь хозяин поля забирает треть урожая, а остальные работают на чужой земле батраками', 'поля переходят по наследству детям'],
+      propose: 'настаивает', authorLine: `Делит поля «${g.name}» в собственность и ${fem(A, 'сам', 'сама')} получает поле`, lostLine: p => `Остаётся без своего поля, когда «${g.name}» делит землю`, grudge: `${fem(A, 'забрал', 'забрала')} общие поля себе и своим` });
     imNote(S, g);
   }
   if (g.land === 'private') {
@@ -1739,18 +1744,26 @@ function institutions(S, g, L) {
     }
   }
   // assembly
-  if (g.gov === 'assembly' && P.assembly >= 0.5 && L.ambition > 0.55 && (g.room !== undefined && g.room < 0.35 || g.warsLost > (g.wl0 || 0)) && mem.filter(m => m.patron === L.id).length >= 2 && rnd(S) < 0.015) {
+  if (g.gov === 'assembly' && P.assembly >= 0.5 && L.ambition > 0.55 && (g.room !== undefined && g.room < 0.35 || g.warsLost > (g.wl0 || 0)) && mem.filter(m => m.patron === L.id).length >= 2 && rnd(S) < 0.015 * (livesOffOthers(S, g, L) ? 1.5 : 0.7)) {
     g.gov = g.dynasty ? 'monarch' : 'chief'; g.wl0 = g.warsLost;
-    log(S, 'gov', `${L.name} разгоняет вече «${g.name}» и правит один`, g.home.x, g.home.y, g.hue, { why: sent([`у ${L.name} своя дружина: ${mem.filter(m => m.patron === L.id).length} ${pl(mem.filter(m => m.patron === L.id).length, 'человек', 'человека', 'человек')} на жалованье`, g.room < 0.35 ? 'вокруг тесно: недовольным некуда уйти' : 'деревня проиграла войну, и люди хотят сильной руки', 'вече не может помешать тому, у кого есть оружие']), who: [L.id], gs: [g.id] });
+    const by = g.asmBy && S._a.get(g.asmBy), keep = topBy(lineHeads(S, g).filter(h => h !== L && h.norm > 0.5), h => h.status, 2);
+    enact(S, g, { type: 'gov', kind: 'dissolve', author: L, backers: mem.filter(m => m.patron === L.id), against: [by && by.group === g.id ? by : null, ...keep], text: `${L.name} разгоняет вече «${g.name}» и правит один`, why: [`у ${L.name} своя дружина: ${mem.filter(m => m.patron === L.id).length} ${pl(mem.filter(m => m.patron === L.id).length, 'человек', 'человека', 'человек')} на жалованье`, g.room < 0.35 ? 'вокруг тесно: недовольным некуда уйти' : 'деревня проиграла войну, и люди хотят сильной руки', 'вече не может помешать тому, у кого есть оружие'],
+      propose: 'решает', authorLine: `Разгоняет вече «${g.name}» и правит один`, lostLine: p => `Не может отстоять вече «${g.name}»: ${L.name} правит один`, grudge: `${fem(L, 'разогнал', 'разогнала')} вече` });
   }
   if (g.gov === 'assembly' && P.assembly < 0.5) {
     g.gov = 'chief';
     log(S, 'gov', `В «${g.name}» распускают вече`, g.home.x, g.home.y, g.hue, { why: 'Народное собрание запрещено вводными.', gs: [g.id] });
-  } else if ((g.gov === 'chief' || g.gov === 'monarch') && P.assembly >= 0.5 && n >= 8 && g.norm > 0.45 && avg(mem, m => m.coop) > 0.42 && (g.trauma > 0 || g.coupCount > 0 || g.warsLost > 0 || g.scarce > S.tick) && (imA = imitP(S, g, o => o.gov === 'assembly'), rnd(S) < (0.003 + imA.p * 0.45) * (0.2 + 0.8 * (g.room === undefined ? 1 : g.room)))) {
+  } else if ((g.gov === 'chief' || g.gov === 'monarch') && P.assembly >= 0.5 && n >= 8 && g.norm > 0.45 && avg(mem, m => m.coop) > 0.42 && (g.trauma > 0 || g.coupCount > 0 || g.warsLost > 0 || g.scarce > S.tick) && (imA = imitP(S, g, o => o.gov === 'assembly'), rnd(S) < (0.003 + imA.p * 0.45) * (0.2 + 0.8 * (g.room === undefined ? 1 : g.room)) * (livesOffOthers(S, g, L) ? 0.5 : 1.3))) {
     // under a hereditary chief the assembly is his council: the office still passes in the line, but war and his share are decided together (Schapera 1956)
     g.gov = 'assembly'; g.imFrom = imA.p > 0.003 && imA.from && rnd(S) < imA.p * 0.45 / (imA.p * 0.45 + 0.003) ? imA.from.name : null;
     const first = !S.firstAssembly; S.firstAssembly = true;
-    log(S, 'gov', g.dynasty ? `В «${g.name}» наследный вождь ${L.name} отныне правит с советом` : first ? `Впервые в мире: «${g.name}» собирает вече` : `«${g.name}» собирает вече`, g.home.x, g.home.y, g.hue, { first, why: sent([g.coupCount ? `деревня пережила ${g.coupCount} ${pl(g.coupCount, 'переворот', 'переворота', 'переворотов')}` : g.warsLost ? 'деревня проиграла войну по воле одного человека' : 'деревня пережила тяжёлые годы', `люди здесь склонны делить поровну (${P0(g.norm)}) и договариваться`, 'теперь о войне, доле лидера и преемнике решает собрание', 'вече реже начинает войны и мягче к недовольным, но решения даются дольше']), gs: [g.id] });
+    // the call comes from a coalition: a respected head of another line (Boehm), against the ruler and his men
+    const A = (L.norm > 0.6 && L.coop > 0.6 && !g.dynasty) ? L : assemblyAuthor(S, g, L) || L; g.asmBy = A.id;
+    const backers = topBy(adultsOf(S, g).filter(m => m !== L && m.patron !== L.id && (m.res > 0.35 || m.norm > 0.6)), m => m.status, 10);
+    const against = A === L ? topBy(adultsOf(S, g).filter(m => m !== L && m.norm < 0.45 && m.ambition > 0.5), m => m.status, 2) : [L.ambition > 0.45 || g.dynasty ? L : null, ...topBy(mem.filter(m => m.patron === L.id), m => m.status, 1)];
+    enact(S, g, { type: 'gov', kind: 'assembly', author: A, backers, against, extra: { first }, propose: A === L ? 'созывает сам вождь' : 'созвать вече требует',
+      text: g.dynasty ? `В «${g.name}» наследный вождь ${L.name} отныне правит с советом` : first ? `Впервые в мире: «${g.name}» собирает вече` : `«${g.name}» собирает вече`, why: [g.coupCount ? `деревня пережила ${g.coupCount} ${pl(g.coupCount, 'переворот', 'переворота', 'переворотов')}` : g.warsLost ? 'деревня проиграла войну по воле одного человека' : 'деревня пережила тяжёлые годы', `люди здесь склонны делить поровну (${P0(g.norm)}) и договариваться`, 'теперь о войне, доле лидера и преемнике решает собрание', 'вече реже начинает войны и мягче к недовольным, но решения даются дольше'],
+      authorLine: A === L ? `Созывает вече «${g.name}»: отныне о войне и доле решают вместе` : `Добивается вече в «${g.name}»: отныне ${L.name} решает не один`, lostLine: p => p === L ? `Вынужден${fem(p, '', 'а')} делить власть с вече «${g.name}»` : `Против вече в «${g.name}», но вече собирается`, grudge: `${fem(A, 'добился', 'добилась')} вече против вождя` });
     imNote(S, g);
   }
 }
@@ -1805,9 +1818,11 @@ function money(S, g, L) {
     const total = bonds.reduce((s2, m) => s2 + m.debt, 0), creds = [...new Set(bonds.map(m => m.cred))].map(id => S._a.get(id)).filter(Boolean);
     if (g.gov === 'assembly' || L.coop > 0.62) {
       for (const m of mem) if (m.debt) { if (m.bond) bio(S, m, 'freed', `Вече прощает долги: ${m.sex === 'f' ? 'свободна' : 'свободен'} от кабалы`); m.debt = 0; m.cred = null; m.bond = false; m.res *= 0.5; bump(m, L, 0.15); }
-      for (const c of creds) { bump(c, L, -0.3); bond(S, c, L, 'rival', 'списал долги, разорив заимодавцев', 0.5); }
+      for (const c of creds) bump(c, L, -0.3);
       S.stats.jubilees = (S.stats.jubilees || 0) + 1;
-      log(S, 'debt', `${g.gov === 'assembly' ? `Вече «${g.name}»` : `${L.name}`} списывает все долги`, g.home.x, g.home.y, g.hue, { why: sent([`в кабале ${bonds.length} ${pl(bonds.length, 'человек', 'человека', 'человек')}, общий долг ${Math.round(total)}`, 'кабальные готовы бунтовать', g.gov === 'assembly' ? 'на вече должников больше, чем ростовщиков' : `${L.name} склонен договариваться (${P0(L.coop)})`, `ростовщики ${creds.slice(0, 2).map(c => c.name).join(' и ')} теряют деньги и затаили обиду на лидера`]), who: bonds.map(m => m.id).concat(creds.map(c => c.id)), gs: [g.id] });
+      const by = g.gov === 'assembly' && g.asmBy && S._a.get(g.asmBy), A = by && by.group === g.id ? by : L;
+      enact(S, g, { type: 'debt', kind: 'jubilee', author: A, backers: bonds, against: topBy(creds.filter(c => c.group === g.id), c => c.loans || 0, 3), text: `${g.gov === 'assembly' ? `Вече «${g.name}»` : `${L.name}`} списывает все долги`, why: [`в кабале ${bonds.length} ${pl(bonds.length, 'человек', 'человека', 'человек')}, общий долг ${Math.round(total)}`, 'кабальные готовы бунтовать', g.gov === 'assembly' ? 'на вече должников больше, чем ростовщиков' : `${L.name} ${fem(L, 'склонен', 'склонна')} договариваться (${P0(L.coop)})`, creds.every(c => c === L) ? `${L.name} ${fem(L, 'сам', 'сама')} давал${fem(L, '', 'а')} эти займы и теряет их` : `ростовщики ${creds.filter(c => c !== L).slice(0, 2).map(c => c.name).join(' и ')} теряют деньги`],
+        authorLine: creds.every(c => c === A) ? `Прощает должникам «${g.name}» всё, что они ${fem(A, 'ему', 'ей')} должны` : `Добивается, чтобы в «${g.name}» простили все долги`, lostLine: p => `Теряет всё, что давал в долг: «${g.name}» прощает долги`, grudge: `${fem(A, 'списал', 'списала')} долги и разорил${fem(A, '', 'а')} меня` });
     } else {
       const ch = bonds.slice().sort((a, b) => b.ambition - a.ambition)[0];
       for (const m of bonds) { m.debt = 0; m.cred = null; m.bond = false; }
@@ -1941,7 +1956,73 @@ function bud(S, g, L) {
   bump(F, L, 0.1); bump(L, F, 0.1);
   bio(S, F, 'found', `Уводит ${go.length} ${pl(go.length, 'человека', 'человек', 'человек')} из «${g.name}» поднимать новую деревню «${ng.name}»`);
   for (const m of go) bio(S, m, 'move', `Уходит с ${F.name} из «${g.name}» на новые земли`);
-  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 });
+  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
+}
+/* ---------- laws with authors (П2, see docs/POLITICS.md) ---------- */
+// Every change in how a village is run has an author, backers, opponents and a cause. The backers and opponents are
+// chosen by interest: who gains and who loses by the law. enact() writes it all into one event; the author and up to
+// three opponents get chronicle lines; the losers turn rivals of the author. Boehm 1993: a coalition of the rank and file
+// keeps the ambitious in check; Blanton & Fargher 2008: a ruler who lives on his own people has to deal with them.
+const LAW_CAUSE = {
+  assembly: ['coup', 'crisis', 'battle', 'conquest', 'famine', 'revolt', 'schism', 'exodus', 'debt'],
+  dissolve: ['battle', 'conquest', 'famine', 'exodus', 'raid'],
+  hered: ['succession', 'coup', 'crisis', 'found', 'colony'],
+  land: ['famine', 'debt', 'land', 'case', 'law'],
+  code: ['reform', 'schism', 'exodus', 'crisis', 'case', 'coup', 'quit', 'exile'],
+  jubilee: ['debt', 'revolt', 'famine'],
+  custom: ['case', 'revenge']
+};
+// the event a law answers to: the latest in this village of the kinds that law is about, within ten years; failing that,
+// the event that brought the present ruler to power
+// the event that brought the present ruler to power. Quiet records in the archive count too (a reform nobody left over,
+// a quarrel with the leader). Returns [id, via] where via is 'reason' or 'power'.
+function lawCause(S, g, kind) {
+  const types = LAW_CAUSE[kind] || [];
+  for (const e of S.events) { if (S.tick - e.t > 360 * 10) break; if (e.gs && e.gs.includes(g.id) && types.includes(e.type)) return [e.id, 'reason']; }
+  let best = null;
+  for (const id in S.evArch || {}) { const e = S.evArch[id]; if (e.quiet && S.tick - e.t <= 360 * 10 && e.gs && e.gs.includes(g.id) && types.includes(e.type) && (!best || e.t > best.t)) best = e; }
+  if (best) return [best.id, 'reason'];
+  return g.powerEv && eventById(S, g.powerEv) ? [g.powerEv, 'power'] : [null, null];
+}
+// remember the event that brought a ruler to power: a law later may point to it
+function powerEvent(S, g, id) { if (g && id) g.powerEv = cite(S, id); }
+const adultsOf = (S, g) => g.members.map(id => S._a.get(id)).filter(m => m && m.age >= 18);
+const topBy = (arr, f, n) => arr.slice().sort((a, b) => f(b) - f(a)).slice(0, n);
+// the heads of the lines with two or more adults in the village
+function lineHeads(S, g) { const out = []; for (const [l, n] of sidesOf(S, adultsOf(S, g))) { if (n < 2) continue; const h = linHead(S, g, l); if (h) out.push(h); } return out; }
+const nameLine = (S, p) => `${p.name} (${clanName(S, linOf(S, p))})`;
+// o: { type, kind, text, author, backers, against, why: [..], authorLine, lostLine(p), grudge, x, y, extra, cause }
+function enact(S, g, o) {
+  const A = o.author, against = (o.against || []).filter(p => p && p !== A).slice(0, 3), backers = (o.backers || []).filter(p => p && p !== A);
+  const [cause, via] = o.cause !== undefined ? [o.cause, o.cause ? 'reason' : null] : lawCause(S, g, o.kind);
+  const why = sent((o.why || []).concat([
+    `${o.propose || 'предлагает'} ${nameLine(S, A)}`,
+    backers.length ? `за — ${sidesTxt(S, backers)}` : '',
+    against.length ? `против — ${against.map(p => nameLine(S, p)).join(', ')}` : 'открыто против никто не выступает'
+  ]));
+  const ev = log(S, o.type || 'law', o.text, o.x !== undefined ? o.x : g.home.x, o.y !== undefined ? o.y : g.home.y, g.hue, Object.assign({ why, who: [A.id, ...against.map(p => p.id)], gs: [g.id], causes: cause ? [cause] : undefined, author: A.id, against: against.map(p => p.id), law: o.kind, via }, o.extra || {}));
+  if (o.authorLine) bio(S, A, 'law', o.authorLine, ev.id);
+  for (const p of against) { bio(S, p, 'lawLost', o.lostLine(p), ev.id); bond(S, p, A, 'rival', o.grudge || `${fem(A, 'провёл', 'провела')} закон против меня`, 0.4, false, ev.id); }
+  S.stats['law_' + o.kind] = (S.stats['law_' + o.kind] || 0) + 1;
+  return ev;
+}
+// does the ruler live off his own people (their shares) or off others (tribute, his own war band)? Blanton & Fargher:
+// the first has to bargain and accepts a council; the second can do without one
+function livesOffOthers(S, g, L) {
+  const ret = g.members.filter(id => { const m = S._a.get(id); return m && L && m.patron === L.id; }).length / Math.max(1, g.members.length);
+  return S.groups.some(o => o.lord === g.id) || ret > 0.2;
+}
+// who would call an assembly: a respected head of another line who values fairness; else the most respected such person
+function assemblyAuthor(S, g, L) {
+  const lin = L && linOf(S, L), heads = lineHeads(S, g).filter(h => h !== L && linOf(S, h) !== lin && h.norm > 0.45);
+  const pool = heads.length ? heads : adultsOf(S, g).filter(m => m !== L && m.norm > 0.45);
+  return topBy(pool, m => m.status * (0.5 + m.coop), 1)[0] || null;
+}
+// the heads of other lines who lose the hope of the office when it is fixed in one line: the strong ones first
+function rivalHeads(S, g, lin) {
+  const hs = lineHeads(S, g).filter(h => linOf(S, h) !== lin);
+  const strong = hs.filter(h => linShare(S, g, linOf(S, h)) >= 0.1);
+  return topBy(strong.length ? strong : hs, h => h.status, 2);
 }
 /* ---------- water: springs, river, wells, drought, dirty water ---------- */
 function springsInit(S) {
@@ -2003,7 +2084,7 @@ function droughtYear(S) {
 }
 
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, goal: 1, goalTurn: 1.5, goalEnd: 2, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, goal: 1, goalTurn: 1.5, goalEnd: 2, law: 2, lawLost: 1.5, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 // Drama counts turns of fate, not events. Everyday lines (a child born, a move, a house of one's own) are part of the
 // chronicle but weigh nothing; the same turn again over the whole life weighs 1/(n+1)² of the first, so repeats add up to
 // at most 1.64 of one turn; a turn that undoes an
@@ -2602,9 +2683,31 @@ function setCustom(S, g, kind, outcome, causes, how) {
   const L = S._a.get(g.leader);
   g.customEv = g.customEv || {};
   const text = kind === 'blood' && outcome === 'wergild' ? `«${g.name}» вводит обычай виры: за кровь платят, а не мстят` : kind === 'inherit' ? `В «${g.name}» складывается обычай наследства: ${CASE_LABEL.inherit[outcome]}` : `В «${g.name}» складывается обычай: ${CASE_LABEL[kind][outcome]}`;
-  const ev = log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([how, 'теперь так решают и дальше, пока сход или новый вождь не переменят', L ? `обычай объявляет ${L.name}` : '']), who: L ? [L.id] : [], gs: [g.id], causes });
+  const A = L || topBy(adultsOf(S, g), m => m.age, 1)[0]; if (!A) return null;
+  const ev = enact(S, g, { kind: 'custom', author: A, against: customLosers(S, g, kind, outcome, causes, A), cause: causes[0] || null, propose: g.gov === 'assembly' ? 'на вече обычай объявляет' : 'обычай объявляет', text,
+    why: [how, 'теперь так решают и дальше, пока сход или новый вождь не переменят'], authorLine: `Объявляет обычай «${g.name}»: ${CASE_LABEL[kind][outcome]}`, lostLine: p => `Обычай «${g.name}» — ${CASE_LABEL[kind][outcome]} — против ${fem(p, 'него', 'неё')}`, grudge: 'объявил обычай против меня', extra: { causes: causes.length ? causes : undefined } });
   g.customEv[kind] = cite(S, ev.id);
   return ev;
+}
+// who loses by a custom: in an inheritance custom the side the cases went against; under blood money those who took
+// blood and want it still; under blood for blood an old peacemaker; for theft the thieves
+function customLosers(S, g, kind, outcome, causes, A) {
+  const out = [];
+  for (const id of causes || []) {
+    const e = eventById(S, id); if (!e || !e.who) continue;
+    let p = null;
+    if (kind === 'inherit') p = S._a.get(outcome === 'eldest' ? e.who[1] : e.who[0]);
+    else if (kind === 'blood' && outcome === 'wergild' && e.type === 'revenge') p = S._a.get(e.who[0]);
+    else if (kind === 'theft') p = S._a.get(e.who[e.who.length - 1]);
+    if (p && p !== A && p.group === g.id && !out.includes(p)) out.push(p);
+  }
+  if (out.length) return out;
+  // nobody from the cases is left: whoever the custom works against by their place in the family or their grudge
+  const ad = adultsOf(S, g).filter(m => m !== A), sib = (m, older) => ad.some(o => o !== m && ((m.father && o.father === m.father) || (m.mother && o.mother === m.mother)) && (older ? o.age > m.age : o.age < m.age));
+  const pick = kind === 'inherit' ? (outcome === 'eldest' ? topBy(ad.filter(m => sib(m, true)), m => m.ambition, 1) : topBy(ad.filter(m => sib(m, false) && !sib(m, true)), m => m.status, 1))
+    : kind === 'blood' ? (outcome === 'wergild' ? topBy(ad.filter(m => m.feud && !m.feud.done).concat(ad.filter(m => m.age < 35)), m => m.ambition, 1) : topBy(ad.filter(m => m.age > 45), m => m.coop, 1))
+    : topBy(ad, m => outcome === 'ban' ? m.coop : 1 - m.coop, 1);
+  return pick.filter(Boolean);
 }
 // who judges: the leader, or the assembly; returns the ruling the judge leans to without a custom
 function judge(S, g, kind) {
@@ -2693,7 +2796,11 @@ function customsYear(S) {
       const text = kind === 'blood' ? `«${g.name}» перенимает у «${o.name}» ${outcome === 'wergild' ? 'обычай виры: за кровь платят' : 'обычай мести: кровь за кровь'}` : `«${g.name}» перенимает у «${o.name}» обычай наследства: ${CASE_LABEL.inherit[outcome]}`;
       g.customs = g.customs || {}; g.customs[kind] = outcome; S.stats.customs = (S.stats.customs || 0) + 1; S.stats.customsCopied = (S.stats.customsCopied || 0) + 1;
       const L = S._a.get(g.leader);
-      const ev = log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([`у «${o.name}» так заведено, и соседи видят, что это работает`, `связи между деревнями: торговля, союз или браки`, L ? `${L.name} вводит обычай у себя` : '']), who: L ? [L.id] : [], gs: [g.id, o.id], causes: (o.customEv || {})[kind] ? [o.customEv[kind]] : undefined });
+      const A = L || topBy(adultsOf(S, g), m => m.age, 1)[0]; if (!A) continue;
+      const src = (o.customEv || {})[kind] ? [o.customEv[kind]] : undefined;
+      const old = topBy(adultsOf(S, g).filter(m => m !== A), m => m.age, 1);
+      const ev = enact(S, g, { kind: 'custom', author: A, against: old, cause: src && src[0] ? src[0] : null, text, propose: 'чужой обычай вводит', extra: { gs: [g.id, o.id] },
+        why: [`у «${o.name}» так заведено, и соседи видят, что это работает`, `связи между деревнями: торговля, союз или браки`], authorLine: `Вводит в «${g.name}» обычай, перенятый у «${o.name}»`, lostLine: p => `Старики «${g.name}» не хотят чужого обычая, но их не слушают`, grudge: 'ввёл чужой обычай' });
       g.customEv = g.customEv || {}; g.customEv[kind] = cite(S, ev.id);
     }
   }
@@ -3202,10 +3309,12 @@ function linSuccession(S, g, W, old, ev) {
   if (!(linStrong(S, g, g.linId) || son) || rnd(S) > 0.5) return;
   g.dynasty = true; g.dynName = clanName(S, g.linId, true); g.dynLin = g.linId; g.dynGen = 1; if (g.gov !== 'assembly') g.gov = 'monarch';
   S.stats.linDynasty = (S.stats.linDynasty || 0) + 1;
-  const e = log(S, 'law', `Власть в «${g.name}» закрепляется за родом ${g.dynName}: ${W.name} — ${g.linN}-й вождь из этого рода подряд`, g.home ? g.home.x : W.x, g.home ? g.home.y : W.y, g.hue, {
-    why: sent([son ? `${W.name} — ${fem(W, 'сын', 'дочь')} ${old.name}, и деревня выбрала ${fem(W, 'его', 'её')} вслед за отцом` : `${old.name} и ${W.name} — оба из рода ${g.dynName}`, g.linId === g.foundLin ? `это род первопоселенцев, основавших «${g.name}»: ${P0(share)} взрослых деревни` : `род — ${P0(share)} взрослых деревни, и за его главой идут`, 'теперь вождя не выбирают: после него власть перейдёт к его детям, а нет детей — к старшему в роду']),
-    who: [W.id], gs: [g.id], causes: ev ? [ev] : undefined, sides: 1 });
-  bio(S, W, 'heir', `Власть закрепляется за родом ${g.dynName}: после ${fem(W, 'него', 'неё')} она перейдёт по наследству`, e.id);
+  if (!g.home) return;
+  const rivals = rivalHeads(S, g, g.dynLin);
+  enact(S, g, { kind: 'hered', author: W, backers: linMembers(S, g, g.dynLin), against: rivals, cause: ev || null, propose: 'за наследование стоит', extra: { sides: 1 },
+    text: `Власть в «${g.name}» закрепляется за родом ${g.dynName}: ${W.name} — ${g.linN}-й вождь из этого рода подряд`,
+    authorLine: `Власть закрепляется за родом ${g.dynName}: после ${fem(W, 'него', 'неё')} она перейдёт по наследству`, lostLine: p => `Род ${clanName(S, linOf(S, p), true)} теряет надежду на власть в «${g.name}»: она закреплена за ${g.dynName}`, grudge: 'власть закреплена за чужим родом',
+    why: [son ? `${W.name} — ${fem(W, 'сын', 'дочь')} ${old.name}, и деревня выбрала ${fem(W, 'его', 'её')} вслед за отцом` : `${old.name} и ${W.name} — оба из рода ${g.dynName}`, g.linId === g.foundLin ? `это род первопоселенцев, основавших «${g.name}»: ${P0(share)} взрослых деревни` : `род — ${P0(share)} взрослых деревни, и за его главой идут`, 'теперь вождя не выбирают: после него власть перейдёт к его детям, а нет детей — к старшему в роду'] });
 }
 // a line can hold the office by right when it is a fifth of the village, or a tenth if it is the line of the first-comers
 // who founded the village (precedence in Austronesian societies: Fox & Sather 1996, Vischer 2009)
@@ -3476,7 +3585,7 @@ function interact(S, a, b) {
       const sc = m => m.ambition * 0.7 + m.skill * 0.3 + m.status * 0.05;
       const L = sc(a) >= sc(b) ? a : b, o = L === a ? b : a;
       const g = createGroup(S, L, [o]);
-      log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Лидером становится ${L.name}: у него больше амбиций.`, who: [L.id, o.id], gs: [g.id] });
+      log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Лидером становится ${L.name}: у него больше амбиций.`, who: [L.id, o.id], gs: [g.id] }); if (!g.powerEv) powerEvent(S, g, S.events[0].id);
     }
   } else if (!ga || !gb) {
     const s = ga ? b : a, m = ga ? a : b, g = S._groupsById[m.group], L = S._agentsById[g.leader];
@@ -3941,7 +4050,7 @@ function groupMonth(S, g) {
     g.bureau *= 0.3; g.cool = S.tick + 720; L.energy -= 0.25; S.stats.reforms++; g.reforms++;
     let gone = 0;
     for (const m of mem) if ((m.trust[L.id] || 0) < 0 && rnd(S) < 0.4) { leave(S, m, 'move'); gone++; }
-    log(S, 'reform', `${L.name} проводит реформу в «${g.name}»: бюрократия срезана${gone ? (one(gone) ? `, ${gone} несогласный уходит` : `, ${gone} несогласных уходят`) : ''}`, L.x, L.y, g.hue, { why, who: [L.id], gs: [g.id] });
+    (gone >= 5 ? log : note)(S, 'reform', `${L.name} проводит реформу в «${g.name}»: бюрократия срезана${gone ? (one(gone) ? `, ${gone} несогласный уходит` : `, ${gone} несогласных уходят`) : ''}`, L.x, L.y, g.hue, { why, who: [L.id], gs: [g.id] });
     if (g.dead) return;
   }
   // coups and schisms
@@ -3973,7 +4082,7 @@ function groupMonth(S, g) {
         const why2 = why + ` С ${ch.name} уходят ${sidesTxt(S, sup)}.`;
         const ng = createGroup(S, ch, sup, g.id);
         S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); bond(S, L, ch, 'enemy', `${fem(ch, 'расколол', 'расколола')} «${g.name}» и ${fem(ch, 'увёл', 'увела')} людей`, 0.6); S.stats.schisms++;
-        const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why: why2, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
+        const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why: why2, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
         refBond(S, L, ch, sev.id); refLast(S, ch, 'schism', sev.id);
         return;
       }
@@ -4000,12 +4109,18 @@ function groupMonth(S, g) {
   // a long, trusted rule turns hereditary only when the ruler's line is a real force in the village
   if (L2 && !g.dynasty && g.gov !== 'assembly' && g.home && S.tick - (g.since || 0) > 360 * 8 && g.legit > 0.55 && g.members.length >= 8 && (linStrong(S, g, linOf(S, L2)) || g.members.some(id => { const k = S._a.get(id); return k && (k.father === L2.id || k.mother === L2.id) && k.age >= 15; })) && rnd(S) < 0.05) {
     g.dynasty = true; g.dynLin = linOf(S, L2); g.dynName = clanName(S, g.dynLin, true); g.dynGen = 1; g.gov = 'monarch'; g.linId = g.dynLin;
-    log(S, 'law', `«${g.name}» вводит наследование: после ${L2.name} власть будет передаваться в роду ${g.dynName}`, g.home.x, g.home.y, g.hue, { why: sent([`${L2.name} правит ${yrs(Math.round((S.tick - g.since) / 360))}, и деревня привыкла к ${fem(L2, 'нему', 'ней')}`, `легитимность ${P0(g.legit)}`, 'закон избавляет от кризисов преемственности, но наследник может оказаться слабым']), who: [L2.id], gs: [g.id] });
+    const rivals = rivalHeads(S, g, g.dynLin);
+    enact(S, g, { kind: 'hered', author: L2, backers: linMembers(S, g, g.dynLin), against: rivals, propose: 'объявляет', text: `«${g.name}» вводит наследование: после ${L2.name} власть будет передаваться в роду ${g.dynName}`, why: [`${L2.name} правит ${yrs(Math.round((S.tick - g.since) / 360))}, и деревня привыкла к ${fem(L2, 'нему', 'ней')}`, `легитимность ${P0(g.legit)}`, 'закон избавляет от кризисов преемственности, но наследник может оказаться слабым'],
+      authorLine: `Закрепляет власть в «${g.name}» за своим родом`, lostLine: p => `Род ${clanName(S, linOf(S, p), true)} теряет надежду на власть в «${g.name}»: она закреплена за ${g.dynName}`, grudge: `${fem(L2, 'закрепил', 'закрепила')} власть за своим родом` });
   }
   let imK;
   if (L2 && !g.code && g.home && g.members.length >= 12 && g.entropy > 0.75 && (g.reforms >= 1 || S.tick - g.founded > 360 * 15) && (imK = imitP(S, g, o => !!o.code), rnd(S) < 0.015 + imK.p)) {
     g.code = g.norm > 0.5 ? 'egal' : 'rank';
-    log(S, 'law', `«${g.name}» записывает свод правил: ${g.code === 'egal' ? 'всем равные доли' : 'доли по статусу'}`, g.home.x, g.home.y, g.hue, { why: sent([`в группе ${g.members.length} человек и ${g.depth} уровня управления`, `энтропия ${g.entropy.toFixed(2)}: спорить о каждом решении стало слишком дорого`, 'писаное правило замедляет бюрократию', g.code === 'egal' ? 'кто хочет делить по заслугам, будет недоволен' : 'кто ждёт равенства, будет недоволен']), who: [L2.id], gs: [g.id] });
+    const adults = adultsOf(S, g), egal = g.code === 'egal';
+    const A = egal ? (L2.norm > 0.5 ? L2 : topBy(lineHeads(S, g).filter(h => h.norm > 0.5), h => h.status, 1)[0] || L2) : L2;
+    enact(S, g, { kind: 'code', author: A, backers: topBy(adults.filter(m => egal ? m.norm > 0.55 : m.norm < 0.45), m => m.status, 10), against: egal ? topBy(adults, m => m.wealth, 2) : topBy(adults.filter(m => m.norm > 0.6), m => m.status, 2),
+      text: `«${g.name}» записывает свод правил: ${egal ? 'всем равные доли' : 'доли по статусу'}`, why: [`в группе ${g.members.length} человек и ${g.depth} уровня управления`, `энтропия ${g.entropy.toFixed(2)}: спорить о каждом решении стало слишком дорого`, 'писаное правило замедляет бюрократию', g.code === 'egal' ? 'кто хочет делить по заслугам, будет недоволен' : 'кто ждёт равенства, будет недоволен'],
+      authorLine: `Записывает свод правил «${g.name}»: ${egal ? 'всем равные доли' : 'доли по статусу'}`, lostLine: p => egal ? `Свод правил «${g.name}» уравнивает доли: богатым это не по душе` : `Свод правил «${g.name}» делит по статусу: ${fem(p, 'ему', 'ей')} это несправедливо`, grudge: egal ? 'уравнял доли за мой счёт' : 'записал доли по статусу' });
   }
   if (S.tick % 90 === 0 || !g.target) pickTarget(S, g);
 }
@@ -4038,7 +4153,7 @@ function coup(S, g, L, ch, sup, cur, why) {
     cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], causes: causes0.length ? causes0 : undefined });
   } else cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}`, ch.x, ch.y, g.hue, { why, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id], causes: causes0.length ? causes0 : undefined });
   // the deposed, his grown children and the usurper's chronicle and ties point to the coup
-  const id = cev.id;
+  const id = cev.id; powerEvent(S, g, id);
   refBond(S, L, ch, id); refLast(S, ch, 'coup', id); refLast(S, L, 'deposed', id); refLast(S, ch, 'leader', id);
   if (L.group === g.id) powerDeposed(S, L, g, id);
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.age >= 15) { refBond(S, o, ch, id); refLast(S, o, 'feud', id); if (o.feud && o.feud.L === ch.id && !o.feud.ev) o.feud.ev = cite(S, id); }

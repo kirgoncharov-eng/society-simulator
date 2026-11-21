@@ -44,10 +44,12 @@ function linSuccession(S, g, W, old, ev) {
   if (!(linStrong(S, g, g.linId) || son) || rnd(S) > 0.5) return;
   g.dynasty = true; g.dynName = clanName(S, g.linId, true); g.dynLin = g.linId; g.dynGen = 1; if (g.gov !== 'assembly') g.gov = 'monarch';
   S.stats.linDynasty = (S.stats.linDynasty || 0) + 1;
-  const e = log(S, 'law', `Власть в «${g.name}» закрепляется за родом ${g.dynName}: ${W.name} — ${g.linN}-й вождь из этого рода подряд`, g.home ? g.home.x : W.x, g.home ? g.home.y : W.y, g.hue, {
-    why: sent([son ? `${W.name} — ${fem(W, 'сын', 'дочь')} ${old.name}, и деревня выбрала ${fem(W, 'его', 'её')} вслед за отцом` : `${old.name} и ${W.name} — оба из рода ${g.dynName}`, g.linId === g.foundLin ? `это род первопоселенцев, основавших «${g.name}»: ${P0(share)} взрослых деревни` : `род — ${P0(share)} взрослых деревни, и за его главой идут`, 'теперь вождя не выбирают: после него власть перейдёт к его детям, а нет детей — к старшему в роду']),
-    who: [W.id], gs: [g.id], causes: ev ? [ev] : undefined, sides: 1 });
-  bio(S, W, 'heir', `Власть закрепляется за родом ${g.dynName}: после ${fem(W, 'него', 'неё')} она перейдёт по наследству`, e.id);
+  if (!g.home) return;
+  const rivals = rivalHeads(S, g, g.dynLin);
+  enact(S, g, { kind: 'hered', author: W, backers: linMembers(S, g, g.dynLin), against: rivals, cause: ev || null, propose: 'за наследование стоит', extra: { sides: 1 },
+    text: `Власть в «${g.name}» закрепляется за родом ${g.dynName}: ${W.name} — ${g.linN}-й вождь из этого рода подряд`,
+    authorLine: `Власть закрепляется за родом ${g.dynName}: после ${fem(W, 'него', 'неё')} она перейдёт по наследству`, lostLine: p => `Род ${clanName(S, linOf(S, p), true)} теряет надежду на власть в «${g.name}»: она закреплена за ${g.dynName}`, grudge: 'власть закреплена за чужим родом',
+    why: [son ? `${W.name} — ${fem(W, 'сын', 'дочь')} ${old.name}, и деревня выбрала ${fem(W, 'его', 'её')} вслед за отцом` : `${old.name} и ${W.name} — оба из рода ${g.dynName}`, g.linId === g.foundLin ? `это род первопоселенцев, основавших «${g.name}»: ${P0(share)} взрослых деревни` : `род — ${P0(share)} взрослых деревни, и за его главой идут`, 'теперь вождя не выбирают: после него власть перейдёт к его детям, а нет детей — к старшему в роду'] });
 }
 // a line can hold the office by right when it is a fifth of the village, or a tenth if it is the line of the first-comers
 // who founded the village (precedence in Austronesian societies: Fox & Sather 1996, Vischer 2009)
