@@ -15,6 +15,7 @@ let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
 const age = { deaths: 0, sum: 0, eligible: 0, reached: 0, left: 0 };
 const lastBirthTick = Math.max(0, (Y - 60) * 360);
 const islandHistory = [];
+const arcs = { old: 0, lived: 0, closed: 0, linked: 0, open: 0, kinds: {} };
 
 function newShelterLinks(S) {
   // Each memory-driven move increments aidMemoryMoves and emits one shelter event.
@@ -89,6 +90,13 @@ for (let i = 0; i < W; i++) {
   // linked chronicle: share of lines and ties that point to the event behind them
   for (const B of S.agents.map(a => a.bio || []).concat((S.legends || []).map(l => l.bio))) for (const b of B) { const r = refK[b[1]] || (refK[b[1]] = [0, 0]); r[0]++; if (b[3]) r[1]++; }
   for (const a of S.agents) for (const id in a.bonds || {}) { const x = a.bonds[id]; if (x[4]) continue; const r = bondRef[x[0]] || (bondRef[x[0]] = [0, 0]); r[0]++; if (x[5]) r[1]++; }
+  // goals and arcs: adults over 40 who lived through at least one finished arc (an ending other than death)
+  for (const a of S.agents) if (a.age > 40) { arcs.old++; if ((a.goals || []).some(x => x.end && x.out !== 'died')) arcs.lived++; }
+  for (const G of S.agents.map(a => a.goals || []).concat((S.legends || []).map(l => l.goals || []))) for (const x of G) {
+    if (!x.end) { arcs.open++; continue; }
+    arcs.closed++; if (x.ev && SIM.eventById(S, x.ev) && SIM.eventById(S, x.endEv)) arcs.linked++;
+  }
+  for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
   allV.push(...villages); vMed.push(med(villages)); vSmall.push(villages.filter(v => v < 5).length);
   console.log(`seed ${seed}: population by 20y ${pops.join('/')}, coups ${st.coups || 0}, wars ${st.wars || 0}, births/1000/yr ${cbr.toFixed(0)}, adults now ${adults.length}, villages ${villages.join(',')}`);
 }
@@ -103,13 +111,15 @@ console.log(`households: living houses per family ${(houseN / Math.max(1, famN))
 { const pc = (o, k) => o[k] ? `${k} ${Math.round(o[k][1] / o[k][0] * 100)}%` : `${k} -`;
   console.log(`linked chronicle (share with a cause): ${['coup', 'deposed', 'exiled', 'quit', 'feud', 'revenge', 'marry', 'house', 'inheritHouse', 'dispute', 'wergild', 'aidReceived', 'client'].map(k => pc(refK, k)).join(', ')}; ties: ${['enemy', 'sworn', 'rival', 'debt', 'love', 'friend'].map(k => pc(bondRef, k)).join(', ')}`); }
 console.log(`bonds: ${(bondN / Math.max(1, adultN)).toFixed(1)} per adult (${Object.entries(bondK).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}); enmities (trust < -0.3) with a named cause ${Math.round(feudsNamed / Math.max(1, feuds) * 100)}% of ${feuds}`);
+{ const K = arcs.kinds, line = Object.keys(K).sort().map(k => `${k} ${Object.entries(K[k]).sort((p, q) => q[1] - p[1]).map(([o, n]) => `${o} ${n}`).join('/')}`).join('; ');
+  console.log(`arcs: adults over 40 with a finished arc ${percent(arcs.lived, arcs.old)} (${arcs.lived}/${arcs.old}); kept arcs with opening and ending in the chronicle ${coverage(arcs.linked, arcs.closed)}, still open ${arcs.open}; by kind and outcome: ${line}`); }
 console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
 console.log(`grain memories: ${memoryMoves} moves changed (${sponsoredMoves} through sponsorship), ${aidReturned} gifts returned (${aidChanged} decisions changed)`);
 console.log(`mean adult age at death (15+): ${age.deaths ? (age.sum / age.deaths).toFixed(1) + ' years, n=' + age.deaths : 'n/a'}`);
 console.log(age.eligible
   ? `survived to 60 (island-born): ${(100 * age.reached / age.eligible).toFixed(1)}% (${age.reached}/${age.eligible}; ${age.left} left before 60)`
   : 'survived to 60 (island-born): n/a (no eligible birth cohort)');
-console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out; median village >= 15 adults, at most 2 villages under 5 per island; 2-5 bonds per adult, >= 30% of enmities with a cause; 0.8-1.2 living houses per family');
+console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out; median village >= 15 adults, at most 2 villages under 5 per island; 2-5 bonds per adult, >= 30% of enmities with a cause; 0.8-1.2 living houses per family; >= 30% of adults over 40 with a finished arc');
 
 console.log('\nИстория островов');
 let sheltersLinked = 0;
