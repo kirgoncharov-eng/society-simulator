@@ -25,7 +25,6 @@ function packWorld(seed, snaps, eras) {
 }`;
 const ATLRUN = { on: false, workers: [], queue: [], done: 0, total: 0, t0: 0, res: [], params: null, years: 60, fb: null };
 const MODEL_V = SIM.MODEL.v;
-function atlSrc() { for (const s of document.scripts) { const t = s.textContent || ''; if (t.includes('const SIM = (() =>') && !t.includes('function atlSrc')) return t; } return null; }
 function atlStart() {
   const n = +$('atlN').value, years = +$('atlY').value, own = $('atlOwn').checked;
   const base = 1 + ((Math.random() * 900000) | 0);
@@ -33,7 +32,7 @@ function atlStart() {
   ATLRUN.params = own && S ? Object.assign({}, S.params) : null;
   ATLRUN.queue = Array.from({ length: n }, (_, i) => ({ i, seed: base + i * 7919 }));
   $('atlGo').hidden = true; $('atlStop').hidden = false; atlProg();
-  const src = atlSrc(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+  const src = engineSource(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
   let ok = false;
   if (src && typeof Worker !== 'undefined') {
     try {

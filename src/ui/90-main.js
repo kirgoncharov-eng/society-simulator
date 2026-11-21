@@ -4,22 +4,30 @@ function frame(now) {
   if (ATL.on) { requestAnimationFrame(frame); return; }
   if (EX.on) {
     if (EX.playing && EX.A) {
-      EX.acc += dt * 12 * EX.speed / 1000;
-      const n = Math.min(Math.floor(EX.acc), 500); EX.acc -= n; if (EX.acc > 40) EX.acc = 0;
-      const t1 = performance.now(); for (let i = 0; i < n; i++) { SIM.step(EX.A); SIM.step(EX.B); if ((i & 7) === 7 && performance.now() - t1 > 14) { EX.acc = 0; break; } }
+      EX.acc = Math.min(60, EX.acc + dt * 12 * EX.speed / 1000);
+      const days = Math.floor(EX.acc);
+      if (!experimentRunner.busy && days >= Math.max(1, EX.speed / 4)) {
+        EX.acc -= days;
+        experimentRunner.advance(days, () => {});
+      }
     }
     if (EX.A) { drawMini(EX.A, $('mA'), EX.tA); drawMini(EX.B, $('mB'), EX.tB); }
     if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
     requestAnimationFrame(frame); return;
   }
-  const t0b = performance.now();
   if (playing) {
-    acc += dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000);
-    let n = Math.min(Math.floor(acc), 900); acc -= n; if (acc > 60) acc = 0;
-    for (let i = 0; i < n; i++) {
-      SIM.step(S);
-      if (S.tick % 30 === 0) { checkStops(now); if (!playing) { acc = 0; break; } }
-      if ((i & 7) === 7 && performance.now() - t0b > 14) { acc = 0; break; }
+    acc = Math.min(60, acc + dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000));
+    // Stop at the same monthly checkpoints as the synchronous simulation.
+    const checkpoint = 30 - S.tick % 30;
+    const days = Math.min(Math.floor(acc), checkpoint);
+    const batch = dayWatch ? 1 : Math.min(checkpoint, Math.max(1, speed / 2));
+    if (!mainRunner.busy && days >= batch) {
+      acc -= days;
+      mainRunner.advance(days, completed => {
+        if (!completed || S.tick % 30) return;
+        checkStops(performance.now());
+        if (!playing) acc = 0;
+      });
     }
   }
   updateDailyView();
@@ -28,7 +36,12 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-$('play').addEventListener('click', () => { playing = !playing; if (playing && focusEv) closeFocus(); syncPlay(); });
+$('play').addEventListener('click', () => {
+  playing = !playing;
+  if (!playing && mainRunner.busy) mainRunner.reset();
+  if (playing && focusEv) closeFocus();
+  syncPlay();
+});
 document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
   dayWatch = e.target.value === 'day';
   if (!dayWatch) speed = +e.target.value;
@@ -46,7 +59,7 @@ $('back').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
-  SIM.shock(S, b.dataset.shock); seenEv = S.evId || 0; ui(true);
+  SIM.shock(S, b.dataset.shock); mainRunner.reset(); seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
 }));
 $('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
@@ -98,4 +111,16 @@ function start(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 window.__lab = () => S; window.__v3 = () => V3;
+window.__labAdvance = async days => {
+  playing = false;
+  if (mainRunner.busy) mainRunner.reset();
+  syncPlay();
+  const target = S.tick + days;
+  while (S.tick < target) {
+    const completed = await new Promise(resolve => mainRunner.advance(Math.min(360, target - S.tick), resolve));
+    if (!completed) throw new Error('World advance interrupted');
+  }
+  seenEv = S.evId || 0;
+  ui(true);
+};
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});

@@ -14,8 +14,34 @@ async def main():
             errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
             await pg.goto('file://' + os.path.join(ROOT, 'dist', 'index.html')); await pg.wait_for_timeout(1500)
             await pg.evaluate("document.getElementById('go').click()")
-            await pg.evaluate("(()=>{const S=__lab(); for(let i=0;i<360*40;i++) SIM.step(S);})()")
-            await pg.click('#play'); await pg.wait_for_timeout(800)
+            await pg.click('#v2d')
+            # A worker must own the advancing world. Disable the UI's copy of step.
+            await pg.evaluate("() => { SIM.step = () => { throw Error('SIM.step on the UI thread'); }; }")
+            await pg.evaluate("() => __labAdvance(360 * 40)")
+            await pg.click('label[for=sp64]')
+            await pg.uncheck('#stops')
+            before = await pg.evaluate("() => __lab().tick")
+            await pg.locator('#play').click()
+            gaps = await pg.evaluate("""() => new Promise(resolve => {
+              const gaps = [], start = performance.now();
+              let last = start;
+              function sample(t) {
+                gaps.push(t - last);
+                last = t;
+                if (t - start < 2000) requestAnimationFrame(sample);
+                else resolve(gaps.sort((a, b) => a - b));
+              }
+              requestAnimationFrame(sample);
+            })""")
+            await pg.locator('#play').click()
+            after = await pg.evaluate("() => __lab().tick")
+            await pg.wait_for_timeout(150)
+            assert await pg.evaluate("() => __lab().tick") == after, 'World advanced after pause'
+            p95 = gaps[int(len(gaps) * 0.95)]
+            print(name, f'64x: {after - before} simulated days, p95 frame interval {p95:.1f} ms')
+            assert after - before > 120, '64x did not advance the world'
+            assert p95 < 100, f'64x missed the frame budget: p95 {p95:.1f} ms'
+            await pg.wait_for_timeout(800)
             await pg.screenshot(path=os.path.join(ROOT, 'tmp', f'{name}-map.png'))
             for tab in await pg.query_selector_all('[data-p]'):
                 await tab.click(); await pg.wait_for_timeout(250)

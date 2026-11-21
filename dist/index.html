@@ -457,7 +457,7 @@ ol.life time{color:var(--muted);font-variant-numeric:tabular-nums}
 
 <p class="band foot wrap solo" id="seedline"></p>
 
-<script>
+<script id="sim-source">
 const SIM = (() => {
 const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан','ис','ор','ну','са','вел','ин','то','ри','ла','мэ','зор','ан','ви','лей','дар','ми','ту','ре','ол','фа','ям','бо','се','ха','ют'];
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
@@ -4237,6 +4237,7 @@ function world(seed) {
   resetView();
 }
 function resetView() {
+  mainRunner.reset();
   D = new Map(); F = []; sel = null; closeFocus(true);
   acc = dayWatch ? dawnFraction() : 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
@@ -4244,6 +4245,80 @@ function resetView() {
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, распределение добычи, иерархия по охвату управления, энтропия от размера, уровней, обид и бюрократии.`;
 }
 
+// A single-file page can use the same engine in its workers, including when opened from disk.
+function engineSource() { return $('sim-source').textContent; }
+function stepWorlds(worlds, days, deadline = Infinity) {
+  for (let day = 0; day < days; day++) {
+    for (const world of worlds) SIM.step(world);
+    if (performance.now() >= deadline) break;
+  }
+}
+
+function backgroundWorlds(read, display) {
+  let worker, pending, revision = 0;
+  function reset() {
+    pending?.finish(false);
+    pending = null;
+    revision++;
+    if (worker) worker.postMessage({ revision, snapshots: read().map(SIM.serialize) });
+  }
+  function fallback() {
+    worker?.terminate();
+    worker = null;
+    pending?.finish(false);
+    pending = null;
+  }
+  if (typeof Worker !== 'undefined') {
+    const code = `
+      let worlds;
+      ${stepWorlds.toString()}
+      onmessage = ({ data }) => {
+        if (data.snapshots) {
+          worlds = data.snapshots.map(SIM.restore);
+          return;
+        }
+        worlds.forEach((world, i) => { world.params = data.params[i]; });
+        stepWorlds(worlds, data.days);
+        postMessage({ revision: data.revision, snapshots: worlds.map(SIM.serialize) });
+      };
+    `;
+    const url = URL.createObjectURL(new Blob([engineSource(), code], { type: 'text/javascript' }));
+    try {
+      worker = new Worker(url);
+      worker.onerror = fallback;
+      worker.onmessageerror = fallback;
+      worker.onmessage = ({ data }) => {
+        if (data.revision !== revision || !pending) return;
+        const old = read();
+        const worlds = data.snapshots.map((snapshot, i) => {
+          const world = SIM.restore(snapshot);
+          world.params = old[i].params;
+          return world;
+        });
+        const request = pending;
+        pending = null;
+        display(worlds);
+        request.finish(true);
+      };
+    } catch (error) { fallback(); }
+    finally { URL.revokeObjectURL(url); }
+  }
+  return {
+    reset,
+    get busy() { return !!pending; },
+    advance(days, finish) {
+      if (worker) {
+        pending = { finish };
+        worker.postMessage({ revision, days, params: read().map(world => world.params) });
+      } else {
+        stepWorlds(read(), days, performance.now() + 8);
+        finish(true);
+      }
+    },
+  };
+}
+
+const mainRunner = backgroundWorlds(() => [S], ([world]) => { S = world; });
 /* ---------- focus: auto-stop, camera, explanation ---------- */
 // linked chronicle: the events that led to this one, each can be opened (even years later, after it left the feed)
 function causesHtml(e) {
@@ -4255,7 +4330,11 @@ function evLink(id) { return id && SIM.eventById(S, id) ? ` <button class="evlin
 document.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('[data-ev]'); if (!b) return; const e = SIM.eventById(S, +b.dataset.ev); if (e) { ev.preventDefault(); focus(e, true); } });
 function focus(e, pause) {
   focusEv = e;
-  if (pause) { playing = false; syncPlay(); }
+  if (pause) {
+    playing = false;
+    if (mainRunner.busy) mainRunner.reset();
+    syncPlay();
+  }
   if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; }
   else vt = { x: 500, y: 500, z: 1 };
   const box = $('focus');
@@ -5246,6 +5325,7 @@ function syncPlay() { $('play').textContent = playing ? 'Пауза' : 'Пуск
 
 /* ---------- two worlds ---------- */
 const EX = { on: false, A: null, B: null, k: 'scarcity', va: 0.3, vb: 0.8, playing: true, speed: 16, acc: 0, seed: null, tA: { terr: document.createElement('canvas'), key: '', at: 0, id: 'A' }, tB: { terr: document.createElement('canvas'), key: '', at: 0, id: 'B' }, lastUi: 0 };
+const experimentRunner = backgroundWorlds(() => [EX.A, EX.B], ([a, b]) => { EX.A = a; EX.B = b; });
 const XK = { scarcity: 'дефицит', inflow: 'приток', synergy: 'синергия', memory: 'память', ambition: 'амбиции', noise: 'только случайность', landPriv: 'частная земля', assembly: 'вече', coin: 'монета', usury: 'проценты' };
 const BOOL = { landPriv: ['разрешена', 'запрещена'], assembly: ['разрешено', 'запрещено'], coin: ['разрешена', 'запрещена'], usury: ['разрешены', 'запрещены'] };
 const xval = v => BOOL[EX.k] ? (v >= 0.5 ? BOOL[EX.k][0] : BOOL[EX.k][1]) : pct(v) + '%';
@@ -5257,6 +5337,7 @@ function exStart() {
   if (EX.k !== 'noise') { pa[EX.k] = EX.va; pb[EX.k] = EX.vb; }
   EX.A = SIM.newWorld(seed, pa); EX.B = SIM.newWorld(seed, pb);
   if (EX.k === 'noise') EX.B.rng = (EX.B.rng ^ 0x5bd1e995) | 0;
+  experimentRunner.reset();
   EX.acc = 0; EX.playing = true; EX.tA.key = EX.tB.key = '';
   $('xplay').textContent = 'Пауза';
   exUi(true);
@@ -5378,7 +5459,11 @@ $('xa').addEventListener('input', e => { EX.va = +e.target.value; syncX(); });
 $('xb').addEventListener('input', e => { EX.vb = +e.target.value; syncX(); });
 $('xgo').addEventListener('click', exStart);
 $('xmap').addEventListener('click', () => { EX.seed = (Math.random() * 99999) | 0; exStart(); });
-$('xplay').addEventListener('click', () => { EX.playing = !EX.playing; $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск'; });
+$('xplay').addEventListener('click', () => {
+  EX.playing = !EX.playing;
+  if (!EX.playing && experimentRunner.busy) experimentRunner.reset();
+  $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск';
+});
 document.querySelectorAll('input[name=xs]').forEach(r => r.addEventListener('change', e => { EX.speed = +e.target.value; }));
 syncX();
 
@@ -5842,7 +5927,6 @@ function packWorld(seed, snaps, eras) {
 }`;
 const ATLRUN = { on: false, workers: [], queue: [], done: 0, total: 0, t0: 0, res: [], params: null, years: 60, fb: null };
 const MODEL_V = SIM.MODEL.v;
-function atlSrc() { for (const s of document.scripts) { const t = s.textContent || ''; if (t.includes('const SIM = (() =>') && !t.includes('function atlSrc')) return t; } return null; }
 function atlStart() {
   const n = +$('atlN').value, years = +$('atlY').value, own = $('atlOwn').checked;
   const base = 1 + ((Math.random() * 900000) | 0);
@@ -5850,7 +5934,7 @@ function atlStart() {
   ATLRUN.params = own && S ? Object.assign({}, S.params) : null;
   ATLRUN.queue = Array.from({ length: n }, (_, i) => ({ i, seed: base + i * 7919 }));
   $('atlGo').hidden = true; $('atlStop').hidden = false; atlProg();
-  const src = atlSrc(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+  const src = engineSource(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
   let ok = false;
   if (src && typeof Worker !== 'undefined') {
     try {
@@ -5982,22 +6066,30 @@ function frame(now) {
   if (ATL.on) { requestAnimationFrame(frame); return; }
   if (EX.on) {
     if (EX.playing && EX.A) {
-      EX.acc += dt * 12 * EX.speed / 1000;
-      const n = Math.min(Math.floor(EX.acc), 500); EX.acc -= n; if (EX.acc > 40) EX.acc = 0;
-      const t1 = performance.now(); for (let i = 0; i < n; i++) { SIM.step(EX.A); SIM.step(EX.B); if ((i & 7) === 7 && performance.now() - t1 > 14) { EX.acc = 0; break; } }
+      EX.acc = Math.min(60, EX.acc + dt * 12 * EX.speed / 1000);
+      const days = Math.floor(EX.acc);
+      if (!experimentRunner.busy && days >= Math.max(1, EX.speed / 4)) {
+        EX.acc -= days;
+        experimentRunner.advance(days, () => {});
+      }
     }
     if (EX.A) { drawMini(EX.A, $('mA'), EX.tA); drawMini(EX.B, $('mB'), EX.tB); }
     if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
     requestAnimationFrame(frame); return;
   }
-  const t0b = performance.now();
   if (playing) {
-    acc += dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000);
-    let n = Math.min(Math.floor(acc), 900); acc -= n; if (acc > 60) acc = 0;
-    for (let i = 0; i < n; i++) {
-      SIM.step(S);
-      if (S.tick % 30 === 0) { checkStops(now); if (!playing) { acc = 0; break; } }
-      if ((i & 7) === 7 && performance.now() - t0b > 14) { acc = 0; break; }
+    acc = Math.min(60, acc + dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000));
+    // Stop at the same monthly checkpoints as the synchronous simulation.
+    const checkpoint = 30 - S.tick % 30;
+    const days = Math.min(Math.floor(acc), checkpoint);
+    const batch = dayWatch ? 1 : Math.min(checkpoint, Math.max(1, speed / 2));
+    if (!mainRunner.busy && days >= batch) {
+      acc -= days;
+      mainRunner.advance(days, completed => {
+        if (!completed || S.tick % 30) return;
+        checkStops(performance.now());
+        if (!playing) acc = 0;
+      });
     }
   }
   updateDailyView();
@@ -6006,7 +6098,12 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-$('play').addEventListener('click', () => { playing = !playing; if (playing && focusEv) closeFocus(); syncPlay(); });
+$('play').addEventListener('click', () => {
+  playing = !playing;
+  if (!playing && mainRunner.busy) mainRunner.reset();
+  if (playing && focusEv) closeFocus();
+  syncPlay();
+});
 document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
   dayWatch = e.target.value === 'day';
   if (!dayWatch) speed = +e.target.value;
@@ -6024,7 +6121,7 @@ $('back').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
-  SIM.shock(S, b.dataset.shock); seenEv = S.evId || 0; ui(true);
+  SIM.shock(S, b.dataset.shock); mainRunner.reset(); seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
 }));
 $('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
@@ -6076,6 +6173,18 @@ function start(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 window.__lab = () => S; window.__v3 = () => V3;
+window.__labAdvance = async days => {
+  playing = false;
+  if (mainRunner.busy) mainRunner.reset();
+  syncPlay();
+  const target = S.tick + days;
+  while (S.tick < target) {
+    const completed = await new Promise(resolve => mainRunner.advance(Math.min(360, target - S.tick), resolve));
+    if (!completed) throw new Error('World advance interrupted');
+  }
+  seenEv = S.evId || 0;
+  ui(true);
+};
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 }
 
