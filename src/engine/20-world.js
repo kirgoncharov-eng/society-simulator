@@ -164,7 +164,7 @@ function succession(S, g, why, old) {
       g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = 0.7; g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
       const weak = W.skill < 0.45;
       const sev = log(S, 'succession', `${old.name} ${VERB[why] || 'уходит'}. ${child ? 'По праву рождения' : 'По праву рода'} «${g.name}» наследует ${W.name}, ${g.dynGen}-е поколение династии ${g.dynName}`, W.x, W.y, g.hue, { why: sent(['в деревне власть наследуется, поэтому выборов нет', child ? `${W.name} — старший ${fem(W, 'сын', 'дочь')} ${old.name}` : `своих детей у ${old.name} в деревне нет, и власть переходит к старшему в роду`, `наследнику ${Math.floor(W.age)} лет`, weak ? `способности средние (навык ${P0(W.skill)}): сильные соперники могут не смириться` : `навык ${P0(W.skill)}`]), who: [W.id, old.id], gs: [g.id] });
-      refLast(S, W, 'heir', sev.id);
+      refLast(S, W, 'heir', sev.id); powerEvent(S, g, sev.id);
       return;
     }
   }
@@ -193,11 +193,12 @@ function succession(S, g, why, old) {
     if (sup.length >= 4 && rnd(S) < Math.min(1, 0.2 + fissionP(S, g))) {
       const ng = createGroup(S, R, sup, g.id);
       S.hostility[key(g.id, ng.id)] = 0.7; S.stats.schisms++;
-      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ${R.name} уходят ${sidesTxt(S, sup)}`, `за ${W.name} остаются ${sidesTxt(S, backers.get(W.id))}`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], sides: 1 });
+      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ${R.name} уходят ${sidesTxt(S, sup)}`, `за ${W.name} остаются ${sidesTxt(S, backers.get(W.id))}`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
       return;
     }
   }
   const sev = log(S, 'succession', `${lead}. «${g.name}» возглавляет ${W.name}${g.gen > 2 ? `, ${g.gen}-й лидер со времён ${g.founder}` : ''}`, W.x, W.y, g.hue, { why: sent([`${W.name} набирает ${P0(share)} голосов`, backers.get(W.id).length ? `за ${fem(W, 'него', 'неё')} ${sidesTxt(S, backers.get(W.id))}` : '', R && backers.get(R.id).length ? `за ${R.name} — ${sidesTxt(S, backers.get(R.id))}` : '', share > 0.6 ? 'сильный мандат' : share < 0.4 ? 'мандат слабый, недовольство может вырасти' : '']), who: [W.id], gs: [g.id], sides: 1 });
+  powerEvent(S, g, sev.id);
   linSuccession(S, g, W, old, sev.id);
   if (R && R !== W) powerLost(S, R, g, W, sev.id);
 }

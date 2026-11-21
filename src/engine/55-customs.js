@@ -20,9 +20,31 @@ function setCustom(S, g, kind, outcome, causes, how) {
   const L = S._a.get(g.leader);
   g.customEv = g.customEv || {};
   const text = kind === 'blood' && outcome === 'wergild' ? `«${g.name}» вводит обычай виры: за кровь платят, а не мстят` : kind === 'inherit' ? `В «${g.name}» складывается обычай наследства: ${CASE_LABEL.inherit[outcome]}` : `В «${g.name}» складывается обычай: ${CASE_LABEL[kind][outcome]}`;
-  const ev = log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([how, 'теперь так решают и дальше, пока сход или новый вождь не переменят', L ? `обычай объявляет ${L.name}` : '']), who: L ? [L.id] : [], gs: [g.id], causes });
+  const A = L || topBy(adultsOf(S, g), m => m.age, 1)[0]; if (!A) return null;
+  const ev = enact(S, g, { kind: 'custom', author: A, against: customLosers(S, g, kind, outcome, causes, A), cause: causes[0] || null, propose: g.gov === 'assembly' ? 'на вече обычай объявляет' : 'обычай объявляет', text,
+    why: [how, 'теперь так решают и дальше, пока сход или новый вождь не переменят'], authorLine: `Объявляет обычай «${g.name}»: ${CASE_LABEL[kind][outcome]}`, lostLine: p => `Обычай «${g.name}» — ${CASE_LABEL[kind][outcome]} — против ${fem(p, 'него', 'неё')}`, grudge: 'объявил обычай против меня', extra: { causes: causes.length ? causes : undefined } });
   g.customEv[kind] = cite(S, ev.id);
   return ev;
+}
+// who loses by a custom: in an inheritance custom the side the cases went against; under blood money those who took
+// blood and want it still; under blood for blood an old peacemaker; for theft the thieves
+function customLosers(S, g, kind, outcome, causes, A) {
+  const out = [];
+  for (const id of causes || []) {
+    const e = eventById(S, id); if (!e || !e.who) continue;
+    let p = null;
+    if (kind === 'inherit') p = S._a.get(outcome === 'eldest' ? e.who[1] : e.who[0]);
+    else if (kind === 'blood' && outcome === 'wergild' && e.type === 'revenge') p = S._a.get(e.who[0]);
+    else if (kind === 'theft') p = S._a.get(e.who[e.who.length - 1]);
+    if (p && p !== A && p.group === g.id && !out.includes(p)) out.push(p);
+  }
+  if (out.length) return out;
+  // nobody from the cases is left: whoever the custom works against by their place in the family or their grudge
+  const ad = adultsOf(S, g).filter(m => m !== A), sib = (m, older) => ad.some(o => o !== m && ((m.father && o.father === m.father) || (m.mother && o.mother === m.mother)) && (older ? o.age > m.age : o.age < m.age));
+  const pick = kind === 'inherit' ? (outcome === 'eldest' ? topBy(ad.filter(m => sib(m, true)), m => m.ambition, 1) : topBy(ad.filter(m => sib(m, false) && !sib(m, true)), m => m.status, 1))
+    : kind === 'blood' ? (outcome === 'wergild' ? topBy(ad.filter(m => m.feud && !m.feud.done).concat(ad.filter(m => m.age < 35)), m => m.ambition, 1) : topBy(ad.filter(m => m.age > 45), m => m.coop, 1))
+    : topBy(ad, m => outcome === 'ban' ? m.coop : 1 - m.coop, 1);
+  return pick.filter(Boolean);
 }
 // who judges: the leader, or the assembly; returns the ruling the judge leans to without a custom
 function judge(S, g, kind) {
@@ -111,7 +133,11 @@ function customsYear(S) {
       const text = kind === 'blood' ? `«${g.name}» перенимает у «${o.name}» ${outcome === 'wergild' ? 'обычай виры: за кровь платят' : 'обычай мести: кровь за кровь'}` : `«${g.name}» перенимает у «${o.name}» обычай наследства: ${CASE_LABEL.inherit[outcome]}`;
       g.customs = g.customs || {}; g.customs[kind] = outcome; S.stats.customs = (S.stats.customs || 0) + 1; S.stats.customsCopied = (S.stats.customsCopied || 0) + 1;
       const L = S._a.get(g.leader);
-      const ev = log(S, 'law', text, g.home.x, g.home.y, g.hue, { why: sent([`у «${o.name}» так заведено, и соседи видят, что это работает`, `связи между деревнями: торговля, союз или браки`, L ? `${L.name} вводит обычай у себя` : '']), who: L ? [L.id] : [], gs: [g.id, o.id], causes: (o.customEv || {})[kind] ? [o.customEv[kind]] : undefined });
+      const A = L || topBy(adultsOf(S, g), m => m.age, 1)[0]; if (!A) continue;
+      const src = (o.customEv || {})[kind] ? [o.customEv[kind]] : undefined;
+      const old = topBy(adultsOf(S, g).filter(m => m !== A), m => m.age, 1);
+      const ev = enact(S, g, { kind: 'custom', author: A, against: old, cause: src && src[0] ? src[0] : null, text, propose: 'чужой обычай вводит', extra: { gs: [g.id, o.id] },
+        why: [`у «${o.name}» так заведено, и соседи видят, что это работает`, `связи между деревнями: торговля, союз или браки`], authorLine: `Вводит в «${g.name}» обычай, перенятый у «${o.name}»`, lostLine: p => `Старики «${g.name}» не хотят чужого обычая, но их не слушают`, grudge: 'ввёл чужой обычай' });
       g.customEv = g.customEv || {}; g.customEv[kind] = cite(S, ev.id);
     }
   }
