@@ -3,19 +3,19 @@ const V3 = { on: false, ready: false, loading: false, texAt: 0, texKey: '', objA
 const URL3 = ['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'];
 function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
 function set3D(on) {
-  V3.requested = on;
   $('v2d').classList.toggle('on', !on); $('v3d').classList.toggle('on', on);
   $('v2d').setAttribute('aria-pressed', String(!on)); $('v3d').setAttribute('aria-pressed', String(on));
   document.body.classList.toggle('flat', !on);
-  if (!on) { V3.on = false; cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
-  if (V3.ready) { $('v3msg').hidden = true; V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); return; }
+  V3.wanted = on;
+  if (!on) { V3.on = false; $('camZoom').value = Math.round(100 * Math.log(vt.z) / Math.log(5)); cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
+  if (V3.ready) { $('v3msg').hidden = true; V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
   if (V3.loading) return;
   V3.loading = true; $('v3msg').hidden = false; $('v3msg').textContent = 'Загружаю 3D…';
   (async () => {
     try {
       if (!window.THREE) await loadScript(URL3[0]);
       if (!THREE.OrbitControls) await loadScript(URL3[1]);
-      if (V3.requested) {
+      if (V3.wanted) {
         init3D();
         V3.ready = true;
         set3D(true);
@@ -61,7 +61,9 @@ function init3D() {
   plate.insertBefore(V3.ren.domElement, $('v3lab'));
   V3.ctl = new T.OrbitControls(V3.cam, V3.ren.domElement);
   V3.ctl.target.set(500, 0, 520); V3.ctl.enableDamping = true; V3.ctl.dampingFactor = 0.08;
-  V3.ctl.maxPolarAngle = 1.32; V3.ctl.minDistance = 120; V3.ctl.maxDistance = 1900; V3.ctl.update();
+  V3.ctl.maxPolarAngle = 1.32; V3.ctl.minDistance = 110; V3.ctl.maxDistance = 3200; V3.ctl.update();
+  V3.ctl.addEventListener('start', () => { follow = false; V3.fly = null; });
+  V3.ctl.addEventListener('end', syncCameraZoom);
   V3.hemi = new T.HemisphereLight(0xffffff, 0x556644, 0.55); V3.scene.add(V3.hemi);
   V3.sun = new T.DirectionalLight(0xfff2dd, 0.6); V3.sun.position.set(-400, 900, 300); V3.scene.add(V3.sun);
   V3.texCv = document.createElement('canvas'); V3.texCv.width = V3.texCv.height = 2048;
@@ -92,7 +94,7 @@ function init3D() {
   const mk = (geo, mat, n) => { const m = new T.InstancedMesh(geo, mat, n); m.count = 0; V3.scene.add(m); return m; };
   V3.cargoW = mk(logG, lam(0x8a5a2b), 600); V3.cargoS = mk(new T.BoxGeometry(3.6, 3, 3.6), lam(0x9a968c), 600); V3.cargoF = mk(new T.SphereGeometry(2.5, 8, 6), lam(0xd9c38e), 600);
   V3.bridges = mk(new T.BoxGeometry(24, 2.2, 11), lam(0x8f6a40), 80); V3.rails = mk(new T.BoxGeometry(24, 2.5, 0.8), lam(0x6b4a2b), 160);
-  V3.sites = mk(new T.BoxGeometry(10, 8, 10), lam(0xd8b98a), 60); V3.scaf = mk(new T.CylinderGeometry(0.45, 0.45, 15, 4), lam(0x9b7647), 240);
+  V3.sites = mk(new T.BoxGeometry(1, 1, 1), lam(0xd8b98a), 600);
   V3.crops = mk(new T.BoxGeometry(3.2, 1, 3.2), lam(0xffffff), 900);
   V3.stumps = mk(new T.CylinderGeometry(1.3, 1.6, 2.2, 6), lam(0x7a5636), 2600);
   V3.smoke = mk(new T.SphereGeometry(2.3, 7, 5), new T.MeshLambertMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.5, depthWrite: false }), 360);
@@ -117,21 +119,42 @@ function init3D() {
   });
   new ResizeObserver(size3D).observe(plate);
   size3D();
-  const big = S.groups.filter(g => g.home).sort((a, b) => b.members.length - a.members.length)[0];
-  const landing = S.tick === 0 && firstLanding(S);
+  const landing = introOpen && firstLanding(S);
   if (landing) fly3D(landing.x1, landing.y1, true);
-  else if (big) fly3D(big.home.x, big.home.y, true);
+  else islandCamera(true);
 }
-function fly3D(x, z, now) {
+function overviewDistance() {
+  const vertical = V3.cam.fov * Math.PI / 360;
+  return Math.max(1350, 510 / Math.sin(Math.min(vertical, Math.atan(Math.tan(vertical) * V3.cam.aspect))));
+}
+function syncCameraZoom() {
+  if (!V3.on || !V3.ctl) return;
+  const max = overviewDistance(), range = $('camZoom');
+  const distance = V3.cam.position.distanceTo(V3.ctl.target);
+  range.value = Math.round(Math.max(0, Math.min(100, 100 * Math.log(max / distance) / Math.log(max / 110))));
+}
+function fly3D(x, z, now, distance = 420, overview = false) {
   if (!V3.ctl) return;
-  V3.fly = { x, z };
-  if (now) { V3.ctl.target.set(x, 0, z); V3.cam.position.set(x + 40, 260, z + 330); V3.ctl.update(); V3.fly = null; }
+  V3.fly = { x, z, distance, overview };
+  if (now || reduce) {
+    V3.ctl.target.set(x, 0, z);
+    V3.cam.position.set(x + distance * 0.07, distance * 0.73, z + distance * 0.68);
+    V3.ctl.update(); V3.fly = null; syncCameraZoom();
+  }
+}
+function islandCamera(now) {
+  follow = false;
+  vt = { x: 500, y: 500, z: 1 };
+  if (now || reduce) view = { ...vt };
+  $('camZoom').value = 0;
+  if (V3.ctl) fly3D(S.isle?.x ?? 500, S.isle?.y ?? 500, now, overviewDistance(), true);
 }
 function size3D() {
   if (!V3.ren) return;
   const w = plate.clientWidth, h = plate.clientHeight;
   V3.ren.setSize(w, h, false); V3.ren.domElement.style.width = w + 'px'; V3.ren.domElement.style.height = h + 'px';
-  V3.cam.aspect = w / Math.max(1, h); V3.cam.updateProjectionMatrix();
+  V3.cam.aspect = Math.max(1, w) / Math.max(1, h); V3.cam.updateProjectionMatrix();
+  V3.ctl.maxDistance = Math.max(3200, overviewDistance());
 }
 function hexOf(css) { V3.col.setStyle(css); return V3.col; }
 function hsl3(h, dl = 0) { return new THREE.Color().setHSL(((h % 360) + 360) % 360 / 360, 0.62, ((C.dark ? 62 : 42) + dl) / 100); }
@@ -192,15 +215,40 @@ function rebuildStatic(W0, now) {
     if (g.shrine && sp < 80) { const w = g.shrine, y = gh(w.x, w.y), f = W0.faiths && W0.faiths[g.faith]; setInst(V3.spires, sp, w.x, y + 11, w.y); V3.spires.setColorAt(sp, hsl3(f ? f.hue : g.hue, -4)); sp++; }
   }
   for (const r of W0.ruins || []) for (const hh of r.houses) { if (h >= 900) break; const y = gh(hh.x, hh.y); setInst(V3.houses, h, hh.x, y + 2, hh.y, 1, hh.x, 0.45); V3.houses.setColorAt(h, hexOf(rgba(C.muted, 1)).clone()); setInst(V3.roofs, h, hh.x, y - 20, hh.y, 0.01); V3.roofs.setColorAt(h, hexOf(rgba(C.muted, 1)).clone()); h++; }
-  let si = 0, sc = 0, cr = 0;
+  let si = 0, cr = 0;
+  const boxAt = (x, y, z, w, h, d, yaw = 0) => {
+    if (si >= V3.sites.instanceMatrix.count) return;
+    const o = V3.dummy; o.position.set(x, y, z); o.rotation.set(0, -yaw, 0); o.scale.set(w, h, d); o.updateMatrix();
+    V3.sites.setMatrixAt(si++, o.matrix);
+  };
   const season = Math.floor((W0.tick % 360) / 90), sh = [0, 0.35, 0.85, 1.1][season], ccol = season === 3 ? hexOf(C.dark ? '#b9963c' : '#d9b04a').clone() : hexOf(C.dark ? '#4f7a36' : '#7eae4e').clone();
   for (const g of W0.groups) {
     if (!g.home) continue;
     const st = g.site;
-    if (st && st.kind !== 'field' && st.kind !== 'walls' && si < 60) {
-      const p = Math.min(1, st.prog / st.need), y = gh(st.x, st.y), w = st.kind === 'workshop' ? 1.6 : st.kind === 'granary' ? 1 : 1;
-      setInst(V3.sites, si++, st.x, y + 4 * Math.max(0.08, p), st.y, w, -(st.angle || 0), Math.max(0.08, p));
-      for (const [dx, dz] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) if (sc < 240) setInst(V3.scaf, sc++, st.x + dx * w, y + 7.5, st.y + dz * w);
+    if (st && st.kind !== 'field' && st.kind !== 'palisade') {
+      const y = gh(st.x, st.y), angle = st.angle || 0;
+      const { width, depth } = st.footprint || { width: 10, depth: 10 };
+      if (st.kind === 'bridge' && st.approaches) {
+        const [a, b] = st.approaches;
+        for (const p of [a, b]) boxAt(p.x, gh(p.x, p.y) + 0.4, p.y, 6, 0.8, 10);
+        if (st.phase === 'supports' || st.phase === 'deck') {
+          const mid = (a.x + b.x) / 2, top = Math.max(gh(a.x, a.y), gh(b.x, b.y)) + 1;
+          for (const x of [a.x + (mid - a.x) * .6, b.x + (mid - b.x) * .6]) {
+            const base = gh(x, a.y);
+            boxAt(x, (top + base) / 2, a.y, 2.5, top - base, 10);
+          }
+          if (st.phase === 'deck') boxAt(mid, top, a.y, Math.abs(b.x - a.x) * (0.3 + 0.7 * (st.prog / st.need - .68) / .32), 1.2, 9);
+        }
+      } else {
+        boxAt(st.x, y + 0.16, st.y, width, .32, depth, angle);
+        if (st.phase === 'frame' || st.phase === 'roof') for (const dx of [-width * .43, width * .43]) for (const dz of [-depth * .43, depth * .43]) {
+          const x = st.x + dx * Math.cos(angle) - dz * Math.sin(angle), z = st.y + dx * Math.sin(angle) + dz * Math.cos(angle);
+          boxAt(x, gh(x, z) + 3, z, .8, 6, .8, angle);
+        }
+        if (st.phase === 'roof') boxAt(st.x, y + 6, st.y, width, .8, depth, angle);
+        if (st.phase === 'lining' || st.phase === 'finish') boxAt(st.x, y + .9, st.y, width, 1.8, depth, angle);
+        if (st.delivered?.wood) boxAt(st.x + width * .8, y + .6, st.y, 2.5, 1.2, 5);
+      }
     }
     if (sh > 0) for (const f of g.fields) for (let i = 0; i < 6 && cr < 900; i++) { const fx = f.x - 6 + (i % 3) * 6, fz = f.y - 3.5 + Math.floor(i / 3) * 7; setInst(V3.crops, cr, fx, gh(fx, fz) + sh * 2.2, fz, 1, 0, sh * 4.4); V3.crops.setColorAt(cr, ccol); cr++; }
   }
@@ -214,18 +262,54 @@ function rebuildStatic(W0, now) {
   }
   V3.bridges.count = bi; V3.rails.count = ri; V3.bridges.instanceMatrix.needsUpdate = true; V3.rails.instanceMatrix.needsUpdate = true;
   V3.water.material.color.set(W0.frozen ? (C.dark ? 0xb8c8d4 : 0xe4eef4) : 0x6fa8c8); V3.water.material.opacity = W0.frozen ? 0.96 : 0.93;
-  for (const [m, c] of [[V3.sites, si], [V3.scaf, sc], [V3.crops, cr]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  for (const [m, c] of [[V3.sites, si], [V3.crops, cr]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   for (const [m, c] of [[V3.houses, h], [V3.roofs, h], [V3.big, b], [V3.chim, b], [V3.silos, s], [V3.spires, sp]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-  const wk = JSON.stringify(W0.groups.filter(g => g.wallPlan).map(g => g.wallPlan.segments));
-  if (wk !== V3.wallsKey) {
-    V3.wallsKey = wk;
-    for (const ch of [...V3.wallG.children]) { V3.wallG.remove(ch); ch.geometry.dispose(); }
-    if (!V3.wallMaterial) V3.wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8a6234 });
-    for (const g of W0.groups) for (const { a, b } of g.wallPlan?.segments || []) {
-      const dx = b.x - a.x, dz = b.y - a.y, x = (a.x + b.x) / 2, z = (a.y + b.y) / 2;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(dx, dz), 7, 2), V3.wallMaterial);
-      m.rotation.y = -Math.atan2(dz, dx);
-      m.position.set(x, gh(x, z) + 3.5, z); V3.wallG.add(m);
+  updatePalisades3D(W0);
+}
+function updatePalisades3D(W0) {
+  const active = W0.groups.filter(g => g.site?.kind === 'palisade').map(g => g.site);
+  const wk = JSON.stringify([W0.seed, W0.wallV, active.map(st => [st.id, st.phase, Math.floor(20 * st.prog / st.need)])]);
+  if (wk === V3.wallsKey && W0 === V3.wallWorld) return;
+  V3.wallsKey = wk; V3.wallWorld = W0;
+  V3.wallG.clear();
+  const T = THREE;
+  V3.postG ||= new T.CylinderGeometry(.8, .94, 1, 7);
+  V3.pointG ||= new T.ConeGeometry(.8, 1, 7);
+  V3.wallMaterial ||= new T.MeshLambertMaterial({ color: 0x775232 });
+  V3.trenchMaterial ||= new T.MeshLambertMaterial({ color: 0x786852 });
+  V3.trenchG ||= new T.BoxGeometry(1, .35, 1);
+  const add = (geo, mat, x, y, z, w, h, d, yaw = 0) => {
+    const m = new T.Mesh(geo, mat);
+    m.position.set(x, y, z); m.scale.set(w, h, d); m.rotation.y = -yaw; V3.wallG.add(m);
+  };
+  const built = [...W0.groups, ...(W0.ruins || [])].flatMap(g => g.fortifications || []);
+  for (const [layout, site] of [...built.map(w => [w, null]), ...active.map(st => [st.layout, st])]) {
+    let remaining = site ? Math.max(0, Math.min(1, (site.prog / site.need - .32) / .56)) * layout.posts : Infinity;
+    for (const { a, b } of layout.segments) {
+      const len = Math.hypot(b.x - a.x, b.y - a.y), yaw = Math.atan2(b.y - a.y, b.x - a.x);
+      const count = Math.ceil(len / (layout.posts ? 1.55 : 1.8)), height = layout.height;
+      for (let i = 0; i < count; i++) {
+        const t = (i + .5) / count, x = a.x + (b.x - a.x) * t, z = a.y + (b.y - a.y) * t;
+        const y = gh(x, z);
+        if (site && remaining-- < 1) {
+          const dug = Math.min(1, site.prog / site.need / .32);
+          if (t > dug) continue;
+          add(V3.trenchG, V3.trenchMaterial, x, y + .15, z, len / count, 1, 1.6, yaw);
+        } else {
+          add(V3.postG, V3.wallMaterial, x, y + height / 2, z, 1, height, 1);
+          add(V3.pointG, V3.wallMaterial, x, y + height + .43, z, 1, .86, 1);
+        }
+      }
+    }
+    if (!site || site.phase === 'finish') for (const gate of layout.gates) {
+      if (gate.angle === undefined) continue;
+      const x0 = gate.x, z0 = gate.y, height = layout.height;
+      for (const side of [-1, 1]) {
+        const x = x0 + Math.cos(gate.angle) * side * gate.width / 2;
+        const z = z0 + Math.sin(gate.angle) * side * gate.width / 2;
+        add(V3.postG, V3.wallMaterial, x, gh(x, z) + height / 2, z, 1.4, height, 1.4);
+      }
+      add(V3.trenchG, V3.wallMaterial, x0, gh(x0, z0) + height, z0, gate.width + 1.1, 3, 1.6, gate.angle);
     }
   }
 }
@@ -244,7 +328,8 @@ function render3D(now) {
     V3.ids[i] = a.id;
     if (a.car && c < 80) { setInst(V3.carts, c++, d.x + 6, y + 3, d.y, 1, Math.atan2(a.x - d.x, a.y - d.y)); }
     if (a.job === 'water' && a.wc && bk < 200) setInst(V3.bucket, bk++, d.x + 2.5, y + 7 * s, d.y);
-    if (a.load > 0.3) { const m = a.lk === 'wood' ? V3.cargoW : a.lk === 'stone' ? V3.cargoS : V3.cargoF, k = m === V3.cargoW ? cw++ : m === V3.cargoS ? cs++ : cf++; if (k < 600) setInst(m, k, d.x, y + 12.5 * s, d.y, 1, a.id); }
+    const cargo = a.load > 0.3 ? a.lk : a.job === 'build' && a.siteTrip?.id === g?.site?.id ? a.siteTrip?.kind : null;
+    if (cargo) { const m = cargo === 'wood' ? V3.cargoW : cargo === 'stone' ? V3.cargoS : V3.cargoF, k = m === V3.cargoW ? cw++ : m === V3.cargoS ? cs++ : cf++; if (k < 600) setInst(m, k, d.x, y + 12.5 * s, d.y, 1, a.id); }
   }
   let sm = 0;
   const winter = Math.floor((W0.tick % 360) / 90) === 0, tt = reduce ? 0 : now / 1600;
@@ -282,7 +367,22 @@ function render3D(now) {
   { let si2 = 0, wi = 0; for (const sp of W0.springs || []) if (!sp.dry && si2 < 20) setInst(V3.springM, si2++, sp.x, gh(sp.x, sp.y) + 0.6, sp.y, sp.big ? 1.25 : 1); for (const g of W0.groups) if (g.well && wi < 80) { const y0 = gh(g.well.x, g.well.y); setInst(V3.wellM, wi, g.well.x, y0 + 2, g.well.y); setInst(V3.wellW, wi, g.well.x, g.well.dry ? -60 : y0 + 2.1, g.well.y); wi++; } V3.springM.count = si2; V3.wellM.count = wi; V3.wellW.count = wi; for (const m of [V3.springM, V3.wellM, V3.wellW]) m.instanceMatrix.needsUpdate = true; }
   for (const [m, k] of [[V3.bucket, bk], [V3.cargoW, cw], [V3.cargoS, cs], [V3.cargoF, cf], [V3.smoke, sm], [V3.deer, dr], [V3.deerH, dr]]) { m.count = Math.min(k, m.instanceMatrix.count); m.instanceMatrix.needsUpdate = true; }
   if (follow && sel && S._a.get(sel)) { const a = D.get(sel); V3.fly = { x: a.x, z: a.y }; }
-  if (V3.fly) { const tg = V3.ctl.target, dx = V3.fly.x - tg.x, dz = V3.fly.z - tg.z; tg.x += dx * 0.08; tg.z += dz * 0.08; V3.cam.position.x += dx * 0.08; V3.cam.position.z += dz * 0.08; if (Math.hypot(dx, dz) < 2) V3.fly = null; }
+  if (V3.fly) {
+    const { x, z, distance, overview } = V3.fly, tg = V3.ctl.target, pos = V3.cam.position;
+    const dx = x - tg.x, dz = z - tg.z, dy = -tg.y, f = reduce ? 1 : 0.10;
+    const current = pos.distanceTo(tg), range = distance ?? current;
+    tg.x += dx * f; tg.y += dy * f; tg.z += dz * f;
+    if (overview) {
+      pos.x += (x + range * 0.07 - pos.x) * f;
+      pos.y += (range * 0.73 - pos.y) * f;
+      pos.z += (z + range * 0.68 - pos.z) * f;
+    } else {
+      pos.x += dx * f; pos.y += dy * f; pos.z += dz * f;
+      pos.sub(tg).multiplyScalar((current + (range - current) * f) / current).add(tg);
+    }
+    const error = overview ? Math.hypot(x + range * 0.07 - pos.x, range * 0.73 - pos.y, z + range * 0.68 - pos.z) : Math.abs(range - current);
+    if (Math.hypot(dx, dy, dz) < 2 && error < 3) { V3.fly = null; syncCameraZoom(); }
+  }
   for (const w of W0.wars || []) {
     if (f >= 20) break;
     const band = (w.fighters || []).map(id => D.get(id)).filter(Boolean), A = W0._g.get(w.att); if (!band.length || !A) continue;
@@ -290,7 +390,6 @@ function render3D(now) {
     const y = gh(fx, fz); setInst(V3.poles, f, fx, y + 15, fz); setInst(V3.flags, f, fx + 3, y + 26, fz, 1, Math.PI / 2); V3.flags.setColorAt(f, hsl3(A.hue)); f++;
   }
   for (const [m, k] of [[V3.bodies, n], [V3.heads, n], [V3.carts, c], [V3.flags, f], [V3.poles, f]]) { m.count = k; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-  if (focusEv && focusEv.x !== undefined && focusEv.x !== null) { V3.ctl.target.x += (focusEv.x - V3.ctl.target.x) * 0.06; V3.ctl.target.z += (focusEv.y - V3.ctl.target.z) * 0.06; }
   V3.ctl.update();
   V3.ren.render(V3.scene, V3.cam);
   if (!V3.lf || now - V3.lf > 60) { labels3D(W0); V3.lf = now; }

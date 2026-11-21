@@ -20,8 +20,15 @@ function storyText(p, full) {
   const fam = kids ? `<p class="famline">${kids} ${kids % 10 === 1 && kids % 100 !== 11 ? 'ребёнок' : kids % 10 > 1 && kids % 10 < 5 && (kids % 100 < 12 || kids % 100 > 14) ? 'ребёнка' : 'детей'}${kd ? `, из них ${kd} ${kd % 10 === 1 && kd % 100 !== 11 ? 'умер' : 'умерли'} в детстве` : ''}.</p>` : '';
   return `<ol class="life">${lines.join('')}</ol>${fam}`;
 }
+// arcs: what a person wanted, the turns on the way and how it ended; each step opens its event
+function arcsHtml(goals, open) {
+  const G = (goals || []).filter(x => open || x.end);
+  if (!G.length) return '';
+  const step = (cls, t, txt, ev) => `<span class="${cls}"><time>${yr(t)}</time> ${esc(txt)}${evLink(ev)}</span>`;
+  return `<ul class="arcs">${G.map(x => `<li><b>${esc(SIM.GOAL_NAME[x.k] || x.k)}</b>${x.end ? ` · <em class="out-${x.out}">${esc(SIM.GOAL_OUT[x.out] || x.out)}</em>` : ' · <em>в пути</em>'}<br>${step('tie', x.t, x.txt, x.ev)}${(x.turns || []).map(t => ' → ' + step('turn', t[0], t[1], t[2])).join('')}${x.end ? ' → ' + step('end', x.end, x.endTxt, x.endEv) : ''}</li>`).join('')}</ul>`;
+}
 function fateList() {
-  const alive = S.agents.filter(a => a.bio && (a.drama || 0) >= 9).map(a => ({ id: a.id, name: a.name, sex: a.sex, bio: a.bio, drama: a.drama, alive: true, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, g: a.group }));
+  const alive = S.agents.filter(a => a.bio && (a.drama || 0) >= 9).map(a => ({ id: a.id, name: a.name, sex: a.sex, bio: a.bio, goals: a.goals, drama: a.drama, alive: true, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, g: a.group }));
   const dead = (S.legends || []).map(l => Object.assign({ alive: false }, l));
   const all = alive.concat(dead).map(p => Object.assign(p, { arc: arcOf(p), kinds: new Set(p.bio.map(b => b[1])).size }));
   all.sort((x, y) => (y.drama * (0.6 + y.kinds / 12)) - (x.drama * (0.6 + x.kinds / 12)));
@@ -36,11 +43,12 @@ function drawFates(force) {
   box.innerHTML = L.map(p => `<article class="fate${p.alive ? '' : ' gone'}">
     <p class="kick">${esc(p.arc)}${p.alive ? '' : ' · память'}</p>
     <h3>${esc(p.name)} <small>${yr(p.born)}–${p.alive ? 'жив' + (p.sex === 'f' ? 'а' : '') : yr(p.died)}</small></h3>
+    ${arcsHtml(p.goals)}
     ${storyText(p)}
     <div class="fbtn">${p.alive ? `<button data-follow="${p.id}">Следить за ${p.sex === 'f' ? 'ней' : 'ним'}</button>` : ''}<button data-full="${p.id}">Вся летопись</button></div>
   </article>`).join('');
 }
-function fateById(id) { const a = S._a.get(id); if (a) return { name: a.name, sex: a.sex, bio: a.bio || [], born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, alive: true }; const l = (S.legends || []).find(x => x.id === id); return l ? Object.assign({ alive: false }, l) : null; }
+function fateById(id) { const a = S._a.get(id); if (a) return { name: a.name, sex: a.sex, bio: a.bio || [], goals: a.goals, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, alive: true }; const l = (S.legends || []).find(x => x.id === id); return l ? Object.assign({ alive: false }, l) : null; }
 $('fates').addEventListener('click', e => {
   const f = e.target.closest('[data-follow]'), u = e.target.closest('[data-full]');
   if (f) { sel = +f.dataset.follow; follow = true; card(); const a = S._a.get(sel), g = a && S._g.get(a.group); if (V3.on && a) fly3D(a.x, a.y); window.scrollTo({ top: 0, behavior: 'smooth' }); }

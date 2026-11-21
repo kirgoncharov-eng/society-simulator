@@ -29,7 +29,7 @@ function nodeOf(S, id) { for (const n of S.nodes) if (n.id === id) return n; ret
 
 function move(S) {
   const A = S.agents;
-  const costs = navigationCosts(S), drag = S._moveDrag;
+  const costs = navigationCosts(S), drag = S._moveDrag, walls = wallCells(S);
   for (const a of A) {
     let tx, ty;
     const gH = a.group && S._g.get(a.group);
@@ -43,7 +43,7 @@ function move(S) {
       if (a.haul && a.load) p = storeOf(g, a.lk);
       else if (a.job === 'farm' && g.fields.length) p = g.fields[(a.slot || 0) % g.fields.length];
       else if (a.job === 'wood' && g.woodCell !== null) p = { x: (g.woodCell % 50) * 20 + 10, y: Math.floor(g.woodCell / 50) * 20 + 10 };
-      else if (a.job === 'build' && g.site) p = g.site;
+      else if (a.job === 'build' && g.site) p = siteTarget(g, a);
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
@@ -53,18 +53,18 @@ function move(S) {
       else if (a.job === 'guard') {
         const bc = g.bcells || [];
         if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + Math.floor(S.tick / 160)) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
-        else if (g.wallPlan) {
-          const segments = g.wallPlan.segments;
-          const { a: from, b: to } = segments[(a.id + Math.floor(S.tick / 120)) % segments.length];
-          p = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-        }
-        else { const ang = a.id * 1.7 + S.tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
+        else if (g.fortifications?.length) {
+          const wall = g.fortifications[(a.id + Math.floor(S.tick / 120)) % g.fortifications.length];
+          const { a: from, b: to } = wall.segments[a.id % wall.segments.length];
+          p = { x: (from.x + to.x) / 2 - (wall.facing?.x || 0) * 5, y: (from.y + to.y) / 2 - (wall.facing?.y || 0) * 5 };
+        } else { const ang = a.id * 1.7 + S.tick / 140; p = { x: g.home.x + Math.cos(ang) * 34, y: g.home.y + Math.sin(ang) * 34 }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
       if (a.rite && S.tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
-      tx = p.x + j * (a.job === 'gather' ? 3 : 1.2); ty = p.y + j2 * (a.job === 'gather' ? 3 : 1.2);
+      const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
+      tx = p.x + j * spread; ty = p.y + j2 * spread;
     } else if (a.group) {
       const g = S._g.get(a.group);
       if (a.role === 'leader') {
@@ -97,8 +97,9 @@ function move(S) {
     const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
     const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
     let nx = a.x + dx / d * sp + gauss(S) * 0.5, ny = a.y + dy / d * sp + gauss(S) * 0.5;
-    const nc = cellAt(nx, ny);
-    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; }
+    if (walls[ca]) { const next = wallWalk(a, { x: nx, y: ny }, { x: tx, y: ty }, walls[ca]); nx = next.x; ny = next.y; }
+    let nc = cellAt(nx, ny);
+    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; nc = ca; }
     a.x = nx; a.y = ny;
     if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
     if (nc !== a.lc) {
@@ -120,7 +121,12 @@ function move(S) {
       if (dx > 55) break;
       if (dy > 55 || dy < -55) continue;
       const d2 = dx * dx + dy * dy;
-      if (d2 < 81) { const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d; a.x -= dx * f; a.y -= dy * f; b.x += dx * f; b.y += dy * f; }
+      if (d2 < 81) {
+        const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
+        const nearA = walls[cellAt(a.x, a.y)], nearB = walls[cellAt(b.x, b.y)];
+        if (!nearA?.some(w => lineCrossing(a, { x: a.x - dx * f, y: a.y - dy * f }, w.a, w.b) !== null)) { a.x -= dx * f; a.y -= dy * f; }
+        if (!nearB?.some(w => lineCrossing(b, { x: b.x + dx * f, y: b.y + dy * f }, w.a, w.b) !== null)) { b.x += dx * f; b.y += dy * f; }
+      }
       if (d2 < 3025 && rnd(S) < 0.02) interact(S, a, b);
     }
   }
@@ -207,8 +213,7 @@ function produce(S) {
         const c = g.woodCell;
         if (c !== null && S.wood[c] > 1 && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
       } else if (m.job === 'build') {
-        const st = g.site;
-        if (st && Math.hypot(m.x - st.x, m.y - st.y) < 26) { st.prog += e * syn; worked = true; if (st.prog >= st.need) finishSite(S, g); }
+        worked = !!g.site && workSite(S, g, m, e * syn);
       } else if (m.job === 'stone') {
         const c = g.stoneCell;
         if (c !== null && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }
@@ -281,12 +286,13 @@ function removeAgent(S, a, why) {
   if (why !== 'move' && why !== 'emigr') houseOwnerDies(S, a);
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
+  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why);
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
     if (why !== 'killed') bio(S, a, why === 'drown' || why === 'lostAtSea' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
     const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'lostAtSea' ? ', в море' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
-    { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); }
+    { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); goalsOnDeath(S, a, why, fev); }
     legend(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
     const w = Math.max(0, a.wealth), g = S._g.get(a.group);
