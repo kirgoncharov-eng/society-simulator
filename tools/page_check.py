@@ -18,6 +18,7 @@ async def main():
             # A worker must own the advancing world. Disable the UI's copy of step.
             await pg.evaluate("() => { SIM.step = () => { throw Error('SIM.step on the UI thread'); }; }")
             await pg.evaluate("() => __labAdvance(360 * 40)")
+            assert not await pg.evaluate("() => __v3().on"), '3D opened after switching to the map'
             await pg.click('label[for=sp64]')
             await pg.uncheck('#stops')
             before = await pg.evaluate("() => __lab().tick")
