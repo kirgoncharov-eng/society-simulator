@@ -105,6 +105,7 @@ function monthly(S) {
   householdsMonth(S);
   affairsMonth(S);
   gossipMonth(S);
+  if (S.tick % 360 === 330) harvestFestival(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);
