@@ -107,16 +107,19 @@ function bud(S, g, L) {
   const n = g.members.length, want = Math.max(6, Math.round(n * 0.3));
   const F = mem.filter(m => m.age >= 25 && m.age < 55).sort((a, b) => (b.status * (0.5 + b.ambition) + b.skill) - (a.status * (0.5 + a.ambition) + a.skill))[0];
   if (!F) return;
-  const kinF = mem.filter(m => m !== F && kin(m, F));
+  // a daughter village is a branch of a line (Kirch): the founder's kin and his line go first
+  const kinF = mem.filter(m => m !== F && (kin(m, F) || linOf(S, m) === linOf(S, F)));
   const rest = mem.filter(m => m !== F && !kinF.includes(m) && (m.trust[F.id] || 0) + bondW(m, F) > (m.trust[L.id] || 0) + bondW(m, L)).sort((a, b) => (b.trust[F.id] || 0) + bondW(b, F) - (a.trust[F.id] || 0) - bondW(a, F));
   const go = kinF.concat(rest).slice(0, want - 1);
   if (go.length < 5) return;
   const why = sent([`в «${g.name}» ${n} взрослых${(g.room === undefined ? 1 : g.room) < 0.5 ? ', и свободной земли рядом почти не осталось' : ''}`, g.treasury < n * 1.5 ? 'хлеба на всех не хватает' : '', (g.entropy || 0) > 1.2 ? 'в большой деревне трудно договориться: работа идёт вразнобой' : '', `${F.name} уводит свою родню и тех, кто ${F.sex === 'f' ? 'ей' : 'ему'} доверяет`, 'уходят без ссоры, со своей долей зерна и скота, и остаются союзниками']);
   const ng = createGroup(S, F, go, g.id);
   g.budT = S.tick + 360 * 4; S.stats.colonies = (S.stats.colonies || 0) + 1;
+  // a branch takes the parent's way of ruling with it (Kirch 1984): under a hereditary parent the founder's line rules the daughter village
+  if (g.dynasty) { ng.dynasty = true; ng.dynLin = linOf(S, F); ng.dynName = clanName(S, ng.dynLin, true); ng.dynGen = 1; ng.gov = 'monarch'; ng.linId = ng.dynLin; ng.linN = 1; }
   S.hostility[key(g.id, ng.id)] = 0; S.alliances.push({ a: g.id, b: ng.id, since: S.tick });
   bump(F, L, 0.1); bump(L, F, 0.1);
   bio(S, F, 'found', `Уводит ${go.length} ${pl(go.length, 'человека', 'человек', 'человек')} из «${g.name}» поднимать новую деревню «${ng.name}»`);
   for (const m of go) bio(S, m, 'move', `Уходит с ${F.name} из «${g.name}» на новые земли`);
-  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why, who: [F.id, L.id], gs: [g.id, ng.id] });
+  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 });
 }

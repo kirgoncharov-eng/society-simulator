@@ -46,6 +46,10 @@ export function runIsland(i, years) {
   const ages = S.ageAudit = { lastBirthTick, adultDeaths: 0, ageAtDeath: 0, reached60: 0, leftBefore60: 0 };
   let cohortBirths = 0, peakTradeLinks = 0, activeTradeLinks = 0;
   let shelterCases = 0, sheltersLinked = 0;
+  // power (П1): village-years from year 40 with hereditary rule, an assembly, an overlord or a vassal; and whether the
+  // struggles for power (elections, coups, splits) name the sides that stood behind each man
+  const power = { vy: 0, hered: 0, assembly: 0, above: 0, fights: 0, named: 0, byLine: 0 };
+  let seenEv = 0;
   for (let y = 1; y <= years; y++) {
     for (let d = 0; d < 360; d++) {
       SIM.step(S);
@@ -59,6 +63,9 @@ export function runIsland(i, years) {
     peakTradeLinks = Math.max(peakTradeLinks, activeTradeLinks);
     if (S.tick === lastBirthTick) cohortBirths = S.stats.births || 0;
     if (y % 20 === 0) pops.push(SIM.popOf(S));
+    for (const e of S.events) { if (e.id <= seenEv) break; if (e.type === 'coup' || e.type === 'schism' || e.type === 'crisis' || (e.type === 'succession' && !/По праву/.test(e.text))) { power.fights++; if (e.sides) power.named++; } }
+    if (S.events[0]) seenEv = Math.max(seenEv, S.events[0].id);
+    if (y >= 40) for (const g of S.groups) { if (!g.home || g.dead || g.members.length < 5) continue; power.vy++; if (g.dynasty) power.hered++; if (g.dynasty && g.dynLin) power.byLine++; if (g.gov === 'assembly') power.assembly++; if (g.lord || S.groups.some(o => o.lord === g.id)) power.above++; }
     if (y >= 10) minPop = Math.min(minPop, SIM.popOf(S));
   }
   const aliveAt60 = S.agents.filter(a => a.bornT > 0 && a.bornT <= lastBirthTick).length;
@@ -91,7 +98,7 @@ export function runIsland(i, years) {
   // drama of the top 20 lives (the Fates tab): variety of turns, finished arcs, repeats and the loops behind them
   const drama = SIM.dramaMeasure(SIM.topFates(S, 20));
   for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
-  return { history, st, arcs, drama, pops, villages, cbr, adults: adults.length, age, minPop,
+  return { history, st, arcs, drama, power, pops, villages, cbr, adults: adults.length, age, minPop,
     famN, houseN, villN, roofN, lodgerN, customW, customI, bondN, adultN, feuds, feudsNamed, refK, bondRef, bondK };
 }
 
@@ -112,6 +119,7 @@ async function main() {
   const islandHistory = [], allV = [], vMed = [], vSmall = [];
   const arcs = { old: 0, lived: 0, closed: 0, linked: 0, open: 0, lost: 0, kinds: {} };
   const drama = { n: 0, kinds: 0, distinct: 0, repeats: 0, arcs: 0, loops: {}, worst: 0 };
+  const power = { vy: 0, hered: 0, assembly: 0, above: 0, fights: 0, named: 0, byLine: 0 }; const heredBy = [];
   let B = 0, CD = 0, minPop = Infinity, customN = 0;
   let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
   await runIslands(import.meta.url, runIsland, W, Y, island => {
@@ -125,6 +133,7 @@ async function main() {
       for (const [outcome, count] of Object.entries(outcomes)) total[outcome] = (total[outcome] || 0) + count;
     }
     { const m = island.drama; drama.n++; drama.kinds += m.kinds; drama.distinct += m.distinct; drama.repeats += m.repeats; drama.arcs += m.arcs; drama.worst = Math.max(drama.worst, m.repeats); for (const k in m.loops) drama.loops[k] = (drama.loops[k] || 0) + m.loops[k]; }
+    for (const k in power) power[k] += island.power[k]; heredBy.push(island.power.vy ? Math.round(100 * island.power.hered / island.power.vy) : 0);
     for (const key of causes) tot[key] = (tot[key] || 0) + (st[key] || 0);
     for (const key in st) if (key.startsWith('case_')) caseN[key] = (caseN[key] || 0) + st[key];
     for (const key in island.bondK) bondK[key] = (bondK[key] || 0) + island.bondK[key];
@@ -159,13 +168,14 @@ async function main() {
     console.log(`arcs: adults over 40 with a finished arc ${percent(arcs.lived, arcs.old)} (${arcs.lived}/${arcs.old}); kept arcs with opening and ending in the chronicle ${coverage(arcs.linked, arcs.closed)}, still open ${arcs.open}, cut short by a death with no funeral ${arcs.lost}; by kind and outcome: ${line}`); }
   { const d = drama, n = Math.max(1, d.n), loops = Object.entries(d.loops).sort((p, q) => q[1] - p[1]).slice(0, 6).map(([k, v]) => `${k} ${v}`).join(', ');
     console.log(`drama of the top 20 lives per island: ${(d.kinds / n).toFixed(1)} kinds of turn per life, ${(d.distinct / n).toFixed(0)} across the 20; repeats ${Math.round(d.repeats / n * 100)}% (worst island ${Math.round(d.worst * 100)}%); with a finished arc ${Math.round(d.arcs / n * 100)}%; loops (a turn 3+ times in one life, lives): ${loops || 'none'}`); }
+  console.log(`power (village-years from year 40, villages of 5+): hereditary ${percent(power.hered, power.vy)} (by island ${heredBy.join(' ')}%; held by a line ${percent(power.byLine, power.hered)}), assembly ${percent(power.assembly, power.vy)}, an overlord or vassals ${percent(power.above, power.vy)}; struggles for power naming the sides ${coverage(power.named, power.fights)}`);
   console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
   console.log(`grain memories: ${memoryMoves} moves changed (${sponsoredMoves} through sponsorship), ${aidReturned} gifts returned (${aidChanged} decisions changed)`);
   console.log(`mean adult age at death (15+): ${age.deaths ? (age.sum / age.deaths).toFixed(1) + ' years, n=' + age.deaths : 'n/a'}`);
   console.log(age.eligible
     ? `survived to 60 (island-born): ${(100 * age.reached / age.eligible).toFixed(1)}% (${age.reached}/${age.eligible}; ${age.left} left before 60)`
     : 'survived to 60 (island-born): n/a (no eligible birth cohort)');
-  console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out; median village >= 15 adults, at most 2 villages under 5 per island; 2-5 bonds per adult, >= 30% of enmities with a cause; 0.8-1.2 living houses per family; >= 30% of adults over 40 with a finished arc; top 20 lives: >= 25 kinds of turn across them, repeats < 45%');
+  console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out; median village >= 15 adults, at most 2 villages under 5 per island; 2-5 bonds per adult, >= 30% of enmities with a cause; 0.8-1.2 living houses per family; >= 30% of adults over 40 with a finished arc; top 20 lives: >= 25 kinds of turn across them, repeats < 45%; hereditary rule 35-75% of village-years, assembly 10-35%, an overlord or vassals 20-60% (POLITICS.md)');
 
   console.log('\nИстория островов');
   let sheltersLinked = 0;

@@ -185,6 +185,7 @@ function regime(S, g) {
   if (n < 5) type = 'Хутор';
   else if (g.priestRule) type = 'Теократия';
   else if (vass >= 1 && b < 0.55) type = 'Держава данников';
+  else if (g.gov === 'assembly' && g.dynasty) type = 'Вождь с советом';
   else if (g.gov === 'assembly') type = b > 0.62 ? 'Торговая республика' : 'Вечевая республика';
   else if (g.land === 'private' && (landTop(g) || {}).share > 0.35) type = (g.dynasty || c > 0.55) ? 'Феодальное княжество' : 'Земельная знать';
   else if (g.dynasty) type = c > 0.55 ? 'Наследственное княжество' : 'Родовая община';

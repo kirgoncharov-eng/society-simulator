@@ -300,9 +300,12 @@ function groupMonth(S, g) {
     for (const m of cur) { const v = m.status * (0.3 + m.ambition + (goalOf(m, 'power') ? 0.25 : 0)) * (0.5 + m.energy); if (v > cv) { cv = v; ch = m; } }
     if (ch && ch.ambition > 0.4) {
       if (ch.ambition > 0.6 && !bondOf(L, ch) && rnd(S) < 0.08) { const why = `${fem(ch, 'метит', 'метит')} на место вождя «${g.name}»`; bond(S, L, ch, 'rival', why, 0.5); bond(S, ch, L, 'rival', `${fem(L, 'держится', 'держится')} за власть в «${g.name}»`, 0.5); powerAim(S, ch, L, g); }
-      const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0) + bondW(m, ch) - bondW(m, L)) > 0);
+      const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0) + linPull(S, m, ch) - linPull(S, m, L) + bondW(m, ch) - bondW(m, L)) > 0);
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
-      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
+      // an accepted rule of succession takes the heat out of open contests (Goody 1966; Gavrilets et al. 2010): under
+      // hereditary rule a coup needs more backing and comes half as often, unless the challenger is of the ruling line
+      const custom = g.dynasty && linOf(S, ch) !== g.dynLin;
+      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets + (custom ? 0.15 : 0) && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) * (custom ? 0.5 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
       if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
         const why = grievances(S, g, L, ch, sup, n) + ` Для переворота поддержки мало (${P0(frac)}), поэтому недовольные уходят сами.`;
         if (sup.length < 5 && g.home) {
@@ -316,9 +319,10 @@ function groupMonth(S, g) {
             return;
           }
         }
+        const why2 = why + ` С ${ch.name} уходят ${sidesTxt(S, sup)}.`;
         const ng = createGroup(S, ch, sup, g.id);
         S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); bond(S, L, ch, 'enemy', `${fem(ch, 'расколол', 'расколола')} «${g.name}» и ${fem(ch, 'увёл', 'увела')} людей`, 0.6); S.stats.schisms++;
-        const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
+        const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why: why2, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
         refBond(S, L, ch, sev.id); refLast(S, ch, 'schism', sev.id);
         return;
       }
@@ -342,9 +346,10 @@ function groupMonth(S, g) {
   const L2 = S._a.get(g.leader);
   institutions(S, g, L2);
   money(S, g, L2);
-  if (L2 && !g.dynasty && g.gov !== 'assembly' && g.home && S.tick - (g.since || 0) > 360 * 12 && g.legit > 0.55 && g.members.length >= 8 && rnd(S) < 0.05) {
-    g.dynasty = true; g.dynName = L2.name; g.dynGen = 1; g.gov = 'monarch';
-    log(S, 'law', `«${g.name}» вводит наследование: после ${L2.name} власть перейдёт его детям`, g.home.x, g.home.y, g.hue, { why: sent([`${L2.name} правит ${yrs(Math.round((S.tick - g.since) / 360))}, и группа привыкла к нему`, `легитимность ${P0(g.legit)}`, 'закон избавляет от кризисов преемственности, но наследник может оказаться слабым']), who: [L2.id], gs: [g.id] });
+  // a long, trusted rule turns hereditary only when the ruler's line is a real force in the village
+  if (L2 && !g.dynasty && g.gov !== 'assembly' && g.home && S.tick - (g.since || 0) > 360 * 8 && g.legit > 0.55 && g.members.length >= 8 && (linStrong(S, g, linOf(S, L2)) || g.members.some(id => { const k = S._a.get(id); return k && (k.father === L2.id || k.mother === L2.id) && k.age >= 15; })) && rnd(S) < 0.05) {
+    g.dynasty = true; g.dynLin = linOf(S, L2); g.dynName = clanName(S, g.dynLin, true); g.dynGen = 1; g.gov = 'monarch'; g.linId = g.dynLin;
+    log(S, 'law', `«${g.name}» вводит наследование: после ${L2.name} власть будет передаваться в роду ${g.dynName}`, g.home.x, g.home.y, g.hue, { why: sent([`${L2.name} правит ${yrs(Math.round((S.tick - g.since) / 360))}, и деревня привыкла к ${fem(L2, 'нему', 'ней')}`, `легитимность ${P0(g.legit)}`, 'закон избавляет от кризисов преемственности, но наследник может оказаться слабым']), who: [L2.id], gs: [g.id] });
   }
   let imK;
   if (L2 && !g.code && g.home && g.members.length >= 12 && g.entropy > 0.75 && (g.reforms >= 1 || S.tick - g.founded > 360 * 15) && (imK = imitP(S, g, o => !!o.code), rnd(S) < 0.015 + imK.p)) {
@@ -355,7 +360,12 @@ function groupMonth(S, g) {
 }
 
 function coup(S, g, L, ch, sup, cur, why) {
-  if (g.dynasty) { why += ` Вместе с ${L.name} свергнута династия ${g.dynName}.`; g.dynasty = false; g.dynName = null; g.gov = 'chief'; }
+  // the sides: whose lines stood behind the challenger, and the line that held the office
+  why += linOf(S, ch) === linOf(S, L) ? ` ${ch.name} и ${L.name} — из одного рода, ${clanName(S, linOf(S, L))}; за ${ch.name} — ${sidesTxt(S, sup)}.` : ` За ${ch.name} — ${sidesTxt(S, sup)}; ${L.name} из рода ${clanName(S, linOf(S, L), true)}.`;
+  g.linN = linOf(S, ch) === g.linId ? (g.linN || 1) + 1 : 1; g.linId = linOf(S, ch);
+  // a usurper from the ruling line keeps the office in the line; anyone else ends the dynasty
+  if (g.dynasty && g.dynLin && linOf(S, ch) === g.dynLin) why += ` Власть остаётся в роду ${g.dynName}: ${ch.name} — ${fem(ch, 'родич', 'родственница')} ${L.name}.`;
+  else if (g.dynasty) { why += ` Вместе с ${L.name} свергнута династия ${g.dynName}.`; g.dynasty = false; g.dynName = null; g.dynLin = null; g.gov = 'chief'; }
   if (g.gov === 'assembly') { why += ' Вече разогнано: теперь решает один человек.'; g.gov = 'chief'; }
   g.coupCount = (g.coupCount || 0) + 1;
   g.priestRule = false;
@@ -374,8 +384,8 @@ function coup(S, g, L, ch, sup, cur, why) {
   if (L.ambition > 0.55 && loyal.length >= 4 && rnd(S) < 0.6 * Math.min(1, 0.3 + fissionP(S, g))) {
     const ng = createGroup(S, L, loyal, g.id);
     S.hostility[key(g.id, ng.id)] = 0.9;
-    cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], causes: causes0.length ? causes0 : undefined });
-  } else cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}`, ch.x, ch.y, g.hue, { why, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id], causes: causes0.length ? causes0 : undefined });
+    cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}. Свергнутый уводит ${loyal.length} ${one(loyal.length) ? 'верного' : 'верных'} и основывает «${ng.name}»`, ch.x, ch.y, g.hue, { why, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], causes: causes0.length ? causes0 : undefined });
+  } else cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${L.name}`, ch.x, ch.y, g.hue, { why, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id], causes: causes0.length ? causes0 : undefined });
   // the deposed, his grown children and the usurper's chronicle and ties point to the coup
   const id = cev.id;
   refBond(S, L, ch, id); refLast(S, ch, 'coup', id); refLast(S, L, 'deposed', id); refLast(S, ch, 'leader', id);

@@ -37,7 +37,7 @@ function families(S) {
     const h = S._a.get(a.spouse); if (!h) { a.spouse = null; continue; }
     const g = S._g.get(a.group), store = g ? g.treasury / Math.max(1, g.members.length) : 1;
     const fert = clamp((a.wealth + h.wealth * 0.5 + store) / 8, 0.04, 1.6) * (a.wealth < 0.5 && store < 1 ? 0.25 : 1) * (g && g.home ? 1 : 0.55) * crowd * (g && g.sick ? 0.4 : 1);
-    if (rnd(S) < 0.034 * fert) { const sx = rnd(S) < 0.5 ? 'f' : 'm'; S.kids.push({ t: S.tick, mo: a.id, fa: h.id, g: a.group, sex: sx, x: a.x, y: a.y }); a.lastBirth = S.tick; S.stats.births = (S.stats.births || 0) + 1; const tx = sx === 'f' ? 'Рождается дочь' : 'Рождается сын'; bio(S, a, 'child', tx); bio(S, h, 'child', tx); }
+    if (rnd(S) < 0.034 * fert) { const sx = rnd(S) < 0.5 ? 'f' : 'm'; S.kids.push({ t: S.tick, mo: a.id, fa: h.id, lin: linOf(S, h), g: a.group, sex: sx, x: a.x, y: a.y }); a.lastBirth = S.tick; S.stats.births = (S.stats.births || 0) + 1; const tx = sx === 'f' ? 'Рождается дочь' : 'Рождается сын'; bio(S, a, 'child', tx); bio(S, h, 'child', tx); }
   }
   // children: cost, mortality, growing up
   const keep = [];
@@ -94,7 +94,7 @@ function marry(S, f, m) {
 }
 function growUp(S, k, mo, fa, g) {
   const p = mo || fa;
-  const a = spawn(S, 'child', { parent: p, mother: mo, father: fa, g, x: k.x, y: k.y });
+  const a = spawn(S, 'child', { parent: p, mother: mo, father: fa, lin: k.lin, g, x: k.x, y: k.y });
   a.sex = k.sex; a.bornT = k.t;
   const par = [S._a.get(k.mo0 || k.mo), S._a.get(k.fa)].filter(Boolean);
   a.bio = [[k.t, 'born', `Рождается${g ? ` в «${g.name}»` : ' в пути'}${mo || fa ? `, ${a.sex === 'f' ? 'дочь' : 'сын'} ${[mo, fa].filter(Boolean).map(x => x.name).join(' и ')}` : ''}`]]; a.drama = 1;

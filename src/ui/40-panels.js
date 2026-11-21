@@ -72,6 +72,11 @@ function famTxt(a, g, L) {
   else parts.push(a.age < 17 ? 'Ещё молод для брака' : a.sex === 'f' ? 'Не замужем' : 'Не женат');
   if (kids) parts.push(`${kids} ${kids % 10 === 1 && kids % 100 !== 11 ? 'ребёнок' : kids % 10 > 1 && kids % 10 < 5 && (kids % 100 < 12 || kids % 100 > 14) ? 'ребёнка' : 'детей'}${young ? ` (${young} ещё ${young === 1 ? 'мал' : 'малы'})` : ''}${grown.length ? `: ${grown.slice(0, 3).map(o => esc(o.name)).join(', ')}${grown.length > 3 ? ' и другие' : ''}` : ''}`);
   if (mo || fa) parts.push(`родители: ${[mo, fa].filter(Boolean).map(o => esc(o.name)).join(' и ')}`);
+  // the line: its name, founder, how many of it live in this village, and its head here
+  if (a.lin && S.lins && S.lins[a.lin]) {
+    const lf = S.lins[a.lin], n = g ? SIM.linMembers(S, g, a.lin).length : 0, h = g ? SIM.linHead(S, g, a.lin) : null;
+    parts.push(`род ${esc(SIM.clanName(S, a.lin))} (от ${esc(lf.n)}, г. ${yr(lf.t)})${g && n > 1 ? `: в деревне ${n}, глава — ${h === a ? 'сам' + (a.sex === 'f' ? 'а' : '') : h ? esc(h.name) : 'нет'}` : ''}${g && g.dynasty && g.dynLin === a.lin ? ', правящий род' : ''}`);
+  }
   const pt = a.patron && S._a.get(a.patron), cl = S.agents.filter(o => o.patron === a.id).length;
   const rep = a.rep || 0, repT = rep > 0.35 ? 'Слава доброго человека' : rep > 0.12 ? 'Хорошая слава' : rep < -0.35 ? 'Дурная слава' : rep < -0.12 ? 'О нём шепчутся' : '';
   const soc = [];

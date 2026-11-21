@@ -58,6 +58,9 @@ function spawn(S, kind, o = {}) {
     else if (side < 2) { a.x = side ? 990 : 10; a.y = t; } else { a.x = t; a.y = side === 2 ? 10 : 990; }
     if (o.culture) Object.assign(a, o.culture(a));
   }
+  // the line: a child takes the father's (the mother's when he is unknown); whoever lands or comes from outside founds one
+  a.lin = kind === 'child' ? (o.lin || (o.father && linOf(S, o.father)) || (o.mother && linOf(S, o.mother)) || null) : null;
+  if (!a.lin) newLin(S, a);
   S.agents.push(a); S._a.set(a.id, a); S._agentsById[a.id] = a;
   if (kind === 'child') { const g = (o.g && S._g.has(o.g.id) && !o.g.dead) ? o.g : o.parent ? S._g.get(o.parent.group) : null; if (g) { a.trust[g.leader] = (a.trust[g.leader] || 0) + 0.3; join(S, a, g, o.parent && o.parent.group === g.id ? o.parent.id : g.leader); } }
   return a;
@@ -131,6 +134,7 @@ function createGroup(S, L, others, parent) {
   const prevG = L.group;
   if (L.group) leave(S, L, 'move');
   L.group = g.id; L.role = 'leader'; L.boss = null; L.joined = S.tick; L.res = 0; g.members.push(L.id);
+  g.foundLin = linOf(S, L); // the first-comers' line: the village's senior line (precedence, Fox & Sather 1996)
   if (S.tick > 0 && others.length >= 2) { L.bioL = g.id; bio(S, L, parent ? 'schism' : 'found', parent ? `Уходит из «${groupName(S, parent)}» и основывает «${g.name}», за ${L.sex === 'f' ? 'ней' : 'ним'} идут ${others.length}` : `Основывает «${g.name}»`); }
   for (const o of others) { if (o.id !== L.id && S._a.has(o.id)) join(S, o, g, L.id); }
   pickTarget(S, g);
@@ -152,21 +156,30 @@ function succession(S, g, why, old) {
   if (g.members.length < 2) { dissolve(S, g); return; }
   const mem = g.members.map(id => S._a.get(id));
   if (g.dynasty) {
-    const heirs = mem.filter(m => (m.father === old.id || m.mother === old.id || m.parent === old.id) && m.age >= 15).sort((a, b) => b.age - a.age);
-    if (heirs.length) {
-      const W = heirs[0]; W.bioL = g.id; bio(S, W, 'heir', `По праву рождения наследует власть ${old.sex === 'f' ? 'матери' : 'отца'} ${old.name} в «${g.name}»`); g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = 0.7;
+    // a grown child first, else the eldest of the ruling line (a brother, a nephew): the patrilineal heir of the ethnographies
+    const h = linHeir(S, g, old);
+    if (h) {
+      const W = h.W, child = h.how === 'child'; W.bioL = g.id;
+      bio(S, W, 'heir', child ? `По праву рождения наследует власть ${old.sex === 'f' ? 'матери' : 'отца'} ${old.name} в «${g.name}»` : `Как старший в роду ${g.dynName || clanName(S, linOf(S, W), true)} наследует власть ${old.name} в «${g.name}»`);
+      g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = 0.7; g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
       const weak = W.skill < 0.45;
-      log(S, 'succession', `${old.name} ${VERB[why] || 'уходит'}. По праву рождения «${g.name}» наследует ${W.name}, ${g.dynGen}-е поколение династии ${g.dynName}`, W.x, W.y, g.hue, { why: sent(['в группе действует закон о наследовании, поэтому выборов нет', `наследнику ${Math.floor(W.age)} лет`, weak ? `способности средние (навык ${P0(W.skill)}): сильные соперники могут не смириться` : `навык ${P0(W.skill)}`]), who: [W.id], gs: [g.id] });
+      const sev = log(S, 'succession', `${old.name} ${VERB[why] || 'уходит'}. ${child ? 'По праву рождения' : 'По праву рода'} «${g.name}» наследует ${W.name}, ${g.dynGen}-е поколение династии ${g.dynName}`, W.x, W.y, g.hue, { why: sent(['в деревне власть наследуется, поэтому выборов нет', child ? `${W.name} — старший ${fem(W, 'сын', 'дочь')} ${old.name}` : `своих детей у ${old.name} в деревне нет, и власть переходит к старшему в роду`, `наследнику ${Math.floor(W.age)} лет`, weak ? `способности средние (навык ${P0(W.skill)}): сильные соперники могут не смириться` : `навык ${P0(W.skill)}`]), who: [W.id, old.id], gs: [g.id] });
+      refLast(S, W, 'heir', sev.id);
       return;
     }
   }
   const pw = m => m.status * (0.5 + m.ambition) * (m.job === 'pray' ? 1.6 : 1);
   const cands = mem.slice().sort((a, b) => pw(b) - pw(a)).slice(0, 3);
+  // the dead leader's heir always stands: his eldest grown child, else the eldest of his line (the big man's son, Sahlins)
+  const hc = old && (mem.filter(m => (m.father === old.id || m.mother === old.id) && m.age >= 18).sort((a, b) => b.age - a.age)[0] || mem.filter(m => m !== old && m.age >= 25 && linOf(S, m) === linOf(S, old)).sort((a, b) => b.age - a.age)[0]);
+  if (hc && !cands.includes(hc)) cands.push(hc);
   const votes = new Map(cands.map(c => [c.id, 0]));
+  const backers = new Map(cands.map(c => [c.id, []]));
   for (const m of mem) {
     let best = cands[0], bv = -9;
-    for (const c of cands) { const v = (c.id === m.id ? 0.4 : (m.trust[c.id] || 0)) + c.status * 0.01 + 0.25 * (c.rep || 0) + (kin(m, c) ? 0.3 : 0) + 0.5 * bondW(m, c); if (v > bv) { bv = v; best = c; } }
+    for (const c of cands) { const v = (c.id === m.id ? 0.4 : (m.trust[c.id] || 0)) + c.status * 0.01 + 0.25 * (c.rep || 0) + (kin(m, c) ? 0.3 : 0) + linPull(S, m, c) + (linOf(S, c) === g.foundLin ? 0.15 : 0) + (m.patron === c.id ? 0.4 : 0) + (c === hc ? 0.15 + 0.3 * (g.legit || 0.5) : 0) + 0.5 * bondW(m, c); if (v > bv) { bv = v; best = c; } }
     votes.set(best.id, votes.get(best.id) + (m.age > 55 ? 1.5 : 1));
+    if (m !== best) backers.get(best.id).push(m);
   }
   const ranked = cands.slice().sort((a, b) => votes.get(b.id) - votes.get(a.id));
   const W = ranked[0], share = votes.get(W.id) / mem.length;
@@ -176,15 +189,16 @@ function succession(S, g, why, old) {
   const lead = `${old.name} ${VERB[why] || 'уходит'}`;
   const R = ranked[1];
   if (R && share < 0.5 && R.ambition > 0.5 && mem.length >= 6) {
-    const sup = mem.filter(m => m !== W && m !== R && (m.trust[R.id] || 0) > (m.trust[W.id] || 0));
+    const sup = mem.filter(m => m !== W && m !== R && (m.trust[R.id] || 0) + linPull(S, m, R) > (m.trust[W.id] || 0) + linPull(S, m, W));
     if (sup.length >= 4 && rnd(S) < Math.min(1, 0.2 + fissionP(S, g))) {
       const ng = createGroup(S, R, sup, g.id);
       S.hostility[key(g.id, ng.id)] = 0.7; S.stats.schisms++;
-      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ним те, кто доверяет ему больше, чем новому лидеру`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] });
+      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ${R.name} уходят ${sidesTxt(S, sup)}`, `за ${W.name} остаются ${sidesTxt(S, backers.get(W.id))}`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], sides: 1 });
       return;
     }
   }
-  const sev = log(S, 'succession', `${lead}. «${g.name}» возглавляет ${W.name}${g.gen > 2 ? `, ${g.gen}-й лидер со времён ${g.founder}` : ''}`, W.x, W.y, g.hue, { why: sent([`${W.name} набирает ${P0(share)} голосов`, share > 0.6 ? 'сильный мандат' : share < 0.4 ? 'мандат слабый, недовольство может вырасти' : '']), who: [W.id], gs: [g.id] });
+  const sev = log(S, 'succession', `${lead}. «${g.name}» возглавляет ${W.name}${g.gen > 2 ? `, ${g.gen}-й лидер со времён ${g.founder}` : ''}`, W.x, W.y, g.hue, { why: sent([`${W.name} набирает ${P0(share)} голосов`, backers.get(W.id).length ? `за ${fem(W, 'него', 'неё')} ${sidesTxt(S, backers.get(W.id))}` : '', R && backers.get(R.id).length ? `за ${R.name} — ${sidesTxt(S, backers.get(R.id))}` : '', share > 0.6 ? 'сильный мандат' : share < 0.4 ? 'мандат слабый, недовольство может вырасти' : '']), who: [W.id], gs: [g.id], sides: 1 });
+  linSuccession(S, g, W, old, sev.id);
   if (R && R !== W) powerLost(S, R, g, W, sev.id);
 }
 
