@@ -14,3 +14,33 @@ jobs:
       - run: python -m pip install playwright
       - run: python -m playwright install --with-deps chromium
       - run: python -u tools/page_check.py
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: |
+          nproc
+          time SOCIETY_WORKERS=1 node tools/audit.mjs > /tmp/audit1.txt
+          time SOCIETY_WORKERS=4 node tools/audit.mjs > /tmp/audit4.txt
+          cmp /tmp/audit1.txt /tmp/audit4.txt
+  chain-and-atlas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: |
+          SOCIETY_WORKERS=1 node tools/chain.mjs > /tmp/chain1.txt
+          SOCIETY_WORKERS=4 node tools/chain.mjs > /tmp/chain4.txt
+          cmp /tmp/chain1.txt /tmp/chain4.txt
+          tail -3 /tmp/chain4.txt
+          SOCIETY_WORKERS=1 node tools/atlas.mjs 2 10
+          cp src/ui/atlas-data.json /tmp/serial-atlas.json
+          SOCIETY_WORKERS=2 node tools/atlas.mjs 2 10
+          cmp src/ui/atlas-data.json /tmp/serial-atlas.json
