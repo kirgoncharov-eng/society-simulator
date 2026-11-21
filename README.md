@@ -11,6 +11,7 @@
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — как устроен код
 - [`docs/MECHANICS.md`](docs/MECHANICS.md) — что уже смоделировано и с какими числами
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — задачи с критериями приёмки
+- [`docs/POLITICS.md`](docs/POLITICS.md) — научная база политики и коридоры из этнографических данных
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — журнал изменений
 
 ```bash
