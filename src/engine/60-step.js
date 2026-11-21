@@ -389,12 +389,12 @@ function lifecycle(S) {
   for (const [a, why] of dead) removeAgent(S, a, why);
 }
 
-function removeAgent(S, a, why) {
+function removeAgent(S, a, why, departure) {
   if (!S._a.has(a.id)) return;
   if (why !== 'move' && why !== 'emigr') houseOwnerDies(S, a);
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
-  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why);
+  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why, departure);
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
