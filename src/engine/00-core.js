@@ -6,13 +6,21 @@ const MODEL = { v: 'm22', date: '2026-11-21', note: 'обряды: свадеб�
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function within(dx, dy, radius) {
+  const squared = dx * dx + dy * dy;
+  const limit = radius * radius;
+  // Only the rounding band at the threshold needs the original calculation.
+  const margin = limit * Number.EPSILON * 8;
+  return Math.abs(squared - limit) <= margin ? Math.hypot(dx, dy) < radius : squared < limit;
+}
 
-function rnd(S) {
-  let t = (S.rng = (S.rng + 0x6D2B79F5) | 0);
+const RNG_STEP = 0x6D2B79F5;
+function randomAt(t) {
   t = Math.imul(t ^ (t >>> 15), t | 1);
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
+const rnd = S => randomAt(S.rng = (S.rng + RNG_STEP) | 0);
 const gauss = S => (rnd(S) + rnd(S) + rnd(S) - 1.5) / 1.5;
 const pick = (S, arr) => arr[Math.floor(rnd(S) * arr.length)];
 function mkName(S) {
@@ -34,6 +42,10 @@ const date = t => `г.${Math.floor(t / 360)} · ${SEASON[Math.floor((t % 360) / 
 function index(S) {
   S._a = new Map(S.agents.map(a => [a.id, a]));
   S._g = new Map(S.groups.map(g => [g.id, g]));
+  S._agentsById = [];
+  S._groupsById = [];
+  for (const a of S.agents) S._agentsById[a.id] = a;
+  for (const g of S.groups) S._groupsById[g.id] = g;
 }
 // ex.causes: ids of the events that led to this one (a linked chronicle); returns the event
 function log(S, type, text, x, y, hue, ex) {

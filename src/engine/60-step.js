@@ -7,11 +7,12 @@ function step(S) {
   const P = S.params;
   const reg = 0.38 * (1.25 - P.scarcity) * (S.tick < S.drought ? 0.3 : 1) * (seasonOf(S.tick) === 0 ? 0.45 : 1.15);
   const regF = 0.38 * (1.25 - P.scarcity) * 1.9;
-  for (const n of S.nodes) n.amt = Math.min(n.cap, n.amt + (n.kind === 'fish' ? regF : reg * 1.25));
+  const regLand = reg * 1.25;
+  for (const n of S.nodes) n.amt = Math.min(n.cap, n.amt + (n.kind === 'fish' ? regF : regLand));
   for (const g of S.groups) {
     if (g.home) { g.cx = g.home.x; g.cy = g.home.y; continue; }
     let sx = 0, sy = 0;
-    for (const id of g.members) { const m = S._a.get(id); sx += m.x; sy += m.y; }
+    for (const id of g.members) { const m = S._agentsById[id]; sx += m.x; sy += m.y; }
     g.cx = sx / g.members.length; g.cy = sy / g.members.length;
   }
   move(S);
@@ -25,14 +26,37 @@ function step(S) {
   inflow(S);
 }
 
-function nodeOf(S, id) { for (const n of S.nodes) if (n.id === id) return n; return null; }
+function nodeOf(S, id) {
+  if (!S._nodesById) S._nodesById = new Map(S.nodes.map(node => [node.id, node]));
+  return S._nodesById.get(id) || null;
+}
+
+function moveDistance(dx, dy) {
+  const x = Math.abs(dx), y = Math.abs(dy);
+  const max = Math.max(x, y);
+  if (!max) return 0;
+  // Use the same normalized two-term sum as hypot, without its generic argument loop.
+  const ratio = Math.min(x, y) / max;
+  return Math.sqrt(1 + ratio * ratio) * max;
+}
+
+function walkNoise(t) {
+  return (randomAt((t + RNG_STEP) | 0) + randomAt((t + 2 * RNG_STEP) | 0) +
+    randomAt((t + 3 * RNG_STEP) | 0) - 1.5) / 1.5 * 0.5;
+}
 
 function move(S) {
   const A = S.agents;
+  const tick = S.tick;
+  const day = tick % 360, frozen = S.frozen;
+  const fordRisk = frozen ? (day < 20 || day >= 70 ? 0.002 : 0.0004)
+    : day >= 90 && day < 150 ? 0.008 : 0.00025;
+  const guardPost = Math.floor(tick / 160), guardWall = Math.floor(tick / 120);
+  const storm = S.weather?.kind === 'storm';
   const costs = navigationCosts(S), drag = S._moveDrag;
   for (const a of A) {
     let tx, ty;
-    const gH = a.group && S._g.get(a.group);
+    const gH = a.group && S._groupsById[a.group];
     const wp = a.war ? warTarget(S, a) : null;
     const cp = !wp && a.car ? carTarget(S, a) : null;
     if (wp) { tx = wp.x + ((a.id * 7) % 15 - 7); ty = wp.y + ((a.id * 11) % 15 - 7); }
@@ -47,84 +71,153 @@ function move(S) {
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
-      else if (a.job === 'fish' && g.landing && S.weather?.kind !== 'storm') p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
-      else if (a.job === 'herd' && g.pasture) p = { x: g.pasture.x + Math.cos(S.tick / 90 + a.id) * 22, y: g.pasture.y + Math.sin(S.tick / 90 + a.id) * 22 };
-      else if (a.job === 'water' && g.wsrc) { const tgt = a.wc ? g.home : g.wsrc; if (Math.hypot(a.x - tgt.x, a.y - tgt.y) < 14) a.wc = !a.wc; p = a.wc ? g.home : g.wsrc; }
+      else if (a.job === 'fish' && g.landing && !storm) p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
+      else if (a.job === 'herd' && g.pasture) p = { x: g.pasture.x + Math.cos(tick / 90 + a.id) * 22, y: g.pasture.y + Math.sin(tick / 90 + a.id) * 22 };
+      else if (a.job === 'water' && g.wsrc) { const tgt = a.wc ? g.home : g.wsrc; if (within(a.x - tgt.x, a.y - tgt.y, 14)) a.wc = !a.wc; p = a.wc ? g.home : g.wsrc; }
       else if (a.job === 'guard') {
         const bc = g.bcells || [];
-        if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + Math.floor(S.tick / 160)) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
+        if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + guardPost) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
         else if (g.wallPlan) {
           const segments = g.wallPlan.segments;
-          const { a: from, b: to } = segments[(a.id + Math.floor(S.tick / 120)) % segments.length];
+          const { a: from, b: to } = segments[(a.id + guardWall) % segments.length];
           p = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
         }
-        else { const ang = a.id * 1.7 + S.tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
+        else { const ang = a.id * 1.7 + tick / 140, r = g.walls ? wallR(g) : 34; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
-      if (a.rite && S.tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
+      if (a.rite && tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
       tx = p.x + j * (a.job === 'gather' ? 3 : 1.2); ty = p.y + j2 * (a.job === 'gather' ? 3 : 1.2);
     } else if (a.group) {
-      const g = S._g.get(a.group);
+      const g = S._groupsById[a.group];
       if (a.role === 'leader') {
         const n = nodeOf(S, g.target);
         const ga = g.id * 2.39996;
         tx = n ? n.x + Math.cos(ga) * 40 : g.cx; ty = n ? n.y + Math.sin(ga) * 40 : g.cy;
-        tx += Math.sin(S.tick / 47 + a.id) * 12; ty += Math.cos(S.tick / 53 + a.id) * 12;
+        tx += Math.sin(tick / 47 + a.id) * 12; ty += Math.cos(tick / 53 + a.id) * 12;
       } else {
-        const b = S._a.get(a.boss) || S._a.get(g.leader);
-        const ang = (a.id * 2.39996) % (Math.PI * 2) + Math.sin(S.tick / 90 + a.id) * 0.4;
+        const b = S._agentsById[a.boss] || S._agentsById[g.leader];
+        const ang = (a.id * 2.39996) % (Math.PI * 2) + Math.sin(tick / 90 + a.id) * 0.4;
         const r = 26 + (a.id % 3) * 9;
         tx = b.x + Math.cos(ang) * r; ty = b.y + Math.sin(ang) * r;
       }
     } else {
       let n = nodeOf(S, a.tnode);
-      if (!n || n.amt < 4 || (S.tick + a.id) % 90 === 0) {
+      if (!n || n.amt < 4 || (tick + a.id) % 90 === 0) {
         let bv = -1;
         for (const q of S.nodes) { const v = (q.amt + 2) / (1 + Math.hypot(q.x - a.x, q.y - a.y) / 110) * (0.7 + rnd(S) * 0.6) * (S.own && S.own[cellAt(q.x, q.y)] ? 0.4 : 1); if (v > bv) { bv = v; n = q; } }
         a.tnode = n ? n.id : null;
       }
       tx = n ? n.x + Math.cos(a.id) * 22 : a.x; ty = n ? n.y + Math.sin(a.id) * 22 : a.y;
     }
-    if (S.ter[cellAt(a.x, a.y)] === 's' || (S.ter[cellAt(a.x, a.y)] === 'w' && !costs[cellAt(a.x, a.y)])) toLand(S, a);
-    const ca = cellAt(a.x, a.y), ct = cellAt(tx, ty); let onPath = false;
+    let ca = cellAt(a.x, a.y);
+    const terrain = S.ter[ca];
+    if (terrain === 's' || (terrain === 'w' && !costs[ca])) {
+      toLand(S, a);
+      ca = cellAt(a.x, a.y);
+    }
+    const ct = cellAt(tx, ty);
+    let onPath = false;
     if (ca !== ct) {
       const far = Math.abs(ca % N - ct % N) + Math.abs(((ca / N) | 0) - ((ct / N) | 0)) > 2;
       const bk = ca * 2500 + ct; if (a.bkK !== bk || a.bkV !== S.navV) { a.bkK = bk; a.bkV = S.navV; a.bkR = !far && blocked(S, a.x, a.y, tx, ty); }
-      if (far || a.bkR) { const wp = navStep(S, a, ca, ct); if (wp) { tx = wp.x; ty = wp.y; a.stuck = 0; onPath = far; } else { tx = a.x; ty = a.y; a.stuck = (a.stuck || 0) + 1; } }
+      if (far || a.bkR) {
+        const cell = nextPathCell(S, a, ca, ct);
+        if (cell >= 0) {
+          const offset = ((a.id * 13) % 7) - 3;
+          tx = (cell % N) * CS + 10 + offset;
+          ty = ((cell / N) | 0) * CS + 10 + offset;
+          a.stuck = 0;
+          onPath = far;
+        } else {
+          tx = a.x;
+          ty = a.y;
+          a.stuck = (a.stuck || 0) + 1;
+        }
+      }
     }
-    const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
+    const dx = tx - a.x, dy = ty - a.y, d = moveDistance(dx, dy) || 1;
     const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
-    let nx = a.x + dx / d * sp + gauss(S) * 0.5, ny = a.y + dy / d * sp + gauss(S) * 0.5;
+    const rng = S.rng;
+    let nx = a.x + dx / d * sp + walkNoise(rng);
+    let ny = a.y + dy / d * sp + walkNoise((rng + 3 * RNG_STEP) | 0);
+    S.rng = (rng + 6 * RNG_STEP) | 0;
     const nc = cellAt(nx, ny);
     if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; }
     a.x = nx; a.y = ny;
     if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
     if (nc !== a.lc) {
       if (S.ter[nc] === 'w' && !S.bridge[nc]) {
-        const gg = a.group && S._g.get(a.group); if (gg) gg.cross = (gg.cross || 0) + 1;
+        const gg = a.group && S._groupsById[a.group]; if (gg) gg.cross = (gg.cross || 0) + 1;
         // a ford is dangerous in the spring flood and with a load on the back; thin ice at the start and end of winter
-        const dy = S.tick % 360, flood = dy >= 90 && dy < 150, risk = S.frozen ? (dy < 20 || dy >= 70 ? 0.002 : 0.0004) : flood ? 0.008 : 0.00025;
-        if (rnd(S) < risk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
+        if (rnd(S) < fordRisk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
       }
       a.lc = nc;
     }
   }
   if (S._drown && S._drown.length) { for (const a of S._drown) drown(S, a); S._drown = []; }
-  const X = A.slice().sort((p, q) => p.x - q.x);
-  for (let i = 0; i < X.length; i++) {
-    const a = X[i];
-    for (let j = i + 1; j < X.length; j++) {
-      const b = X[j], dx = b.x - a.x, dy = b.y - a.y;
-      if (dx > 55) break;
-      if (dy > 55 || dy < -55) continue;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < 81) { const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d; a.x -= dx * f; a.y -= dy * f; b.x += dx * f; b.y += dy * f; }
-      if (d2 < 3025 && rnd(S) < 0.02) interact(S, a, b);
+  meet(S, A);
+  for (const a of A) { a.x = clamp(a.x, 6, 994); a.y = clamp(a.y, 6, 994); }
+}
+
+function meet(S, agents) {
+  // Agents are appended in ID order. Use that same tie order even when the
+  // previous day's list makes the sort largely incremental.
+  const tail = agents[agents.length - 1];
+  if (S._meetingAgents !== agents || S._meetingTail !== tail) {
+    S._meetingAgents = agents;
+    S._meetingTail = tail;
+    S._meetingOrder = agents.slice().sort((p, q) => p.x - q.x);
+  } else {
+    const order = S._meetingOrder;
+    for (let i = 1; i < order.length; i++) {
+      const agent = order[i], x = agent.x;
+      let slot = i;
+      while (slot > 0) {
+        const previous = order[slot - 1];
+        if (previous.x < x || (previous.x === x && previous.id < agent.id)) break;
+        order[slot--] = previous;
+      }
+      order[slot] = agent;
     }
   }
-  for (const a of A) { a.x = clamp(a.x, 6, 994); a.y = clamp(a.y, 6, 994); }
+  const order = S._meetingOrder;
+  const size = order.length;
+  if (!S._meetingX || S._meetingX.length < size) {
+    S._meetingX = new Float64Array(size + 32);
+    S._meetingY = new Float64Array(size + 32);
+  }
+  const xs = S._meetingX, ys = S._meetingY;
+  for (let i = 0; i < size; i++) {
+    xs[i] = order[i].x;
+    ys[i] = order[i].y;
+  }
+  let rng = S.rng;
+  for (let i = 0; i < size; i++) {
+    const a = order[i];
+    let ax = xs[i], ay = ys[i];
+    for (let j = i + 1; j < size; j++) {
+      const dx = xs[j] - ax;
+      if (dx > 55) break;
+      const dy = ys[j] - ay;
+      if (dy > 55 || dy < -55) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < 81) {
+        const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
+        a.x = ax -= dx * f;
+        a.y = ay -= dy * f;
+        order[j].x = xs[j] += dx * f;
+        order[j].y = ys[j] += dy * f;
+      }
+      if (d2 < 3025 && randomAt(rng = (rng + RNG_STEP) | 0) < 0.02) {
+        S.rng = rng;
+        interact(S, a, order[j]);
+        rng = S.rng;
+      }
+    }
+  }
+  S.rng = rng;
 }
 
 function bump(a, b, d) { a.trust[b.id] = clamp((a.trust[b.id] || 0) + d, -1, 1); }
@@ -135,11 +228,11 @@ function interact(S, a, b) {
   const ga = a.group, gb = b.group;
   if (a.trust[b.id] === undefined) a.trust[b.id] = 0.25 * (b.rep || 0);
   if (b.trust[a.id] === undefined) b.trust[a.id] = 0.25 * (a.rep || 0);
-  if (ga && ga === gb) { const Lid = S._g.get(ga).leader; if (Lid !== a.id && Lid !== b.id) { const ta = a.trust[Lid] || 0, tb = b.trust[Lid] || 0, w = 0.05; if ((a.trust[b.id] || 0) > 0.1) a.trust[Lid] = ta + (tb - ta) * w; if ((b.trust[a.id] || 0) > 0.1) b.trust[Lid] = tb + (ta - tb) * w; } }
+  if (ga && ga === gb) { const Lid = S._groupsById[ga].leader; if (Lid !== a.id && Lid !== b.id) { const ta = a.trust[Lid] || 0, tb = b.trust[Lid] || 0, w = 0.05; if ((a.trust[b.id] || 0) > 0.1) a.trust[Lid] = ta + (tb - ta) * w; if ((b.trust[a.id] || 0) > 0.1) b.trust[Lid] = tb + (ta - tb) * w; } }
   if (ga && ga === gb) {
     const d = 0.025 * (a.coop + b.coop) / 2 - 0.012 * (a.res + b.res) / 2;
     bump(a, b, d); bump(b, a, d);
-    const g = S._g.get(ga);
+    const g = S._groupsById[ga];
     for (const [x, y] of [[a, b], [b, a]]) {
       if (x.id !== g.leader && y.id !== g.leader && x.ambition > 0.6 && y.res > 0.15) {
         y.trust[g.leader] = clamp((y.trust[g.leader] || 0) - 0.035 * x.ambition * (0.3 + y.res), -1, 1);
@@ -157,7 +250,7 @@ function interact(S, a, b) {
       log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Лидером становится ${L.name}: у него больше амбиций.`, who: [L.id, o.id], gs: [g.id] });
     }
   } else if (!ga || !gb) {
-    const s = ga ? b : a, m = ga ? a : b, g = S._g.get(m.group), L = S._a.get(g.leader);
+    const s = ga ? b : a, m = ga ? a : b, g = S._groupsById[m.group], L = S._agentsById[g.leader];
     bump(s, m, 0.035 * s.coop + 0.008); bump(m, s, 0.02 * m.coop);
     const open = 0.18 + 0.5 * L.coop - 0.004 * g.members.length;
     if ((s.trust[m.id] || 0) > (s.wealth < 1 ? 0.12 : 0.22) && rnd(S) < open * (s.wealth < 1 ? 0.9 : 0.5)) { join(S, s, g, m.id); s.trust[g.leader] = Math.max(s.trust[g.leader] || 0, 0.1); }
@@ -165,7 +258,7 @@ function interact(S, a, b) {
     const h = S.hostility[key(ga, gb)] || 0, al = allied(S, ga, gb);
     const d = al ? 0.02 : h > 0.4 ? -0.03 * h : 0.012 * (a.coop + b.coop) / 2 - 0.004;
     bump(a, b, d); bump(b, a, d);
-    const gA = S._g.get(ga), gB = S._g.get(gb);
+    const gA = S._groupsById[ga], gB = S._groupsById[gb];
     for (const [x, y, gx, gy] of [[a, b, gA, gB], [b, a, gB, gA]]) {
       if (x.res > 0.45 && x.id !== gx.leader && (x.trust[y.id] || 0) > 0.25 && gy.pay > gx.pay * 1.2 && rnd(S) < 0.1) { join(S, x, gy, y.id); gy.poached = (gy.poached || 0) + 1; break; }
     }
@@ -174,14 +267,18 @@ function interact(S, a, b) {
 
 function produce(S) {
   const P = S.params, claims = new Map(), season = seasonOf(S.tick);
+  const cropDrought = S.tick < S.drought ? 0.4 : 1;
+  const cropScarcity = 1.2 - 0.5 * P.scarcity;
   const add = (n, c) => { if (!claims.has(n.id)) claims.set(n.id, { n, list: [] }); claims.get(n.id).list.push(c); };
   for (const g of S.groups) {
     const k = g.members.length, syn = (1 + P.synergy * 4 * (1 - Math.exp(-(k - 1) / 6))) / (1 + g.entropy);
-    const n = nodeOf(S, g.target), L = S._a.get(g.leader);
+    const n = nodeOf(S, g.target);
+    const effortCost = 0.0012 * (1 + g.entropy * 0.7);
     if (!g.home) {
+      const L = S._agentsById[g.leader];
       if (!n || !L || Math.hypot(L.x - n.x, L.y - n.y) > 90) continue;
       let E = 0;
-      for (const id of g.members) { const m = S._a.get(id), e = m.skill * m.energy; m.eff += e; E += e; m.energy -= 0.0012 * (1 + g.entropy * 0.7); }
+      for (const id of g.members) { const m = S._agentsById[id], e = m.skill * m.energy; m.eff += e; E += e; m.energy -= effortCost; }
       add(n, { g, pot: 0.14 * E * syn });
       continue;
     }
@@ -189,32 +286,33 @@ function produce(S) {
     g._gath = [];
     const tm = 1 + 0.5 * Math.min(1, g.tools / Math.max(1, k * 0.6));
     for (const id of g.members) {
-      const m = S._a.get(id), e = jobSkill(m, m.job) * m.energy * tm;
-      let worked = false;
+      const m = S._agentsById[id];
       if (m.haul) continue;
-      if (m.job === 'gather') { if (n && Math.hypot(m.x - n.x, m.y - n.y) < 70) { const pt = 0.12 * e * syn * HAUL; gpot += pt; g._gath.push([m, pt]); worked = true; } }
+      const e = jobSkill(m, m.job) * m.energy * tm;
+      let worked = false;
+      if (m.job === 'gather') { if (n && within(m.x - n.x, m.y - n.y, 70)) { const pt = 0.12 * e * syn * HAUL; gpot += pt; g._gath.push([m, pt]); worked = true; } }
       else if (m.job === 'farm') {
         const f = g.fields[(m.slot || 0) % Math.max(1, g.fields.length)];
-        if (f && season !== 0 && Math.hypot(m.x - f.x, m.y - f.y) < 30) {
-          const food = 0.34 * e * syn * f.fert * (S.tick < S.drought ? 0.4 : 1) * (1.2 - 0.5 * P.scarcity) * HAUL;
+        if (f && season !== 0 && within(m.x - f.x, m.y - f.y, 30)) {
+          const food = 0.34 * e * syn * f.fert * cropDrought * cropScarcity * HAUL;
           const v = farmYield(S, f, season, food, e);
-          const ow = f.owner && S._a.get(f.owner);
+          const ow = f.owner && S._agentsById[f.owner];
           if (g.land === 'private' && ow && ow.group === g.id) { if (ow === m) { m.wealth += v * 0.5; load(m, 'food', v * 0.5); } else { ow.wealth += v * 0.35; m.wealth += v * 0.15; load(m, 'food', v * 0.5); m.hired = S.tick; } }
           else load(m, 'food', v);
           worked = true;
         }
       } else if (m.job === 'wood') {
         const c = g.woodCell;
-        if (c !== null && S.wood[c] > 1 && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
+        if (c !== null && S.wood[c] > 1 && within(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10), 30)) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
       } else if (m.job === 'build') {
         const st = g.site;
-        if (st && Math.hypot(m.x - st.x, m.y - st.y) < 26) { st.prog += e * syn; worked = true; if (st.prog >= st.need) finishSite(S, g); }
+        if (st && within(m.x - st.x, m.y - st.y, 26)) { st.prog += e * syn; worked = true; if (st.prog >= st.need) finishSite(S, g); }
       } else if (m.job === 'stone') {
         const c = g.stoneCell;
-        if (c !== null && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }
+        if (c !== null && within(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10), 30)) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }
       } else if (m.job === 'craft') {
         const w = g.workshop || g.home;
-        if (w && Math.hypot(m.x - w.x, m.y - w.y) < 26) {
+        if (w && within(m.x - w.x, m.y - w.y, 26)) {
           const n0 = g.members.length, want = g.workshop && g.tools < n0 * 0.6 && g.wood >= 1 && g.stone >= 1 ? 'tools' : (g.pots || 0) < n0 * 0.5 ? 'pots' : (g.goats || 0) >= 4 && (g.cloth || 0) < n0 * 0.6 ? 'cloth' : g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n0 * 1.2 ? 'tools' : null;
           if (want) {
             g.craftProg = (g.craftProg || 0) + e * syn; worked = true; m.craftKind = want;
@@ -228,7 +326,7 @@ function produce(S) {
         }
       }
       if (worked) {
-        m.eff += e; m.energy -= 0.0012 * (1 + g.entropy * 0.7); workers++;
+        m.eff += e; m.energy -= effortCost; workers++;
         const before = m.xp[m.job] || 0; m.xp[m.job] = before + 0.0009;
         if (before < 1 && m.xp[m.job] >= 1) { m.master = m.job; bio(S, m, 'master', `Становится мастером: ${TITLE[m.job]}${m.teacherName ? `, как ${m.sex === 'f' ? 'её' : 'его'} учитель ${m.teacherName}` : ''}`); if (!S.masters) S.masters = {}; if (!S.masters[m.job]) { S.masters[m.job] = 1; log(S, 'tech', `${m.name} становится первым в мире: ${TITLE[m.job]}`, m.x, m.y, g.hue, { why: `Три года одной и той же работы. Опыт поднимает выработку на 60%, поэтому лидер ставит мастера на его дело в первую очередь. Так рождается специализация.`, who: [m.id], gs: [g.id] }); } }
       }
@@ -266,12 +364,20 @@ function lifecycle(S) {
     // light hunger wears one down slowly, deep hunger fast; the deficit is not a debt that grows without end
     if (a.wealth < -1.5) a.wealth = -1.5;
     if (a.wealth < 0) a.energy -= 0.0004 + 0.0004 * Math.min(1, -a.wealth / 1.5); else a.energy += 0.003 * (1.05 - a.energy);
-    const gq = a.group && S._g.get(a.group); if (gq && gq.home) { if (gq.thirst) a.energy -= 0.0016; else if (gq.wShort > 1) a.energy -= 0.0012; }
+    const gq = a.group && S._groupsById[a.group]; if (gq && gq.home) { if (gq.thirst) a.energy -= 0.0016; else if (gq.wShort > 1) a.energy -= 0.0012; }
     if (winter) { if (a.shel && a.group) a.energy += 0.0004; else a.energy -= 0.0008; }
     a.energy = clamp(a.energy, 0, 1);
     if (a.age > a.life) dead.push([a, 'death']);
     else if (a.energy < 0.03) dead.push([a, 'burnout']);
-    else if (rnd(S) < (0.004 + 0.0013 * Math.exp((a.age - 25) / 11)) / 360 * (a.energy < 0.3 ? 1.5 : 1) * (winter ? (a.group && (gq?.cloth || 0) >= (gq?.members.length || 0) * 0.5 ? 1.05 : 1.25) : 0.9) * (1 + 1.6 * (gq?.dirty || 0))) dead.push([a, 'sick']);
+    else {
+      const roll = rnd(S), dirty = gq?.dirty || 0;
+      // At age 80 or less and dirt at most 1.5, the maximum daily risk is below 0.004.
+      if ((roll < 0.004 || a.age > 80 || dirty > 1.5) &&
+          roll < (0.004 + 0.0013 * Math.exp((a.age - 25) / 11)) / 360 *
+            (a.energy < 0.3 ? 1.5 : 1) *
+            (winter ? (a.group && (gq?.cloth || 0) >= (gq?.members.length || 0) * 0.5 ? 1.05 : 1.25) : 0.9) *
+            (1 + 1.6 * dirty)) dead.push([a, 'sick']);
+    }
   }
   for (const [a, why] of dead) removeAgent(S, a, why);
 }
@@ -297,7 +403,7 @@ function removeAgent(S, a, why) {
     for (const o of S.agents) if (o.patron === a.id) o.patron = heir && rnd(S) < 0.6 ? heir.id : null;
   }
   if (a.group) leave(S, a, why);
-  S.agents = S.agents.filter(x => x !== a); S._a.delete(a.id);
+  S.agents = S.agents.filter(x => x !== a); S._a.delete(a.id); S._agentsById[a.id] = undefined;
 }
 
 function inflow(S) {

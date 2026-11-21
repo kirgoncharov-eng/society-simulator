@@ -68,6 +68,7 @@ function shock(S, kind) {
     do { x = 80 + rnd(S) * 840; y = 80 + rnd(S) * 840; } while (t++ < 200 && S.nodes.some(n => Math.hypot(n.x - x, n.y - y) < 150));
     S.nodes.push({ id: S.nextId++, x, y, amt: 90, cap: 90 });
     if (S.nodes.length > 14) S.nodes.shift();
+    S._nodesById = null;
     log(S, 'shock', 'Открыт новый богатый источник', x, y, 45, { why: 'Новый ресурс меняет баланс сил: кто дотянется до него первым, тот усилится.' });
   }
   if (kind === 'strangers') {

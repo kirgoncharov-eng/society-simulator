@@ -58,7 +58,7 @@ function spawn(S, kind, o = {}) {
     else if (side < 2) { a.x = side ? 990 : 10; a.y = t; } else { a.x = t; a.y = side === 2 ? 10 : 990; }
     if (o.culture) Object.assign(a, o.culture(a));
   }
-  S.agents.push(a); S._a.set(a.id, a);
+  S.agents.push(a); S._a.set(a.id, a); S._agentsById[a.id] = a;
   if (kind === 'child') { const g = (o.g && S._g.has(o.g.id) && !o.g.dead) ? o.g : o.parent ? S._g.get(o.parent.group) : null; if (g) { a.trust[g.leader] = (a.trust[g.leader] || 0) + 0.3; join(S, a, g, o.parent && o.parent.group === g.id ? o.parent.id : g.leader); } }
   return a;
 }
@@ -102,7 +102,7 @@ function dissolve(S, g, silent) {
   const share = g.treasury / Math.max(1, g.members.length);
   for (const id of g.members) { const m = S._a.get(id); if (m) { m.group = null; m.boss = null; m.role = null; m.wealth += share; } }
   g.members = [];
-  S.groups = S.groups.filter(x => x !== g); S._g.delete(g.id);
+  S.groups = S.groups.filter(x => x !== g); S._g.delete(g.id); S._groupsById[g.id] = undefined;
   S.alliances = S.alliances.filter(al => al.a !== g.id && al.b !== g.id);
   for (const k of Object.keys(S.hostility)) { const [p, q] = k.split('|'); if (+p === g.id || +q === g.id) delete S.hostility[k]; }
   if (!silent && S.tick - g.founded > 360) log(S, 'collapse', `«${g.name}» распадается спустя ${yrs(Math.round((S.tick - g.founded) / 360))}`, g.cx, g.cy, g.hue, { why: 'В группе осталось меньше двух человек: остальные ушли, умерли или перебежали к соседям.', gs: [g.id] });
@@ -117,7 +117,7 @@ function createGroup(S, L, others, parent) {
     bureau: 0, entropy: 0, depth: 1, maxDepth: 1, cx: L.x, cy: L.y, target: null, cool: 0, gen: 1, legit: 0.7, pay: 1, avoid: {},
     home: null, houses: [], fields: [], wood: 0, site: null, woodCell: null, stone: 0, tools: 0, stoneCell: null, workshop: null, granary: null, walls: false, lord: null, raided: -1e9, faith: null, shrine: null, dynasty: false, dynName: null, dynGen: 0, code: null, trauma: 0, trades: 0, warsWon: 0, warsLost: 0, reforms: 0, rhist: [], rtype: null, since: S.tick, terr: 0, land: 'common', gov: 'chief', coupCount: 0, bcells: []
   };
-  S.groups.push(g); S._g.set(g.id, g); S.stats.founded++;
+  S.groups.push(g); S._g.set(g.id, g); S._groupsById[g.id] = g; S.stats.founded++;
   S.arch = S.arch || {};
   S.arch[g.id] = { name: g.name, hue, founded: S.tick, end: null, parent: parent || null, into: null };
   // those who split off take their share of the stores, tools and goats (at most half)

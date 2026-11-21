@@ -1,6 +1,6 @@
 const N = 50, CS = 20;
 const seasonOf = t => Math.floor((t % 360) / 90);
-const cellAt = (x, y) => clamp(Math.floor(y / CS), 0, N - 1) * N + clamp(Math.floor(x / CS), 0, N - 1);
+const cellAt = (x, y) => clamp(y / CS | 0, 0, N - 1) * N + clamp(x / CS | 0, 0, N - 1);
 function genTerrain(S) {
   const grid = () => { const a = []; for (let i = 0; i < 64; i++) a.push(rnd(S)); return a; };
   const E1 = grid(), E2 = grid(), M1 = grid();
