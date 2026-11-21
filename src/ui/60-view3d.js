@@ -3,7 +3,6 @@ const V3 = { on: false, ready: false, loading: false, texAt: 0, texKey: '', objA
 const URL3 = ['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'];
 function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
 function set3D(on) {
-  V3.wanted = on;
   $('v2d').classList.toggle('on', !on); $('v3d').classList.toggle('on', on);
   $('v2d').setAttribute('aria-pressed', String(!on)); $('v3d').setAttribute('aria-pressed', String(on));
   document.body.classList.toggle('flat', !on);
