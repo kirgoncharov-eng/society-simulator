@@ -19,22 +19,28 @@ function jobs(S, g) {
   const lean0 = ((n <= 6 && g.treasury < n * 3) || g.treasury < n * 1.2) && season !== 0;
   if (!g.site && lean0 && g.fields.length < wantF) g.site = fieldSpot(S, g);
   if (!g.site) {
-    if (threat > 0.6 && g.houses.length >= 3 && g.wood >= 8 && (site = wallSite(S, g)) && g.wood >= site.wood) { g.wood -= site.wood; g.site = site; }
-    else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8 && (site = specialSpot(S, g, 'shrine'))) { g.wood -= 8; g.site = site; }
-    else if (g.landing && (g.fboats || 0) < Math.ceil(n / 8) && g.houses.length >= 2 && g.wood >= 8 && n >= 4) { g.wood -= 8; g.site = { kind: 'fboat', x: g.landing.x, y: g.landing.y, prog: 0, need: 70 }; }
-    else if (g.houses.some(h => h.ruined) && livingHouses(g).length < wantH && g.wood >= 2) { const idx = g.houses.findIndex(h => h.ruined), hh = g.houses[idx]; g.wood -= 2; g.site = { kind: 'repair', idx, x: hh.x, y: hh.y, prog: 0, need: 20 }; }
-    else if (!g.bridgeAt && n >= 8 && g.houses.length >= 3 && g.wood >= 12 && ((g.cross12 || 0) >= 10 || (g.drowned || 0) >= 1) && (site = bridgeSpot(S, g)) && g.wood >= site.wood) { g.wood -= site.wood; g.site = site; g.bridgeAt = -1; }
-    else if (g.houses.length < wantH && g.wood >= (g.workshop ? 5 : 6) && (site = houseSpot(S, g))) { g.wood -= g.workshop ? 5 : 6; g.site = site; }
-    // no timber within reach: a family still gets a roof, an earth-and-wattle house that takes longer to raise
-    else if (g.wood < 6 && livingHouses(g).length < wantH && (g.woodCell === null || livingHouses(g).length <= wantH - 2) && (site = houseSpot(S, g))) { g.site = { ...site, need: 90, earth: true }; }
-    else if (g.fields.length < wantF && season !== 0 && (site = fieldSpot(S, g))) g.site = site;
-    else if (needGR && g.wood >= 8 && (site = specialSpot(S, g, 'granary'))) { g.wood -= 8; g.site = site; }
-    else if (needWS && g.wood >= 4 && g.stone >= 4 && (site = specialSpot(S, g, 'workshop'))) { g.wood -= 4; g.stone -= 4; g.site = site; }
+    if (threat > 0.6 && g.houses.length >= 3 && g.wood >= 8 && (site = wallSite(S, g)) && beginSite(S, g, site, site.wood)) {}
+    else if (!g.shrine && n >= 7 && g.trauma > 0 && g.houses.length >= 2 && g.wood >= 8 && (site = specialSpot(S, g, 'shrine'))) beginSite(S, g, site, 8);
+    else if (g.landing && (g.fboats || 0) < Math.ceil(n / 8) && g.houses.length >= 2 && g.wood >= 8 && n >= 4) {
+      beginSite(S, g, { kind: 'fboat', x: g.landing.x, y: g.landing.y, prog: 0, need: 70 }, 8);
+    } else if (g.houses.some(h => h.ruined) && livingHouses(g).length < wantH && g.wood >= 2) {
+      const idx = g.houses.findIndex(h => h.ruined), hh = g.houses[idx];
+      beginSite(S, g, { kind: 'repair', idx, x: hh.x, y: hh.y, angle: hh.angle, footprint: hh.footprint, prog: 0, need: 20 }, 2);
+    } else if (!g.bridgeAt && n >= 8 && g.houses.length >= 3 && g.wood >= 12 && ((g.cross12 || 0) >= 10 || (g.drowned || 0) >= 1)
+      && (site = bridgeSpot(S, g)) && beginSite(S, g, site, site.wood)) g.bridgeAt = -1;
+    else if (g.houses.length < wantH && g.wood >= (g.workshop ? 5 : 6) && (site = houseSpot(S, g))) beginSite(S, g, site, g.workshop ? 5 : 6);
+    // A wattle-and-earth house still needs a load of poles and longer work on site.
+    else if (g.wood >= 1 && g.wood < 6 && livingHouses(g).length < wantH
+      && (g.woodCell === null || livingHouses(g).length <= wantH - 2) && (site = houseSpot(S, g))) {
+      beginSite(S, g, { ...site, need: 90, earth: true }, 1);
+    } else if (g.fields.length < wantF && season !== 0 && (site = fieldSpot(S, g))) g.site = site;
+    else if (needGR && g.wood >= 8 && (site = specialSpot(S, g, 'granary'))) beginSite(S, g, site, 8);
+    else if (needWS && g.wood >= 4 && g.stone >= 4 && (site = specialSpot(S, g, 'workshop'))) beginSite(S, g, site, 4, 4);
   }
   const L = S._a.get(g.leader);
   const pool = mem.filter(m => !(m === L && n > 4) && !m.car && !m.war);
   if (L && n > 4) L.job = 'lead';
-  const woodNeed = g.houses.length < wantH || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
+  const woodNeed = g.houses.length < wantH || (threat > 0.6 && g.houses.length >= 3 && !g.walls && g.wood < 20) || (needGR && g.wood < 8) || (needWS && g.wood < 4) || (g.workshop && g.wood < 6);
   const stoneNeed = g.stoneCell !== null && ((needWS && g.stone < 4) || (g.workshop && g.stone < 6));
   const lean = lean0;
   const quota = {

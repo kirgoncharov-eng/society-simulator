@@ -61,7 +61,45 @@ $('lf1').addEventListener('click', () => { logAll = false; $('lf1').classList.ad
 $('lf2').addEventListener('click', () => { logAll = true; $('lf2').classList.add('on'); $('lf1').classList.remove('on'); ui(true); });
 $('groups').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
 $('log').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const ev = S.events[+b.dataset.i]; if (ev) { focus(ev, true); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
+let mapDrag;
+const zoom = $('camZoom');
+function zoomCamera(value) {
+  follow = false;
+  const fraction = Math.max(0, Math.min(100, value)) / 100;
+  if (!fraction) { islandCamera(); return; }
+  zoom.value = Math.round(fraction * 100);
+  if (V3.on && V3.ready) {
+    V3.fly = null;
+    const target = V3.ctl.target, pos = V3.cam.position, distance = overviewDistance() * (110 / overviewDistance()) ** fraction;
+    pos.sub(target).setLength(distance).add(target);
+    V3.ctl.update();
+  } else vt.z = 5 ** fraction;
+}
+$('camIsland').addEventListener('click', () => islandCamera());
+zoom.addEventListener('input', () => zoomCamera(+zoom.value));
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomCamera(+zoom.value - Math.sign(e.deltaY) * 6);
+}, { passive: false });
 cv.addEventListener('pointerdown', e => {
+  if (mapDrag || e.button !== 0) return;
+  mapDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (mapDrag?.id !== e.pointerId) return;
+  const dx = e.clientX - mapDrag.x, dy = e.clientY - mapDrag.y;
+  if (Math.hypot(dx, dy) < 5 && !mapDrag.moved) return;
+  mapDrag.moved = true; follow = false;
+  const scale = cv.width / Math.max(1, cv.clientWidth) / T.k, half = 500 / vt.z;
+  vt.x = Math.max(half, Math.min(1000 - half, mapDrag.vx - dx * scale));
+  vt.y = Math.max(half, Math.min(1000 - half, mapDrag.vy - dy * scale));
+});
+cv.addEventListener('pointercancel', () => { mapDrag = null; });
+cv.addEventListener('pointerup', e => {
+  if (mapDrag?.id !== e.pointerId) return;
+  const moved = mapDrag.moved; mapDrag = null;
+  if (moved) return;
   const r = cv.getBoundingClientRect(), dx = cv.width / r.width;
   const x = ((e.clientX - r.left) * dx - T.ox) / T.k, y = ((e.clientY - r.top) * dx - T.oy) / T.k;
   let best = null, bd = 32 / view.z;
@@ -73,18 +111,21 @@ cv.addEventListener('pointerdown', e => {
 new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
 
+let introOpen = false;
 function intro() {
+  introOpen = true;
   playing = false; acc = dayWatch ? dawnFraction() : 0; syncPlay();
   const landing = firstLanding(S);
   if (landing) {
     vt = { x: landing.x1, y: landing.y1, z: 1.65 };
     view = { ...vt };
+    zoom.value = Math.round(100 * Math.log(vt.z) / Math.log(5));
     fly3D(landing.x1, landing.y1, true);
   }
   const box = $('focus'); box.style.setProperty('--c', C.slate);
   box.innerHTML = `<em>Год 0</em><strong>После кораблекрушения</strong><p>Ночью шторм разбил корабль. К утру шлюпки прибило к берегам острова. Выжившие вынесли на сушу то, что удалось спасти. Теперь им нужно найти пресную воду и место для ночлега.</p><div class="acts"><button class="main" id="go">Смотреть</button></div>`;
   box.hidden = false;
-  $('go').onclick = () => { box.hidden = true; lastStop = performance.now() - 6000; playing = true; syncPlay(); };
+  $('go').onclick = () => { introOpen = false; box.hidden = true; islandCamera(); lastStop = performance.now(); playing = true; syncPlay(); };
 }
 function start(data) {
   readColors(); sizeCanvas();

@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm23', date: '2026-11-21', note: 'цели и дуги: месть, власть, возвращение, выгодная партия, отцовский дом' };
+const MODEL = { v: 'm24', date: '2026-11-21', note: 'цели и дуги: месть, власть, возвращение, выгодная партия, отцовский дом' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -83,7 +83,11 @@ function archiveGC(S) {
   }
   for (const l of S.legends || []) { refs(l.bio); goalRefs(l.goals); }
   for (const id of S.secrets || []) keep.add(id);
-  for (const g of S.groups) { for (const k in g.customEv || {}) keep.add(g.customEv[k]); for (const c of g.cases || []) if (c[3]) keep.add(c[3]); }
+  for (const g of S.groups) {
+    for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+    for (const c of g.cases || []) if (c[3]) keep.add(c[3]);
+    for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
+  }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }

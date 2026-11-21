@@ -1,4 +1,3 @@
-const wallR = g => Math.max(26, ...g.houses.map(h => Math.hypot(h.x - g.home.x, h.y - g.home.y) + 12));
 function threatOf(S, g) {
   let t = 0;
   for (const o of S.groups) {
@@ -11,10 +10,10 @@ function threatOf(S, g) {
 }
 function toolCov(g) { return Math.min(1, (g.tools || 0) / Math.max(1, g.members.length * 0.6)); }
 function fightPow(m, g) { return m.skill * (0.3 + m.energy) * (1 + 0.5 * toolCov(g)) * (1 + 0.4 * Math.min(1, (m.xp && m.xp.guard) || 0)); }
-function defence(S, g) {
+function defence(S, g, approach) {
   let p = 0;
   for (const id of g.members) { const m = S._a.get(id); if (!m || m.car || m.war) continue; if (Math.hypot(m.x - g.home.x, m.y - g.home.y) > 160) continue; p += fightPow(m, g) * (m.job === 'guard' ? 1 : 0.45); }
-  return p * (g.walls ? 1.7 : 1);
+  return p * (wallCover(g, approach) ? 1.35 : 1);
 }
 function warTarget(S, a) {
   const w = S.wars.find(x => x.id === a.war);
@@ -36,7 +35,7 @@ function warMonth(S) {
       const d = Math.hypot(A.home.x - B.home.x, A.home.y - B.home.y); if (d > 460 || !reach(S, A.home.x, A.home.y, B.home.x, B.home.y)) continue;
       const fighters = warband(S, A);
       let pa = 0; for (const m of fighters) pa += fightPow(m, A);
-      const pdR = defence(S, B), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
+      const pdR = defence(S, B, A.home), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
       const prize = B.treasury + (B.tools || 0) * 4 + (A.lord === B.id ? 40 : 0);
       const v = odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
       if (odds > 0.42 && v > bv) { bv = v; best = { B, fighters, pa, pd: pdR, odds, oddsR, h, d, av }; }
@@ -102,7 +101,7 @@ function wars(S) {
 }
 function battle(S, w, A, B, band) {
   let pa = 0; for (const m of band) pa += fightPow(m, A);
-  let pd = defence(S, B);
+  let pd = defence(S, B, A.home);
   const st = B.state && (S.states || []).find(x => x.id === B.state);
   if (st && st.type === 'Конфедерация') for (const id of st.members) { const o = S._g.get(id); if (o && o !== B && o !== A && o.home && Math.hypot(o.home.x - B.home.x, o.home.y - B.home.y) < 420) pd += defence(S, o) * 0.35; }
   const win = rnd(S) < pa * pa / (pa * pa + pd * pd + 1e-6);
@@ -137,14 +136,14 @@ function battle(S, w, A, B, band) {
     for (const m of B.members.map(id => S._a.get(id))) if (m && m.id !== B.leader) { m.res = clamp(m.res + 0.12, 0, 1); if (LB) bump(m, LB, -0.1); }
     conquer = !B.lord && B.members.length < A.members.length && ratio > 1.3 && LA && LA.ambition > 0.5 && rnd(S) < 0.6;
     text = `Битва у «${B.name}»: войско «${A.name}» ${rout ? 'наголову разбивает защитников' : 'берёт верх'}, уносит ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${burnt ? ', один дом сожжён' : ''}${annexed ? `, отрезает ${annexed} ${pl(annexed, 'клетку', 'клетки', 'клеток')} земли` : ''}`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол не спас' : 'частокола у защитников не было', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
   } else {
     if (LA) { LA.status = Math.max(0, LA.status - 2); A.legit = Math.max(0.2, A.legit - 0.25); LA.rep = clamp((LA.rep || 0) - 0.12, -1, 1); }
     A.warsLost++; B.warsWon++; A.trauma++;
     for (const m of A.members.map(id => S._a.get(id))) if (m && m.id !== A.leader) { m.res = clamp(m.res + 0.15, 0, 1); if (LA) bump(m, LA, -0.12); }
     for (const m of defenders) { m.status += 0.4; m.xp.guard = (m.xp.guard || 0) + 0.25; }
     text = `Битва у «${B.name}»: защитники ${rout ? 'обращают в бегство' : 'отбивают'} войско «${A.name}»`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, B.walls ? 'частокол удвоил оборону' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
   }
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
   const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
