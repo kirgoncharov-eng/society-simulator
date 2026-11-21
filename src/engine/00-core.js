@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm23', date: '2026-11-21', note: 'стройплощадки с доставкой и этапами, частокол по отдельным участкам' };
+const MODEL = { v: 'm24', date: '2026-11-21', note: 'цели и дуги: месть, власть, возвращение, выгодная партия, отцовский дом' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -54,6 +54,7 @@ function note(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
   (S.evArch || (S.evArch = {}))[ev.id] = ev;
+  if (ev.causes) for (const c of ev.causes) cite(S, c);
   return ev;
 }
 function eventById(S, id) {
@@ -72,16 +73,19 @@ function cite(S, id) {
 function archiveGC(S) {
   const A = S.evArch; if (!A) return;
   const keep = new Set(), refs = b => { for (const x of b || []) if (x[3]) keep.add(x[3]); };
+  const goalRefs = G => { for (const x of G || []) { if (x.ev) keep.add(x.ev); if (x.endEv) keep.add(x.endEv); for (const t of x.turns || []) if (t[2]) keep.add(t[2]); } };
   for (const a of S.agents) {
     refs(a.bio);
     for (const m of a.grainMemories || []) if (m.ev) keep.add(m.ev);
     if (a.feud && a.feud.ev && !a.feud.done) keep.add(a.feud.ev);
     for (const id in a.bonds || {}) if (a.bonds[id][5]) keep.add(a.bonds[id][5]);
+    goalRefs(a.goals);
   }
-  for (const l of S.legends || []) refs(l.bio);
+  for (const l of S.legends || []) { refs(l.bio); goalRefs(l.goals); }
   for (const id of S.secrets || []) keep.add(id);
   for (const g of S.groups) {
     for (const k in g.customEv || {}) keep.add(g.customEv[k]);
+    for (const c of g.cases || []) if (c[3]) keep.add(c[3]);
     for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
   }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);

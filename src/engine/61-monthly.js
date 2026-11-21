@@ -105,6 +105,7 @@ function monthly(S) {
   householdsMonth(S);
   affairsMonth(S);
   gossipMonth(S);
+  goalsMonth(S);
   if (S.tick % 360 === 330) harvestFestival(S);
   relations(S);
   tradeMonth(S);
@@ -190,6 +191,7 @@ function groupMonth(S, g) {
   const R = pool - lt;
   let sE = 0, sS = 0; for (const m of mem) { sE += m.eff; sS += m.status; }
   sE = sE || 1; sS = sS || 1;
+  const jobE = new Map(); for (const m of mem) { const x = jobE.get(m.job) || [0, 0]; x[0] += m.eff; x[1]++; jobE.set(m.job, x); }
   const egal = R / Math.max(1, mem.length), nepo = mem.filter(m => kin(m, L)).length >= 2;
   if (g.take > 0.22) L.rep = clamp((L.rep || 0) - 0.012 * (g.take - 0.2) * 10, -1, 1);
   const floor = Math.min(egal, 1.15), R2 = R - floor * mem.length;
@@ -211,8 +213,13 @@ function groupMonth(S, g) {
     if (g.code) unfair *= (g.code === 'egal') === (m.norm > 0.5) ? 0.75 : 1.15;
     m.res = clamp(m.res * 0.8 + unfair * 0.5, 0, 1);
     m.trust[L.id] = clamp((m.trust[L.id] || 0) + 0.06 * (0.22 - unfair) * (0.5 + g.legit), -1, 1);
-    if (mem.length >= 4 && m.eff < 0.3 * sE / mem.length && m.age < 55) m.rep = clamp((m.rep || 0) - 0.02, -1, 1);
-    else if (m.eff > 1.6 * sE / mem.length) m.rep = clamp((m.rep || 0) + 0.01, -1, 1);
+    // a shirker is judged against those doing the same work: a herder or a water carrier is not idle for doing no ploughing
+    const peer = jobE.get(m.job);
+    if (peer && peer[1] >= 2 && peer[0] > 0) {
+      const avg = peer[0] / peer[1];
+      if (mem.length >= 4 && m.eff < 0.3 * avg && m.age < 55) m.rep = clamp((m.rep || 0) - 0.02, -1, 1);
+      else if (m.eff > 1.6 * avg) m.rep = clamp((m.rep || 0) + 0.01, -1, 1);
+    }
     m.status += m.eff * 0.03; m.eff = 0;
     if (m.role === 'lt') m.status += 0.15;
     if (m.job === 'pray') m.status += 0.25;
@@ -290,9 +297,9 @@ function groupMonth(S, g) {
   if (n >= 4) {
     const cur = g.members.map(id => S._a.get(id)).filter(m => m !== L);
     let ch = null, cv = -1;
-    for (const m of cur) { const v = m.status * (0.3 + m.ambition) * (0.5 + m.energy); if (v > cv) { cv = v; ch = m; } }
+    for (const m of cur) { const v = m.status * (0.3 + m.ambition + (goalOf(m, 'power') ? 0.25 : 0)) * (0.5 + m.energy); if (v > cv) { cv = v; ch = m; } }
     if (ch && ch.ambition > 0.4) {
-      if (ch.ambition > 0.6 && !bondOf(L, ch) && rnd(S) < 0.08) { const why = `${fem(ch, 'метит', 'метит')} на место вождя «${g.name}»`; bond(S, L, ch, 'rival', why, 0.5); bond(S, ch, L, 'rival', `${fem(L, 'держится', 'держится')} за власть в «${g.name}»`, 0.5); }
+      if (ch.ambition > 0.6 && !bondOf(L, ch) && rnd(S) < 0.08) { const why = `${fem(ch, 'метит', 'метит')} на место вождя «${g.name}»`; bond(S, L, ch, 'rival', why, 0.5); bond(S, ch, L, 'rival', `${fem(L, 'держится', 'держится')} за власть в «${g.name}»`, 0.5); powerAim(S, ch, L, g); }
       const sup = cur.filter(m => m !== ch && m.patron !== L.id && ((m.trust[ch.id] || 0) - (m.trust[L.id] || 0) + 0.6 * m.res - 0.3 + (kin(m, ch) || m.patron === ch.id ? 0.5 : 0) - (kin(m, L) ? 0.5 : 0) + bondW(m, ch) - bondW(m, L)) > 0);
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
       if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
@@ -324,9 +331,10 @@ function groupMonth(S, g) {
     if (m.res > 0.7 && (m.trust[g.leader] || 0) < -0.15 && rnd(S) < 0.25 * (0.25 + 0.75 * room)) {
       const qev = note(S, 'quit', `${m.name} уходит из «${g.name}»: не ладит с вождём ${L.name}`, m.x, m.y, g.hue, { who: [m.id, L.id], gs: [g.id] }).id;
       bio(S, m, 'quit', `Уходит из «${g.name}»: не ладит с вождём ${L.name}`, qev); bond(S, m, L, 'rival', `не поладили в «${g.name}»`, 0.4, false, qev); (m.quit = m.quit || {})[g.id] = S.tick;
+      if (kinLeftIn(S, m, g)) returnGoal(S, m, g, L, qev, 'quit');
       gone.push(m.id); leave(S, m, 'move'); exits++; if (g.dead) return;
       const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { bio(S, sp, 'quit', `Уходит из «${g.name}» вслед за ${sp.sex === 'f' ? 'мужем' : 'женой'}`, qev); (sp.quit = sp.quit || {})[g.id] = S.tick; leave(S, sp, 'move'); exits++; if (g.dead) return; }
-    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && bondW(L, m) < 0.2 && rnd(S) < 0.15) { const xev = note(S, 'exile', `${L.name} изгоняет ${m.name} из «${g.name}»: дурная слава`, m.x, m.y, g.hue, { who: [L.id, m.id], gs: [g.id] }).id; bond(S, m, L, 'enemy', `${fem(L, 'изгнал', 'изгнала')} меня из «${g.name}»`, 0.5, false, xev); bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`, xev); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
+    } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && bondW(L, m) < 0.2 && rnd(S) < 0.15) { const xev = note(S, 'exile', `${L.name} изгоняет ${m.name} из «${g.name}»: дурная слава`, m.x, m.y, g.hue, { who: [L.id, m.id], gs: [g.id] }).id; bond(S, m, L, 'enemy', `${fem(L, 'изгнал', 'изгнала')} меня из «${g.name}»`, 0.5, false, xev); bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`, xev); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; returnGoal(S, m, g, L, xev, 'exile'); leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
   }
   if (exits >= 3) log(S, 'exodus', `Из «${g.name}» разом уходят ${exits} недовольных`, g.cx, g.cy, g.hue, { why: `У каждого обида выше 70% и доверие к лидеру ниже нуля. Но лидера среди них нет, поэтому они расходятся поодиночке. Доля ${L.name} в добыче: ${P0(g.take)}.`, who: gone, gs: [g.id] });
   if (g.shrine) g.treasury *= 0.99;
@@ -371,6 +379,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   // the deposed, his grown children and the usurper's chronicle and ties point to the coup
   const id = cev.id;
   refBond(S, L, ch, id); refLast(S, ch, 'coup', id); refLast(S, L, 'deposed', id); refLast(S, ch, 'leader', id);
+  if (L.group === g.id) powerDeposed(S, L, g, id);
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.age >= 15) { refBond(S, o, ch, id); refLast(S, o, 'feud', id); if (o.feud && o.feud.L === ch.id && !o.feud.ev) o.feud.ev = cite(S, id); }
   for (const m of sup) refBond(S, L, m, id);
 }

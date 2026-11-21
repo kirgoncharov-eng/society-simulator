@@ -120,6 +120,7 @@ function card() {
   ${famTxt(a, g, L)}
   ${houseTxt(a)}
   ${bondsTxt(a)}
+  ${a.goals && a.goals.length ? `<div class="rel"><b>Цели и дуги</b>${arcsHtml(a.goals, true)}</div>` : ''}
   ${a.feud && !a.feud.done ? `<p class="rel"><b>Ждёт мести</b> за ${esc(a.feud.rel)} ${esc(a.feud.v)}: ${a.feud.personal ? esc(a.feud.Lname) : `«${esc(a.feud.gname)}»`}.</p>` : ''}
   <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : 'Следить камерой'}</button></div>
   ${a.bio && a.bio.length > 1 ? `<details class="chron1"><summary>Летопись жизни · ${arcOf({ bio: a.bio })}</summary>${storyText({ bio: a.bio }, true)}</details>` : ''}

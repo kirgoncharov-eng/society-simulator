@@ -22,7 +22,7 @@ function families(S) {
       if (m.spouse || Math.abs(m.age - f.age) > 14 || kin(m, f)) continue;
       const d = Math.hypot(m.x - f.x, m.y - f.y), gm = S._g.get(m.group), gf = S._g.get(f.group);
       if (m.group !== f.group && d > 320) continue;
-      const v = (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + bondW(f, m) + Math.min(0, bondW(S._a.get(f.father), m), bondW(S._a.get(f.mother), m)) + 0.3 * (m.rep || 0) + 0.02 * m.status - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
+      const v = (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + bondW(f, m) + Math.min(0, bondW(S._a.get(f.father), m), bondW(S._a.get(f.mother), m)) + 0.3 * (m.rep || 0) + 0.02 * m.status + matchPull(S, f, m) - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
       if (v > bv) { bv = v; best = m; }
     }
     if (!best || bv < -0.4) continue;
@@ -65,6 +65,7 @@ function marry(S, f, m) {
   // the wedding is an event: the couple's house, the spurned suitor's grudge and an alliance of villages point to it
   const wev = note(S, 'marriage', `Свадьба: ${f.name} и ${m.name}`, f.x, f.y, (S._g.get(m.group) || {}).hue || 0, { who: [f.id, m.id], gs: [f.group, m.group].filter(Boolean) }).id; f.marryEv = m.marryEv = cite(S, wev);
   weddingFeast(S, f, m, wev);
+  matchWedding(S, f, m, wev);
   bio(S, f, 'marry', `Выходит замуж за ${m.name}${m.group && m.group !== f.group ? ` из «${groupName(S, m.group)}»` : ''}`, wev); bio(S, m, 'marry', `Женится на ${f.name}${f.group && f.group !== m.group ? ` из «${groupName(S, f.group)}»` : ''}`, wev);
   S.stats.marriages = (S.stats.marriages || 0) + 1;
   // the one who hoped for her: a spurned suitor turns rival to the groom

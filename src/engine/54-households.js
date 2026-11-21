@@ -38,11 +38,14 @@ function householdsMonth(S) {
       const ow = h.owner && S._a.get(h.owner);
       if (ow && ow.group === g.id) { h.spouseOf = ow.spouse || null; continue; }
       if (!h.owner) continue;
-      const o = S._a.get(h.owner), dead = !o, oname = h.oname || 'хозяина';
+      const prevOwner = h.owner, o = S._a.get(h.owner), dead = !o, oname = h.oname || 'хозяина';
       const inside = g.members.map(id => S._a.get(id)).filter(m => m && m.house === h.id && !m.lodger);
       const widow = inside.find(m => m.spouse === h.owner || (h.spouseOf && m.id === h.spouseOf));
       const heirs = inside.filter(m => m.mother === h.owner || m.father === h.owner).sort((a, b) => b.age - a.age);
-      const next = widow || heirs[0] || inside.sort((a, b) => b.age - a.age)[0];
+      let next = widow || heirs[0] || inside.sort((a, b) => b.age - a.age)[0], claimed = false;
+      // the one who lost this house in a dispute may take it back now that its owner is gone
+      const cl = houseClaimant(S, g, h);
+      if (cl && cl !== next && cl.id !== h.owner && (!widow || rnd(S) < 0.3)) { next = cl; claimed = true; }
       // only the death of this very owner, and only once: a stale mark from an earlier owner must not be reused
       const ref = dead && h.deathEv && h.deathOwner === h.owner && eventById(S, h.deathEv) ? h.deathEv : null;
       h.deathEv = null; h.deathOwner = null;
@@ -50,7 +53,9 @@ function householdsMonth(S) {
         h.owner = next.id; h.oname = next.name; h.spouseOf = null;
         if (dead) bio(S, next, 'inheritHouse', next === widow ? `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме` : `Наследует дом ${oname}`, ref);
         if (dead && next !== widow && heirs.includes(next)) inheritDispute(S, g, h, next, oname, ref);
+        if (claimed) { next.house = h.id; next.lodger = false; }
       } else { h.owner = null; h.oname = null; h.emptyT = S.tick; }
+      houseSettled(S, g, h, prevOwner, next, claimed, ref);
     }
     // everyone checks their place: a house that burned or that they left no longer counts
     for (const id of g.members) { const a = S._a.get(id); const h = houseOf(g, a.house); if (!h || h.ruined) { a.house = null; a.lodger = false; } }
