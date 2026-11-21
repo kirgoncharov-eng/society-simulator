@@ -1,5 +1,6 @@
 /* ---------- two worlds ---------- */
 const EX = { on: false, A: null, B: null, k: 'scarcity', va: 0.3, vb: 0.8, playing: true, speed: 16, acc: 0, seed: null, tA: { terr: document.createElement('canvas'), key: '', at: 0, id: 'A' }, tB: { terr: document.createElement('canvas'), key: '', at: 0, id: 'B' }, lastUi: 0 };
+const experimentRunner = backgroundWorlds(() => [EX.A, EX.B], ([a, b]) => { EX.A = a; EX.B = b; });
 const XK = { scarcity: 'дефицит', inflow: 'приток', synergy: 'синергия', memory: 'память', ambition: 'амбиции', noise: 'только случайность', landPriv: 'частная земля', assembly: 'вече', coin: 'монета', usury: 'проценты' };
 const BOOL = { landPriv: ['разрешена', 'запрещена'], assembly: ['разрешено', 'запрещено'], coin: ['разрешена', 'запрещена'], usury: ['разрешены', 'запрещены'] };
 const xval = v => BOOL[EX.k] ? (v >= 0.5 ? BOOL[EX.k][0] : BOOL[EX.k][1]) : pct(v) + '%';
@@ -11,6 +12,7 @@ function exStart() {
   if (EX.k !== 'noise') { pa[EX.k] = EX.va; pb[EX.k] = EX.vb; }
   EX.A = SIM.newWorld(seed, pa); EX.B = SIM.newWorld(seed, pb);
   if (EX.k === 'noise') EX.B.rng = (EX.B.rng ^ 0x5bd1e995) | 0;
+  experimentRunner.reset();
   EX.acc = 0; EX.playing = true; EX.tA.key = EX.tB.key = '';
   $('xplay').textContent = 'Пауза';
   exUi(true);
@@ -133,7 +135,11 @@ $('xa').addEventListener('input', e => { EX.va = +e.target.value; syncX(); });
 $('xb').addEventListener('input', e => { EX.vb = +e.target.value; syncX(); });
 $('xgo').addEventListener('click', exStart);
 $('xmap').addEventListener('click', () => { EX.seed = (Math.random() * 99999) | 0; exStart(); });
-$('xplay').addEventListener('click', () => { EX.playing = !EX.playing; $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск'; });
+$('xplay').addEventListener('click', () => {
+  EX.playing = !EX.playing;
+  if (!EX.playing && experimentRunner.busy) experimentRunner.reset();
+  $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск';
+});
 document.querySelectorAll('input[name=xs]').forEach(r => r.addEventListener('change', e => { EX.speed = +e.target.value; }));
 syncX();
 

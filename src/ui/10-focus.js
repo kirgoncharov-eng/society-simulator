@@ -9,7 +9,11 @@ function evLink(id) { return id && SIM.eventById(S, id) ? ` <button class="evlin
 document.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('[data-ev]'); if (!b) return; const e = SIM.eventById(S, +b.dataset.ev); if (e) { ev.preventDefault(); focus(e, true); } });
 function focus(e, pause) {
   focusEv = e;
-  if (pause) { playing = false; syncPlay(); }
+  if (pause) {
+    playing = false;
+    if (mainRunner.busy) mainRunner.reset();
+    syncPlay();
+  }
   if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; if (!V3.on) $('camZoom').value = Math.round(100 * Math.log(z) / Math.log(5)); fly3D(e.x, e.y); }
   else vt = { x: 500, y: 500, z: 1 };
   const box = $('focus');

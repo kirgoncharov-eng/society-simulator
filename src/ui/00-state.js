@@ -63,6 +63,7 @@ function world(seed) {
   resetView();
 }
 function resetView() {
+  mainRunner.reset();
   D = new Map(); F = []; sel = null; closeFocus(true);
   acc = dayWatch ? dawnFraction() : 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);

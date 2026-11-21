@@ -471,7 +471,7 @@ ul.arcs em.out-done{color:var(--slate);font-weight:600}ul.arcs em.out-failed,ul.
 
 <p class="band foot wrap solo" id="seedline"></p>
 
-<script>
+<script id="sim-source">
 const SIM = (() => {
 const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан','ис','ор','ну','са','вел','ин','то','ри','ла','мэ','зор','ан','ви','лей','дар','ми','ту','ре','ол','фа','ям','бо','се','ха','ют'];
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
@@ -481,13 +481,21 @@ const MODEL = { v: 'm24', date: '2026-11-21', note: 'цели и дуги: ме�
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function within(dx, dy, radius) {
+  const squared = dx * dx + dy * dy;
+  const limit = radius * radius;
+  // Only the rounding band at the threshold needs the original calculation.
+  const margin = limit * Number.EPSILON * 8;
+  return Math.abs(squared - limit) <= margin ? Math.hypot(dx, dy) < radius : squared < limit;
+}
 
-function rnd(S) {
-  let t = (S.rng = (S.rng + 0x6D2B79F5) | 0);
+const RNG_STEP = 0x6D2B79F5;
+function randomAt(t) {
   t = Math.imul(t ^ (t >>> 15), t | 1);
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
+const rnd = S => randomAt(S.rng = (S.rng + RNG_STEP) | 0);
 const gauss = S => (rnd(S) + rnd(S) + rnd(S) - 1.5) / 1.5;
 const pick = (S, arr) => arr[Math.floor(rnd(S) * arr.length)];
 function mkName(S) {
@@ -509,6 +517,10 @@ const date = t => `г.${Math.floor(t / 360)} · ${SEASON[Math.floor((t % 360) / 
 function index(S) {
   S._a = new Map(S.agents.map(a => [a.id, a]));
   S._g = new Map(S.groups.map(g => [g.id, g]));
+  S._agentsById = [];
+  S._groupsById = [];
+  for (const a of S.agents) S._agentsById[a.id] = a;
+  for (const g of S.groups) S._groupsById[g.id] = g;
 }
 // ex.causes: ids of the events that led to this one (a linked chronicle); returns the event
 function log(S, type, text, x, y, hue, ex) {
@@ -652,9 +664,9 @@ function seaMonth(S) {
     const d = Math.hypot(bs.x - S.isle.x, bs.y - S.isle.y) || 1;
     S.boats.push({ x0: bs.x, y0: bs.y, x1: bs.x + (bs.x - S.isle.x) / d * 160, y1: bs.y + (bs.y - S.isle.y) / d * 160, t: S.tick, out: true });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
-    log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
+    const departure = log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
     S.firstEmigr = true;
-    for (const m of fam) removeAgent(S, m, 'emigr');
+    for (const m of fam) removeAgent(S, m, 'emigr', departure.id);
   }
 }
 function beachNear(S, x, y, R0) { let best = null, bd = R0; const ci = Math.floor(x / CS), cj = Math.floor(y / CS), r = Math.ceil(R0 / CS); for (let j = cj - r; j <= cj + r; j++) for (let i = ci - r; i <= ci + r; i++) { if (i < 0 || j < 0 || i >= N || j >= N) continue; const c = j * N + i; if (S.ter[c] !== 'b') continue; const bx = i * CS + 10, by = j * CS + 10, d = Math.hypot(bx - x, by - y); if (d < bd && reach(S, x, y, bx, by)) { bd = d; best = { x: bx, y: by }; } } return best; }
@@ -728,7 +740,7 @@ function spawn(S, kind, o = {}) {
     else if (side < 2) { a.x = side ? 990 : 10; a.y = t; } else { a.x = t; a.y = side === 2 ? 10 : 990; }
     if (o.culture) Object.assign(a, o.culture(a));
   }
-  S.agents.push(a); S._a.set(a.id, a);
+  S.agents.push(a); S._a.set(a.id, a); S._agentsById[a.id] = a;
   if (kind === 'child') { const g = (o.g && S._g.has(o.g.id) && !o.g.dead) ? o.g : o.parent ? S._g.get(o.parent.group) : null; if (g) { a.trust[g.leader] = (a.trust[g.leader] || 0) + 0.3; join(S, a, g, o.parent && o.parent.group === g.id ? o.parent.id : g.leader); } }
   return a;
 }
@@ -773,7 +785,7 @@ function dissolve(S, g, silent) {
   const share = g.treasury / Math.max(1, g.members.length);
   for (const id of g.members) { const m = S._a.get(id); if (m) { m.group = null; m.boss = null; m.role = null; m.wealth += share; } }
   g.members = [];
-  S.groups = S.groups.filter(x => x !== g); S._g.delete(g.id);
+  S.groups = S.groups.filter(x => x !== g); S._g.delete(g.id); S._groupsById[g.id] = undefined;
   S.alliances = S.alliances.filter(al => al.a !== g.id && al.b !== g.id);
   for (const k of Object.keys(S.hostility)) { const [p, q] = k.split('|'); if (+p === g.id || +q === g.id) delete S.hostility[k]; }
   if (!silent && S.tick - g.founded > 360) log(S, 'collapse', `«${g.name}» распадается спустя ${yrs(Math.round((S.tick - g.founded) / 360))}`, g.cx, g.cy, g.hue, { why: 'В группе осталось меньше двух человек: остальные ушли, умерли или перебежали к соседям.', gs: [g.id] });
@@ -788,7 +800,7 @@ function createGroup(S, L, others, parent) {
     bureau: 0, entropy: 0, depth: 1, maxDepth: 1, cx: L.x, cy: L.y, target: null, cool: 0, gen: 1, legit: 0.7, pay: 1, avoid: {},
     home: null, houses: [], fields: [], wood: 0, site: null, woodCell: null, stone: 0, tools: 0, stoneCell: null, workshop: null, granary: null, walls: false, lord: null, raided: -1e9, faith: null, shrine: null, dynasty: false, dynName: null, dynGen: 0, code: null, trauma: 0, trades: 0, warsWon: 0, warsLost: 0, reforms: 0, rhist: [], rtype: null, since: S.tick, terr: 0, land: 'common', gov: 'chief', coupCount: 0, bcells: []
   };
-  S.groups.push(g); S._g.set(g.id, g); S.stats.founded++;
+  S.groups.push(g); S._g.set(g.id, g); S._groupsById[g.id] = g; S.stats.founded++;
   S.arch = S.arch || {};
   S.arch[g.id] = { name: g.name, hue, founded: S.tick, end: null, parent: parent || null, into: null };
   // those who split off take their share of the stores, tools and goats (at most half)
@@ -900,7 +912,7 @@ function pickTarget(S, g) {
 
 const N = 50, CS = 20;
 const seasonOf = t => Math.floor((t % 360) / 90);
-const cellAt = (x, y) => clamp(Math.floor(y / CS), 0, N - 1) * N + clamp(Math.floor(x / CS), 0, N - 1);
+const cellAt = (x, y) => clamp(y / CS | 0, 0, N - 1) * N + clamp(x / CS | 0, 0, N - 1);
 function genTerrain(S) {
   const grid = () => { const a = []; for (let i = 0; i < 64; i++) a.push(rnd(S)); return a; };
   const E1 = grid(), E2 = grid(), M1 = grid();
@@ -971,7 +983,8 @@ function aStar(S, c0, c1) {
   const NN = N * N, gS = S._gS || (S._gS = new Float64Array(NN)), from = S._from || (S._from = new Int32Array(NN)), seen = S._seen || (S._seen = new Int32Array(NN));
   S._stamp = (S._stamp || 0) + 1; const stamp = S._stamp;
   const tx = c1 % N, ty = (c1 / N) | 0, h = c => { const dx = Math.abs(c % N - tx), dy = Math.abs(((c / N) | 0) - ty); return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 0.5; };
-  const heap = [], hf = [];
+  const heap = S._pathHeap || (S._pathHeap = []), hf = S._pathPriorities || (S._pathPriorities = []);
+  heap.length = hf.length = 0;
   const push = (cell, priority) => {
     let i = heap.length;
     while (i > 0) {
@@ -1032,12 +1045,28 @@ function getPath(S, c0, c1) {
 function comps(S) {
   const key = S.navV + '|' + (S.frozen ? 1 : 0);
   if (S._comp && S._compK === key) return S._comp;
-  const C = S._comp || (S._comp = new Int32Array(N * N)); C.fill(0); let id = 0; const st = [];
-  for (let c0 = 0; c0 < N * N; c0++) {
-    if (C[c0] || !passCost(S, c0)) continue; id++; C[c0] = id; st.push(c0);
-    while (st.length) { const c = st.pop(), cx = c % N, cy = (c / N) | 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue; const q = ny * N + nx; if (!C[q] && passCost(S, q)) { C[q] = id; st.push(q); } } }
+  const costs = navigationCosts(S);
+  const C = S._comp || (S._comp = new Int32Array(N * N));
+  C.fill(0);
+  let id = 0;
+  const stack = [];
+  const visit = c => {
+    if (!C[c] && costs[c]) { C[c] = id; stack.push(c); }
+  };
+  for (let c = 0; c < N * N; c++) {
+    if (C[c] || !costs[c]) continue;
+    id++;
+    visit(c);
+    while (stack.length) {
+      const next = stack.pop(), x = next % N;
+      if (x < N - 1) visit(next + 1);
+      if (x > 0) visit(next - 1);
+      if (next < N * (N - 1)) visit(next + N);
+      if (next >= N) visit(next - N);
+    }
   }
-  S._compK = key; return C;
+  S._compK = key;
+  return C;
 }
 function reach(S, x0, y0, x1, y1) { const C = comps(S), a = C[cellAt(x0, y0)], b = C[cellAt(x1, y1)]; return !!a && a === b; }
 function blocked(S, x0, y0, x1, y1) {
@@ -1066,13 +1095,20 @@ function toLand(S, a) {
     a.x = x * CS + 10 + gauss(S) * 3; a.y = y * CS + 10 + gauss(S) * 3; a.path = null; return;
   }
 }
-function navStep(S, a, ca, ct) {
+function nextPathCell(S, a, ca, ct) {
   if (a.pc !== ct || a.pv !== S.navV || !a.path) { a.path = getPath(S, ca, ct); a.pc = ct; a.pv = S.navV; a.pi = 0; }
-  const P = a.path; if (!P) return null;
-  for (let k = a.pi; k < Math.min(P.length, a.pi + 6); k++) if (P[k] === ca) { a.pi = k; break; }
-  if (P[a.pi] !== ca && !P.includes(ca)) { a.path = getPath(S, ca, ct); a.pi = 0; if (!a.path) return null; }
-  const nx = a.path[Math.min(a.pi + 1, a.path.length - 1)], j = ((a.id * 13) % 7) - 3;
-  return { x: (nx % N) * CS + 10 + j, y: ((nx / N) | 0) * CS + 10 + j };
+  const path = a.path;
+  if (!path) return -1;
+  if (path[a.pi] !== ca) {
+    const end = Math.min(path.length, a.pi + 6);
+    for (let k = a.pi + 1; k < end; k++) if (path[k] === ca) { a.pi = k; break; }
+    if (path[a.pi] !== ca && !path.includes(ca)) {
+      a.path = getPath(S, ca, ct);
+      a.pi = 0;
+      if (!a.path) return -1;
+    }
+  }
+  return a.path[Math.min(a.pi + 1, a.path.length - 1)];
 }
 function roadsYear(S) {
   let ch = 0;
@@ -1332,18 +1368,20 @@ function specialSpot(S, g, kind) {
     : kind === 'well' && wellOk(S, choice.x, choice.y) < 0.5 ? 120 : 60;
   return { kind, ...choice, angle, prog: 0, need };
 }
+const CARGO_JOB = { food: 'farm', wood: 'wood', stone: 'stone' };
 const HAUL = 2.5, CAP = { food: 4, wood: 3, stone: 2 };
 function load(m, k, v) { if (m.lk && m.lk !== k && m.load > 0) return; m.lk = k; m.load = (m.load || 0) + v; if (m.load >= CAP[k]) m.haul = true; }
 function storeOf(g, k) { return k === 'food' && g.granary ? g.granary : k === 'stone' && g.workshop ? g.workshop : g.home; }
 function deliver(S) {
+  const winter = seasonOf(S.tick) === 0;
   for (const a of S.agents) {
     if (!a.load) continue;
-    const g = a.group && S._g.get(a.group);
+    const g = a.group && S._groupsById[a.group];
     if (!g || !g.home) { a.load = 0; a.haul = false; a.lk = null; continue; }
     const st = storeOf(g, a.lk);
-    if (a.haul && Math.hypot(a.x - st.x, a.y - st.y) < 16) { addStock(g, a.lk, a.load); a.load = 0; a.haul = false; a.lk = null; }
-    else if (!a.haul && seasonOf(S.tick) === 0 && a.lk === 'food' && a.job !== 'gather') a.haul = true;
-    else if (!a.haul && a.job !== ({ food: a.job === 'gather' ? 'gather' : 'farm', wood: 'wood', stone: 'stone' })[a.lk]) a.haul = true;
+    if (a.haul && within(a.x - st.x, a.y - st.y, 16)) { addStock(g, a.lk, a.load); a.load = 0; a.haul = false; a.lk = null; }
+    else if (!a.haul && winter && a.lk === 'food' && a.job !== 'gather') a.haul = true;
+    else if (!a.haul && a.job !== (a.lk === 'food' && a.job === 'gather' ? 'gather' : CARGO_JOB[a.lk])) a.haul = true;
   }
 }
 /* ---------- Settlement geometry shared by the simulation and both map views ---------- */
@@ -3403,7 +3441,19 @@ function goalEnd(S, a, x, out, txt, ev, quiet) {
 }
 // a life ends (or leaves the island): what was still wanted stays undone
 function goalsOnDeath(S, a, why, ev) {
-  for (const x of a.goals || []) if (!x.end) { x.end = S.tick; if (ev) x.endEv = cite(S, ev); const away = why === 'emigr' || why === 'move'; x.out = away ? 'abandoned' : 'died'; x.endTxt = away ? 'уплывает с острова, так и не добившись своего' : 'умирает, так и не добившись своего'; const k = 'arc_' + x.k + '_' + x.out; S.stats[k] = (S.stats[k] || 0) + 1; }
+  const away = why === 'emigr' || why === 'move';
+  for (const x of a.goals || []) if (!x.end) {
+    if (away) {
+      goalEnd(S, a, x, 'abandoned', 'уплывает с острова, так и не добившись своего', ev, true);
+    } else {
+      x.end = S.tick;
+      if (ev) x.endEv = cite(S, ev);
+      x.out = 'died';
+      x.endTxt = 'умирает, так и не добившись своего';
+      const key = 'arc_' + x.k + '_died';
+      S.stats[key] = (S.stats[key] || 0) + 1;
+    }
+  }
 }
 // the event of the line just written about a.leadership (a coup, a succession, a founding): the ending of a road to power
 function lastRef(a, kinds, since) { for (let i = (a.bio || []).length - 1; i >= 0 && a.bio[i][0] >= since; i--) if (kinds.includes(a.bio[i][1]) && a.bio[i][3]) return a.bio[i][3]; return null; }
@@ -3571,11 +3621,12 @@ function step(S) {
   const P = S.params;
   const reg = 0.38 * (1.25 - P.scarcity) * (S.tick < S.drought ? 0.3 : 1) * (seasonOf(S.tick) === 0 ? 0.45 : 1.15);
   const regF = 0.38 * (1.25 - P.scarcity) * 1.9;
-  for (const n of S.nodes) n.amt = Math.min(n.cap, n.amt + (n.kind === 'fish' ? regF : reg * 1.25));
+  const regLand = reg * 1.25;
+  for (const n of S.nodes) n.amt = Math.min(n.cap, n.amt + (n.kind === 'fish' ? regF : regLand));
   for (const g of S.groups) {
     if (g.home) { g.cx = g.home.x; g.cy = g.home.y; continue; }
     let sx = 0, sy = 0;
-    for (const id of g.members) { const m = S._a.get(id); sx += m.x; sy += m.y; }
+    for (const id of g.members) { const m = S._agentsById[id]; sx += m.x; sy += m.y; }
     g.cx = sx / g.members.length; g.cy = sy / g.members.length;
   }
   move(S);
@@ -3589,14 +3640,37 @@ function step(S) {
   inflow(S);
 }
 
-function nodeOf(S, id) { for (const n of S.nodes) if (n.id === id) return n; return null; }
+function nodeOf(S, id) {
+  if (!S._nodesById) S._nodesById = new Map(S.nodes.map(node => [node.id, node]));
+  return S._nodesById.get(id) || null;
+}
+
+function moveDistance(dx, dy) {
+  const x = Math.abs(dx), y = Math.abs(dy);
+  const max = Math.max(x, y);
+  if (!max) return 0;
+  // Use the same normalized two-term sum as hypot, without its generic argument loop.
+  const ratio = Math.min(x, y) / max;
+  return Math.sqrt(1 + ratio * ratio) * max;
+}
+
+function walkNoise(t) {
+  return (randomAt((t + RNG_STEP) | 0) + randomAt((t + 2 * RNG_STEP) | 0) +
+    randomAt((t + 3 * RNG_STEP) | 0) - 1.5) / 1.5 * 0.5;
+}
 
 function move(S) {
   const A = S.agents;
+  const tick = S.tick;
+  const day = tick % 360, frozen = S.frozen;
+  const fordRisk = frozen ? (day < 20 || day >= 70 ? 0.002 : 0.0004)
+    : day >= 90 && day < 150 ? 0.008 : 0.00025;
+  const guardPost = Math.floor(tick / 160), guardWall = Math.floor(tick / 120);
+  const storm = S.weather?.kind === 'storm';
   const costs = navigationCosts(S), drag = S._moveDrag, walls = wallCells(S);
   for (const a of A) {
     let tx, ty;
-    const gH = a.group && S._g.get(a.group);
+    const gH = a.group && S._groupsById[a.group];
     const wp = a.war ? warTarget(S, a) : null;
     const cp = !wp && a.car ? carTarget(S, a) : null;
     if (wp) { tx = wp.x + ((a.id * 7) % 15 - 7); ty = wp.y + ((a.id * 11) % 15 - 7); }
@@ -3611,56 +3685,78 @@ function move(S) {
       else if (a.job === 'stone' && g.stoneCell !== null) p = { x: (g.stoneCell % 50) * 20 + 10, y: Math.floor(g.stoneCell / 50) * 20 + 10 };
       else if (a.job === 'craft') p = g.workshop || g.home;
       else if (a.job === 'pray' && g.shrine) p = g.shrine;
-      else if (a.job === 'fish' && g.landing && S.weather?.kind !== 'storm') p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
-      else if (a.job === 'herd' && g.pasture) p = { x: g.pasture.x + Math.cos(S.tick / 90 + a.id) * 22, y: g.pasture.y + Math.sin(S.tick / 90 + a.id) * 22 };
-      else if (a.job === 'water' && g.wsrc) { const tgt = a.wc ? g.home : g.wsrc; if (Math.hypot(a.x - tgt.x, a.y - tgt.y) < 14) a.wc = !a.wc; p = a.wc ? g.home : g.wsrc; }
+      else if (a.job === 'fish' && g.landing && !storm) p = { x: g.landing.x + ((a.id * 7) % 9) - 4, y: g.landing.y + ((a.id * 3) % 9) - 4 };
+      else if (a.job === 'herd' && g.pasture) p = { x: g.pasture.x + Math.cos(tick / 90 + a.id) * 22, y: g.pasture.y + Math.sin(tick / 90 + a.id) * 22 };
+      else if (a.job === 'water' && g.wsrc) { const tgt = a.wc ? g.home : g.wsrc; if (within(a.x - tgt.x, a.y - tgt.y, 14)) a.wc = !a.wc; p = a.wc ? g.home : g.wsrc; }
       else if (a.job === 'guard') {
         const bc = g.bcells || [];
-        if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + Math.floor(S.tick / 160)) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
+        if (bc.length && a.id % 3 !== 0) { const c = bc[(a.id * 7 + guardPost) % bc.length]; p = { x: (c % 50) * 20 + 10, y: Math.floor(c / 50) * 20 + 10 }; }
         else if (g.fortifications?.length) {
-          const wall = g.fortifications[(a.id + Math.floor(S.tick / 120)) % g.fortifications.length];
+          const wall = g.fortifications[(a.id + guardWall) % g.fortifications.length];
           const { a: from, b: to } = wall.segments[a.id % wall.segments.length];
           p = { x: (from.x + to.x) / 2 - (wall.facing?.x || 0) * 5, y: (from.y + to.y) / 2 - (wall.facing?.y || 0) * 5 };
-        } else { const ang = a.id * 1.7 + S.tick / 140; p = { x: g.home.x + Math.cos(ang) * 34, y: g.home.y + Math.sin(ang) * 34 }; }
+        } else { const ang = a.id * 1.7 + tick / 140; p = { x: g.home.x + Math.cos(ang) * 34, y: g.home.y + Math.sin(ang) * 34 }; }
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
-      if (a.rite && S.tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
+      if (a.rite && tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
       const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
       tx = p.x + j * spread; ty = p.y + j2 * spread;
     } else if (a.group) {
-      const g = S._g.get(a.group);
+      const g = S._groupsById[a.group];
       if (a.role === 'leader') {
         const n = nodeOf(S, g.target);
         const ga = g.id * 2.39996;
         tx = n ? n.x + Math.cos(ga) * 40 : g.cx; ty = n ? n.y + Math.sin(ga) * 40 : g.cy;
-        tx += Math.sin(S.tick / 47 + a.id) * 12; ty += Math.cos(S.tick / 53 + a.id) * 12;
+        tx += Math.sin(tick / 47 + a.id) * 12; ty += Math.cos(tick / 53 + a.id) * 12;
       } else {
-        const b = S._a.get(a.boss) || S._a.get(g.leader);
-        const ang = (a.id * 2.39996) % (Math.PI * 2) + Math.sin(S.tick / 90 + a.id) * 0.4;
+        const b = S._agentsById[a.boss] || S._agentsById[g.leader];
+        const ang = (a.id * 2.39996) % (Math.PI * 2) + Math.sin(tick / 90 + a.id) * 0.4;
         const r = 26 + (a.id % 3) * 9;
         tx = b.x + Math.cos(ang) * r; ty = b.y + Math.sin(ang) * r;
       }
     } else {
       let n = nodeOf(S, a.tnode);
-      if (!n || n.amt < 4 || (S.tick + a.id) % 90 === 0) {
+      if (!n || n.amt < 4 || (tick + a.id) % 90 === 0) {
         let bv = -1;
         for (const q of S.nodes) { const v = (q.amt + 2) / (1 + Math.hypot(q.x - a.x, q.y - a.y) / 110) * (0.7 + rnd(S) * 0.6) * (S.own && S.own[cellAt(q.x, q.y)] ? 0.4 : 1); if (v > bv) { bv = v; n = q; } }
         a.tnode = n ? n.id : null;
       }
       tx = n ? n.x + Math.cos(a.id) * 22 : a.x; ty = n ? n.y + Math.sin(a.id) * 22 : a.y;
     }
-    if (S.ter[cellAt(a.x, a.y)] === 's' || (S.ter[cellAt(a.x, a.y)] === 'w' && !costs[cellAt(a.x, a.y)])) toLand(S, a);
-    const ca = cellAt(a.x, a.y), ct = cellAt(tx, ty); let onPath = false;
+    let ca = cellAt(a.x, a.y);
+    const terrain = S.ter[ca];
+    if (terrain === 's' || (terrain === 'w' && !costs[ca])) {
+      toLand(S, a);
+      ca = cellAt(a.x, a.y);
+    }
+    const ct = cellAt(tx, ty);
+    let onPath = false;
     if (ca !== ct) {
       const far = Math.abs(ca % N - ct % N) + Math.abs(((ca / N) | 0) - ((ct / N) | 0)) > 2;
       const bk = ca * 2500 + ct; if (a.bkK !== bk || a.bkV !== S.navV) { a.bkK = bk; a.bkV = S.navV; a.bkR = !far && blocked(S, a.x, a.y, tx, ty); }
-      if (far || a.bkR) { const wp = navStep(S, a, ca, ct); if (wp) { tx = wp.x; ty = wp.y; a.stuck = 0; onPath = far; } else { tx = a.x; ty = a.y; a.stuck = (a.stuck || 0) + 1; } }
+      if (far || a.bkR) {
+        const cell = nextPathCell(S, a, ca, ct);
+        if (cell >= 0) {
+          const offset = ((a.id * 13) % 7) - 3;
+          tx = (cell % N) * CS + 10 + offset;
+          ty = ((cell / N) | 0) * CS + 10 + offset;
+          a.stuck = 0;
+          onPath = far;
+        } else {
+          tx = a.x;
+          ty = a.y;
+          a.stuck = (a.stuck || 0) + 1;
+        }
+      }
     }
-    const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
+    const dx = tx - a.x, dy = ty - a.y, d = moveDistance(dx, dy) || 1;
     const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
-    let nx = a.x + dx / d * sp + gauss(S) * 0.5, ny = a.y + dy / d * sp + gauss(S) * 0.5;
+    const rng = S.rng;
+    let nx = a.x + dx / d * sp + walkNoise(rng);
+    let ny = a.y + dy / d * sp + walkNoise((rng + 3 * RNG_STEP) | 0);
+    S.rng = (rng + 6 * RNG_STEP) | 0;
     if (walls[ca]) { const next = wallWalk(a, { x: nx, y: ny }, { x: tx, y: ty }, walls[ca]); nx = next.x; ny = next.y; }
     let nc = cellAt(nx, ny);
     if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; nc = ca; }
@@ -3668,33 +3764,82 @@ function move(S) {
     if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
     if (nc !== a.lc) {
       if (S.ter[nc] === 'w' && !S.bridge[nc]) {
-        const gg = a.group && S._g.get(a.group); if (gg) gg.cross = (gg.cross || 0) + 1;
+        const gg = a.group && S._groupsById[a.group]; if (gg) gg.cross = (gg.cross || 0) + 1;
         // a ford is dangerous in the spring flood and with a load on the back; thin ice at the start and end of winter
-        const dy = S.tick % 360, flood = dy >= 90 && dy < 150, risk = S.frozen ? (dy < 20 || dy >= 70 ? 0.002 : 0.0004) : flood ? 0.008 : 0.00025;
-        if (rnd(S) < risk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
+        if (rnd(S) < fordRisk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
       }
       a.lc = nc;
     }
   }
   if (S._drown && S._drown.length) { for (const a of S._drown) drown(S, a); S._drown = []; }
-  const X = A.slice().sort((p, q) => p.x - q.x);
-  for (let i = 0; i < X.length; i++) {
-    const a = X[i];
-    for (let j = i + 1; j < X.length; j++) {
-      const b = X[j], dx = b.x - a.x, dy = b.y - a.y;
+  meet(S, A, walls);
+  for (const a of A) { a.x = clamp(a.x, 6, 994); a.y = clamp(a.y, 6, 994); }
+}
+
+function meet(S, agents, walls) {
+  // Agents are appended in ID order. Use that same tie order even when the
+  // previous day's list makes the sort largely incremental.
+  const tail = agents[agents.length - 1];
+  if (S._meetingAgents !== agents || S._meetingTail !== tail) {
+    S._meetingAgents = agents;
+    S._meetingTail = tail;
+    S._meetingOrder = agents.slice().sort((p, q) => p.x - q.x);
+  } else {
+    const order = S._meetingOrder;
+    for (let i = 1; i < order.length; i++) {
+      const agent = order[i], x = agent.x;
+      let slot = i;
+      while (slot > 0) {
+        const previous = order[slot - 1];
+        if (previous.x < x || (previous.x === x && previous.id < agent.id)) break;
+        order[slot--] = previous;
+      }
+      order[slot] = agent;
+    }
+  }
+  const order = S._meetingOrder;
+  const size = order.length;
+  if (!S._meetingX || S._meetingX.length < size) {
+    S._meetingX = new Float64Array(size + 32);
+    S._meetingY = new Float64Array(size + 32);
+  }
+  const xs = S._meetingX, ys = S._meetingY;
+  for (let i = 0; i < size; i++) {
+    xs[i] = order[i].x;
+    ys[i] = order[i].y;
+  }
+  let rng = S.rng;
+  for (let i = 0; i < size; i++) {
+    const a = order[i];
+    let ax = xs[i], ay = ys[i];
+    for (let j = i + 1; j < size; j++) {
+      const dx = xs[j] - ax;
       if (dx > 55) break;
+      const dy = ys[j] - ay;
       if (dy > 55 || dy < -55) continue;
       const d2 = dx * dx + dy * dy;
       if (d2 < 81) {
         const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
-        const nearA = walls[cellAt(a.x, a.y)], nearB = walls[cellAt(b.x, b.y)];
-        if (!nearA?.some(w => lineCrossing(a, { x: a.x - dx * f, y: a.y - dy * f }, w.a, w.b) !== null)) { a.x -= dx * f; a.y -= dy * f; }
-        if (!nearB?.some(w => lineCrossing(b, { x: b.x + dx * f, y: b.y + dy * f }, w.a, w.b) !== null)) { b.x += dx * f; b.y += dy * f; }
+        const b = order[j];
+        const nearA = walls[cellAt(ax, ay)], nearB = walls[cellAt(xs[j], ys[j])];
+        const shiftX = dx * f, shiftY = dy * f;
+        if (!nearA?.some(w => lineCrossing(a, { x: ax - shiftX, y: ay - shiftY }, w.a, w.b) !== null)) {
+          a.x = ax -= shiftX;
+          a.y = ay -= shiftY;
+        }
+        if (!nearB?.some(w => lineCrossing(b, { x: xs[j] + shiftX, y: ys[j] + shiftY }, w.a, w.b) !== null)) {
+          b.x = xs[j] += shiftX;
+          b.y = ys[j] += shiftY;
+        }
       }
-      if (d2 < 3025 && rnd(S) < 0.02) interact(S, a, b);
+      if (d2 < 3025 && randomAt(rng = (rng + RNG_STEP) | 0) < 0.02) {
+        S.rng = rng;
+        interact(S, a, order[j]);
+        rng = S.rng;
+      }
     }
   }
-  for (const a of A) { a.x = clamp(a.x, 6, 994); a.y = clamp(a.y, 6, 994); }
+  S.rng = rng;
 }
 
 function bump(a, b, d) { a.trust[b.id] = clamp((a.trust[b.id] || 0) + d, -1, 1); }
@@ -3705,11 +3850,11 @@ function interact(S, a, b) {
   const ga = a.group, gb = b.group;
   if (a.trust[b.id] === undefined) a.trust[b.id] = 0.25 * (b.rep || 0);
   if (b.trust[a.id] === undefined) b.trust[a.id] = 0.25 * (a.rep || 0);
-  if (ga && ga === gb) { const Lid = S._g.get(ga).leader; if (Lid !== a.id && Lid !== b.id) { const ta = a.trust[Lid] || 0, tb = b.trust[Lid] || 0, w = 0.05; if ((a.trust[b.id] || 0) > 0.1) a.trust[Lid] = ta + (tb - ta) * w; if ((b.trust[a.id] || 0) > 0.1) b.trust[Lid] = tb + (ta - tb) * w; } }
+  if (ga && ga === gb) { const Lid = S._groupsById[ga].leader; if (Lid !== a.id && Lid !== b.id) { const ta = a.trust[Lid] || 0, tb = b.trust[Lid] || 0, w = 0.05; if ((a.trust[b.id] || 0) > 0.1) a.trust[Lid] = ta + (tb - ta) * w; if ((b.trust[a.id] || 0) > 0.1) b.trust[Lid] = tb + (ta - tb) * w; } }
   if (ga && ga === gb) {
     const d = 0.025 * (a.coop + b.coop) / 2 - 0.012 * (a.res + b.res) / 2;
     bump(a, b, d); bump(b, a, d);
-    const g = S._g.get(ga);
+    const g = S._groupsById[ga];
     for (const [x, y] of [[a, b], [b, a]]) {
       if (x.id !== g.leader && y.id !== g.leader && x.ambition > 0.6 && y.res > 0.15) {
         y.trust[g.leader] = clamp((y.trust[g.leader] || 0) - 0.035 * x.ambition * (0.3 + y.res), -1, 1);
@@ -3727,7 +3872,7 @@ function interact(S, a, b) {
       log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Лидером становится ${L.name}: у него больше амбиций.`, who: [L.id, o.id], gs: [g.id] });
     }
   } else if (!ga || !gb) {
-    const s = ga ? b : a, m = ga ? a : b, g = S._g.get(m.group), L = S._a.get(g.leader);
+    const s = ga ? b : a, m = ga ? a : b, g = S._groupsById[m.group], L = S._agentsById[g.leader];
     bump(s, m, 0.035 * s.coop + 0.008); bump(m, s, 0.02 * m.coop);
     const open = 0.18 + 0.5 * L.coop - 0.004 * g.members.length;
     if ((s.trust[m.id] || 0) > (s.wealth < 1 ? 0.12 : 0.22) && rnd(S) < open * (s.wealth < 1 ? 0.9 : 0.5)) { join(S, s, g, m.id); s.trust[g.leader] = Math.max(s.trust[g.leader] || 0, 0.1); }
@@ -3735,7 +3880,7 @@ function interact(S, a, b) {
     const h = S.hostility[key(ga, gb)] || 0, al = allied(S, ga, gb);
     const d = al ? 0.02 : h > 0.4 ? -0.03 * h : 0.012 * (a.coop + b.coop) / 2 - 0.004;
     bump(a, b, d); bump(b, a, d);
-    const gA = S._g.get(ga), gB = S._g.get(gb);
+    const gA = S._groupsById[ga], gB = S._groupsById[gb];
     for (const [x, y, gx, gy] of [[a, b, gA, gB], [b, a, gB, gA]]) {
       if (x.res > 0.45 && x.id !== gx.leader && (x.trust[y.id] || 0) > 0.25 && gy.pay > gx.pay * 1.2 && rnd(S) < 0.1) { join(S, x, gy, y.id); gy.poached = (gy.poached || 0) + 1; break; }
     }
@@ -3744,14 +3889,18 @@ function interact(S, a, b) {
 
 function produce(S) {
   const P = S.params, claims = new Map(), season = seasonOf(S.tick);
+  const cropDrought = S.tick < S.drought ? 0.4 : 1;
+  const cropScarcity = 1.2 - 0.5 * P.scarcity;
   const add = (n, c) => { if (!claims.has(n.id)) claims.set(n.id, { n, list: [] }); claims.get(n.id).list.push(c); };
   for (const g of S.groups) {
     const k = g.members.length, syn = (1 + P.synergy * 4 * (1 - Math.exp(-(k - 1) / 6))) / (1 + g.entropy);
-    const n = nodeOf(S, g.target), L = S._a.get(g.leader);
+    const n = nodeOf(S, g.target);
+    const effortCost = 0.0012 * (1 + g.entropy * 0.7);
     if (!g.home) {
+      const L = S._agentsById[g.leader];
       if (!n || !L || Math.hypot(L.x - n.x, L.y - n.y) > 90) continue;
       let E = 0;
-      for (const id of g.members) { const m = S._a.get(id), e = m.skill * m.energy; m.eff += e; E += e; m.energy -= 0.0012 * (1 + g.entropy * 0.7); }
+      for (const id of g.members) { const m = S._agentsById[id], e = m.skill * m.energy; m.eff += e; E += e; m.energy -= effortCost; }
       add(n, { g, pot: 0.14 * E * syn });
       continue;
     }
@@ -3759,31 +3908,32 @@ function produce(S) {
     g._gath = [];
     const tm = 1 + 0.5 * Math.min(1, g.tools / Math.max(1, k * 0.6));
     for (const id of g.members) {
-      const m = S._a.get(id), e = jobSkill(m, m.job) * m.energy * tm;
-      let worked = false;
+      const m = S._agentsById[id];
       if (m.haul) continue;
-      if (m.job === 'gather') { if (n && Math.hypot(m.x - n.x, m.y - n.y) < 70) { const pt = 0.12 * e * syn * HAUL; gpot += pt; g._gath.push([m, pt]); worked = true; } }
+      const e = jobSkill(m, m.job) * m.energy * tm;
+      let worked = false;
+      if (m.job === 'gather') { if (n && within(m.x - n.x, m.y - n.y, 70)) { const pt = 0.12 * e * syn * HAUL; gpot += pt; g._gath.push([m, pt]); worked = true; } }
       else if (m.job === 'farm') {
         const f = g.fields[(m.slot || 0) % Math.max(1, g.fields.length)];
-        if (f && season !== 0 && Math.hypot(m.x - f.x, m.y - f.y) < 30) {
-          const food = 0.34 * e * syn * f.fert * (S.tick < S.drought ? 0.4 : 1) * (1.2 - 0.5 * P.scarcity) * HAUL;
+        if (f && season !== 0 && within(m.x - f.x, m.y - f.y, 30)) {
+          const food = 0.34 * e * syn * f.fert * cropDrought * cropScarcity * HAUL;
           const v = farmYield(S, f, season, food, e);
-          const ow = f.owner && S._a.get(f.owner);
+          const ow = f.owner && S._agentsById[f.owner];
           if (g.land === 'private' && ow && ow.group === g.id) { if (ow === m) { m.wealth += v * 0.5; load(m, 'food', v * 0.5); } else { ow.wealth += v * 0.35; m.wealth += v * 0.15; load(m, 'food', v * 0.5); m.hired = S.tick; } }
           else load(m, 'food', v);
           worked = true;
         }
       } else if (m.job === 'wood') {
         const c = g.woodCell;
-        if (c !== null && S.wood[c] > 1 && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
+        if (c !== null && S.wood[c] > 1 && within(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10), 30)) { const v = 0.1 * e * syn * HAUL; S.wood[c] -= v; load(m, 'wood', v); worked = true; }
       } else if (m.job === 'build') {
         worked = !!g.site && workSite(S, g, m, e * syn);
       } else if (m.job === 'stone') {
         const c = g.stoneCell;
-        if (c !== null && Math.hypot(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10)) < 30) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }
+        if (c !== null && within(m.x - ((c % 50) * 20 + 10), m.y - (Math.floor(c / 50) * 20 + 10), 30)) { load(m, 'stone', 0.07 * e * syn * HAUL); worked = true; }
       } else if (m.job === 'craft') {
         const w = g.workshop || g.home;
-        if (w && Math.hypot(m.x - w.x, m.y - w.y) < 26) {
+        if (w && within(m.x - w.x, m.y - w.y, 26)) {
           const n0 = g.members.length, want = g.workshop && g.tools < n0 * 0.6 && g.wood >= 1 && g.stone >= 1 ? 'tools' : (g.pots || 0) < n0 * 0.5 ? 'pots' : (g.goats || 0) >= 4 && (g.cloth || 0) < n0 * 0.6 ? 'cloth' : g.workshop && g.wood >= 1 && g.stone >= 1 && g.tools < n0 * 1.2 ? 'tools' : null;
           if (want) {
             g.craftProg = (g.craftProg || 0) + e * syn; worked = true; m.craftKind = want;
@@ -3797,7 +3947,7 @@ function produce(S) {
         }
       }
       if (worked) {
-        m.eff += e; m.energy -= 0.0012 * (1 + g.entropy * 0.7); workers++;
+        m.eff += e; m.energy -= effortCost; workers++;
         const before = m.xp[m.job] || 0; m.xp[m.job] = before + 0.0009;
         if (before < 1 && m.xp[m.job] >= 1) { m.master = m.job; bio(S, m, 'master', `Становится мастером: ${TITLE[m.job]}${m.teacherName ? `, как ${m.sex === 'f' ? 'её' : 'его'} учитель ${m.teacherName}` : ''}`); if (!S.masters) S.masters = {}; if (!S.masters[m.job]) { S.masters[m.job] = 1; log(S, 'tech', `${m.name} становится первым в мире: ${TITLE[m.job]}`, m.x, m.y, g.hue, { why: `Три года одной и той же работы. Опыт поднимает выработку на 60%, поэтому лидер ставит мастера на его дело в первую очередь. Так рождается специализация.`, who: [m.id], gs: [g.id] }); } }
       }
@@ -3835,22 +3985,30 @@ function lifecycle(S) {
     // light hunger wears one down slowly, deep hunger fast; the deficit is not a debt that grows without end
     if (a.wealth < -1.5) a.wealth = -1.5;
     if (a.wealth < 0) a.energy -= 0.0004 + 0.0004 * Math.min(1, -a.wealth / 1.5); else a.energy += 0.003 * (1.05 - a.energy);
-    const gq = a.group && S._g.get(a.group); if (gq && gq.home) { if (gq.thirst) a.energy -= 0.0016; else if (gq.wShort > 1) a.energy -= 0.0012; }
+    const gq = a.group && S._groupsById[a.group]; if (gq && gq.home) { if (gq.thirst) a.energy -= 0.0016; else if (gq.wShort > 1) a.energy -= 0.0012; }
     if (winter) { if (a.shel && a.group) a.energy += 0.0004; else a.energy -= 0.0008; }
     a.energy = clamp(a.energy, 0, 1);
     if (a.age > a.life) dead.push([a, 'death']);
     else if (a.energy < 0.03) dead.push([a, 'burnout']);
-    else if (rnd(S) < (0.004 + 0.0013 * Math.exp((a.age - 25) / 11)) / 360 * (a.energy < 0.3 ? 1.5 : 1) * (winter ? (a.group && (gq?.cloth || 0) >= (gq?.members.length || 0) * 0.5 ? 1.05 : 1.25) : 0.9) * (1 + 1.6 * (gq?.dirty || 0))) dead.push([a, 'sick']);
+    else {
+      const roll = rnd(S), dirty = gq?.dirty || 0;
+      // At age 80 or less and dirt at most 1.5, the maximum daily risk is below 0.004.
+      if ((roll < 0.004 || a.age > 80 || dirty > 1.5) &&
+          roll < (0.004 + 0.0013 * Math.exp((a.age - 25) / 11)) / 360 *
+            (a.energy < 0.3 ? 1.5 : 1) *
+            (winter ? (a.group && (gq?.cloth || 0) >= (gq?.members.length || 0) * 0.5 ? 1.05 : 1.25) : 0.9) *
+            (1 + 1.6 * dirty)) dead.push([a, 'sick']);
+    }
   }
   for (const [a, why] of dead) removeAgent(S, a, why);
 }
 
-function removeAgent(S, a, why) {
+function removeAgent(S, a, why, departure) {
   if (!S._a.has(a.id)) return;
   if (why !== 'move' && why !== 'emigr') houseOwnerDies(S, a);
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
-  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why);
+  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why, departure);
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
@@ -3867,7 +4025,7 @@ function removeAgent(S, a, why) {
     for (const o of S.agents) if (o.patron === a.id) o.patron = heir && rnd(S) < 0.6 ? heir.id : null;
   }
   if (a.group) leave(S, a, why);
-  S.agents = S.agents.filter(x => x !== a); S._a.delete(a.id);
+  S.agents = S.agents.filter(x => x !== a); S._a.delete(a.id); S._agentsById[a.id] = undefined;
 }
 
 function inflow(S) {
@@ -4562,6 +4720,7 @@ function shock(S, kind) {
     do { x = 80 + rnd(S) * 840; y = 80 + rnd(S) * 840; } while (t++ < 200 && S.nodes.some(n => Math.hypot(n.x - x, n.y - y) < 150));
     S.nodes.push({ id: S.nextId++, x, y, amt: 90, cap: 90 });
     if (S.nodes.length > 14) S.nodes.shift();
+    S._nodesById = null;
     log(S, 'shock', 'Открыт новый богатый источник', x, y, 45, { why: 'Новый ресурс меняет баланс сил: кто дотянется до него первым, тот усилится.' });
   }
   if (kind === 'strangers') {
@@ -4685,6 +4844,7 @@ function world(seed) {
   resetView();
 }
 function resetView() {
+  mainRunner.reset();
   D = new Map(); F = []; sel = null; closeFocus(true);
   acc = dayWatch ? dawnFraction() : 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
@@ -4692,6 +4852,80 @@ function resetView() {
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, распределение добычи, иерархия по охвату управления, энтропия от размера, уровней, обид и бюрократии.`;
 }
 
+// A single-file page can use the same engine in its workers, including when opened from disk.
+function engineSource() { return $('sim-source').textContent; }
+function stepWorlds(worlds, days, deadline = Infinity) {
+  for (let day = 0; day < days; day++) {
+    for (const world of worlds) SIM.step(world);
+    if (performance.now() >= deadline) break;
+  }
+}
+
+function backgroundWorlds(read, display) {
+  let worker, pending, revision = 0;
+  function reset() {
+    pending?.finish(false);
+    pending = null;
+    revision++;
+    if (worker) worker.postMessage({ revision, snapshots: read().map(SIM.serialize) });
+  }
+  function fallback() {
+    worker?.terminate();
+    worker = null;
+    pending?.finish(false);
+    pending = null;
+  }
+  if (typeof Worker !== 'undefined') {
+    const code = `
+      let worlds;
+      ${stepWorlds.toString()}
+      onmessage = ({ data }) => {
+        if (data.snapshots) {
+          worlds = data.snapshots.map(SIM.restore);
+          return;
+        }
+        worlds.forEach((world, i) => { world.params = data.params[i]; });
+        stepWorlds(worlds, data.days);
+        postMessage({ revision: data.revision, snapshots: worlds.map(SIM.serialize) });
+      };
+    `;
+    const url = URL.createObjectURL(new Blob([engineSource(), code], { type: 'text/javascript' }));
+    try {
+      worker = new Worker(url);
+      worker.onerror = fallback;
+      worker.onmessageerror = fallback;
+      worker.onmessage = ({ data }) => {
+        if (data.revision !== revision || !pending) return;
+        const old = read();
+        const worlds = data.snapshots.map((snapshot, i) => {
+          const world = SIM.restore(snapshot);
+          world.params = old[i].params;
+          return world;
+        });
+        const request = pending;
+        pending = null;
+        display(worlds);
+        request.finish(true);
+      };
+    } catch (error) { fallback(); }
+    finally { URL.revokeObjectURL(url); }
+  }
+  return {
+    reset,
+    get busy() { return !!pending; },
+    advance(days, finish) {
+      if (worker) {
+        pending = { finish };
+        worker.postMessage({ revision, days, params: read().map(world => world.params) });
+      } else {
+        stepWorlds(read(), days, performance.now() + 8);
+        finish(true);
+      }
+    },
+  };
+}
+
+const mainRunner = backgroundWorlds(() => [S], ([world]) => { S = world; });
 /* ---------- focus: auto-stop, camera, explanation ---------- */
 // linked chronicle: the events that led to this one, each can be opened (even years later, after it left the feed)
 function causesHtml(e) {
@@ -4703,7 +4937,11 @@ function evLink(id) { return id && SIM.eventById(S, id) ? ` <button class="evlin
 document.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('[data-ev]'); if (!b) return; const e = SIM.eventById(S, +b.dataset.ev); if (e) { ev.preventDefault(); focus(e, true); } });
 function focus(e, pause) {
   focusEv = e;
-  if (pause) { playing = false; syncPlay(); }
+  if (pause) {
+    playing = false;
+    if (mainRunner.busy) mainRunner.reset();
+    syncPlay();
+  }
   if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; if (!V3.on) $('camZoom').value = Math.round(100 * Math.log(z) / Math.log(5)); fly3D(e.x, e.y); }
   else vt = { x: 500, y: 500, z: 1 };
   const box = $('focus');
@@ -5614,8 +5852,8 @@ function ui(force) {
   const big = S.groups.reduce((m, g) => g.members.length > (m ? m.members.length : 0) ? g : m, null);
   const st = S.stats, maxD = S.groups.reduce((m, g) => Math.max(m, g.depth), 0);
   $('tally').textContent = `В группах ${S.agents.length ? pct(inG / S.agents.length) : 0}% агентов. Крупнейшая: ${big ? `«${big.name}», ${big.members.length}` : 'нет'}. Поселений ${S.groups.filter(g => g.home).length}, домов ${S.groups.reduce((s, g) => s + g.houses.length, 0)}, полей ${S.groups.reduce((s, g) => s + g.fields.length, 0)}, мастерских ${S.groups.filter(g => g.workshop).length}, руин ${(S.ruins || []).length}. Мастеров ${S.agents.filter(a => a.master && a.master !== 'gather').length}. Государств сейчас ${(S.states || []).length} (возникало ${st.states || 0}). Походов ${st.wars || 0}, битв ${st.battles || 0}, завоеваний ${st.conquests || 0}, восстаний ${st.revolts || 0}, грабежей караванов ${st.raids || 0}; в боях погибло ${st.war || 0}; стража прогоняла чужаков ${st.border || 0} раз; монета в ${S.groups.filter(g => g.coin).length} дер., займов ${st.loans || 0}, в кабале сейчас ${S.agents.filter(a => a.bond).length}, списаний долгов ${st.jubilees || 0}, восстаний должников ${st.debtRevolts || 0}; данников сейчас ${S.groups.filter(g => g.lord).length}. Караванов в пути ${S.agents.filter(a => a.car).length}, торговых путей ${Object.keys(S.routes || {}).length}, сделок ${S.stats.trades || 0}. Иерархия до ${maxD || 1} ур. За всё время: переворотов ${st.coups}, расколов ${st.schisms}, стычек ${st.conflicts}, слияний ${st.merges}, реформ ${st.reforms}.`;
-  if (force || S.events[0] !== lastEvt) {
-    lastEvt = S.events[0];
+  if (force || S.events[0]?.id !== lastEvt) {
+    lastEvt = S.events[0]?.id;
     const list = S.events.map((e, i) => [e, i]).filter(([e]) => logAll || isKey(e)).slice(0, 50);
     $('log').innerHTML = list.map(([e, i]) => `<li><button class="ev${isMajor(e) ? ' big' : ''}${e.type === 'era' ? ' era' : ''}" data-i="${i}"><i style="background:${typeColor(e.type, 1, e.hue)}"></i><span><time>${SIM.date(e.t)} · ${TL[e.type] || ''}</time>${esc(e.text)}${(isMajor(e) || e.type === 'era' || e.type === 'law' || e.type === 'faith') && e.why ? `<small>${esc(e.why)}</small>` : ''}</span></button></li>`).join('') || '<li class="empty">Пока ничего важного.</li>';
   }
@@ -5717,6 +5955,7 @@ function syncPlay() { $('play').textContent = playing ? 'Пауза' : 'Пуск
 
 /* ---------- two worlds ---------- */
 const EX = { on: false, A: null, B: null, k: 'scarcity', va: 0.3, vb: 0.8, playing: true, speed: 16, acc: 0, seed: null, tA: { terr: document.createElement('canvas'), key: '', at: 0, id: 'A' }, tB: { terr: document.createElement('canvas'), key: '', at: 0, id: 'B' }, lastUi: 0 };
+const experimentRunner = backgroundWorlds(() => [EX.A, EX.B], ([a, b]) => { EX.A = a; EX.B = b; });
 const XK = { scarcity: 'дефицит', inflow: 'приток', synergy: 'синергия', memory: 'память', ambition: 'амбиции', noise: 'только случайность', landPriv: 'частная земля', assembly: 'вече', coin: 'монета', usury: 'проценты' };
 const BOOL = { landPriv: ['разрешена', 'запрещена'], assembly: ['разрешено', 'запрещено'], coin: ['разрешена', 'запрещена'], usury: ['разрешены', 'запрещены'] };
 const xval = v => BOOL[EX.k] ? (v >= 0.5 ? BOOL[EX.k][0] : BOOL[EX.k][1]) : pct(v) + '%';
@@ -5728,6 +5967,7 @@ function exStart() {
   if (EX.k !== 'noise') { pa[EX.k] = EX.va; pb[EX.k] = EX.vb; }
   EX.A = SIM.newWorld(seed, pa); EX.B = SIM.newWorld(seed, pb);
   if (EX.k === 'noise') EX.B.rng = (EX.B.rng ^ 0x5bd1e995) | 0;
+  experimentRunner.reset();
   EX.acc = 0; EX.playing = true; EX.tA.key = EX.tB.key = '';
   $('xplay').textContent = 'Пауза';
   exUi(true);
@@ -5850,7 +6090,11 @@ $('xa').addEventListener('input', e => { EX.va = +e.target.value; syncX(); });
 $('xb').addEventListener('input', e => { EX.vb = +e.target.value; syncX(); });
 $('xgo').addEventListener('click', exStart);
 $('xmap').addEventListener('click', () => { EX.seed = (Math.random() * 99999) | 0; exStart(); });
-$('xplay').addEventListener('click', () => { EX.playing = !EX.playing; $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск'; });
+$('xplay').addEventListener('click', () => {
+  EX.playing = !EX.playing;
+  if (!EX.playing && experimentRunner.busy) experimentRunner.reset();
+  $('xplay').textContent = EX.playing ? 'Пауза' : 'Пуск';
+});
 document.querySelectorAll('input[name=xs]').forEach(r => r.addEventListener('change', e => { EX.speed = +e.target.value; }));
 syncX();
 
@@ -5865,12 +6109,23 @@ function set3D(on) {
   document.body.classList.toggle('flat', !on);
   V3.wanted = on;
   if (!on) { V3.on = false; $('camZoom').value = Math.round(100 * Math.log(vt.z) / Math.log(5)); cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
-  if (V3.ready) { V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
+  if (V3.ready) { $('v3msg').hidden = true; V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
   if (V3.loading) return;
   V3.loading = true; $('v3msg').hidden = false; $('v3msg').textContent = 'Загружаю 3D…';
   (async () => {
-    try { if (!window.THREE) await loadScript(URL3[0]); if (!THREE.OrbitControls) await loadScript(URL3[1]); init3D(); V3.ready = true; $('v3msg').hidden = true; set3D(V3.wanted); }
-    catch (e) { $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.'; V3.loading = false; }
+    try {
+      if (!window.THREE) await loadScript(URL3[0]);
+      if (!THREE.OrbitControls) await loadScript(URL3[1]);
+      if (V3.wanted) {
+        init3D();
+        V3.ready = true;
+        set3D(true);
+      }
+    } catch (e) {
+      $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.';
+    } finally {
+      V3.loading = false;
+    }
   })();
 }
 function cellH(t) { return t === 's' ? -16 : t === 'b' ? 0.2 : t === 'h' ? 26 : t === 'f' ? 3 : t === 'w' ? -9 : t === 'r' ? 0.5 : 1.5; }
@@ -6047,7 +6302,8 @@ function rebuildStatic(W0, now) {
     V3.trees.count = V3.trunks.count = n; V3.trees.instanceMatrix.needsUpdate = V3.trunks.instanceMatrix.needsUpdate = true;
   }
   const xk = `${Math.floor(W0.tick / 30)}|${C.dark}|${W0.groups.length}|${(W0.states || []).length}|${W0.frozen}|${W0.roadV}|${Object.keys(W0.bridge || {}).length}`;
-  if (xk !== V3.texKey || now - V3.texAt > 8000) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
+  const texAge = now - V3.texAt;
+  if (!V3.texKey || texAge > 8000 || (xk !== V3.texKey && texAge >= 200)) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
   if (now - V3.objAt < 500) return;
   V3.objAt = now;
   let h = 0, b = 0, s = 0, sp = 0;
@@ -6414,7 +6670,6 @@ function packWorld(seed, snaps, eras) {
 }`;
 const ATLRUN = { on: false, workers: [], queue: [], done: 0, total: 0, t0: 0, res: [], params: null, years: 60, fb: null };
 const MODEL_V = SIM.MODEL.v;
-function atlSrc() { for (const s of document.scripts) { const t = s.textContent || ''; if (t.includes('const SIM = (() =>') && !t.includes('function atlSrc')) return t; } return null; }
 function atlStart() {
   const n = +$('atlN').value, years = +$('atlY').value, own = $('atlOwn').checked;
   const base = 1 + ((Math.random() * 900000) | 0);
@@ -6422,7 +6677,7 @@ function atlStart() {
   ATLRUN.params = own && S ? Object.assign({}, S.params) : null;
   ATLRUN.queue = Array.from({ length: n }, (_, i) => ({ i, seed: base + i * 7919 }));
   $('atlGo').hidden = true; $('atlStop').hidden = false; atlProg();
-  const src = atlSrc(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+  const src = engineSource(), cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
   let ok = false;
   if (src && typeof Worker !== 'undefined') {
     try {
@@ -6554,36 +6809,54 @@ $('fates').addEventListener('click', e => {
 let follow = false;
 
 { const M = SIM.MODEL, [y, m, d] = M.date.split('-'); $('ver').textContent = `модель ${M.v} · ${+d} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][m - 1]} ${y}`; $('ver').title = M.note; }
+let lastPaint = -Infinity;
 function frame(now) {
   const dt = Math.min(100, now - last); last = now;
   if (ATL.on) { requestAnimationFrame(frame); return; }
   if (EX.on) {
     if (EX.playing && EX.A) {
-      EX.acc += dt * 12 * EX.speed / 1000;
-      const n = Math.min(Math.floor(EX.acc), 500); EX.acc -= n; if (EX.acc > 40) EX.acc = 0;
-      const t1 = performance.now(); for (let i = 0; i < n; i++) { SIM.step(EX.A); SIM.step(EX.B); if ((i & 7) === 7 && performance.now() - t1 > 14) { EX.acc = 0; break; } }
+      EX.acc = Math.min(60, EX.acc + dt * 12 * EX.speed / 1000);
+      const days = Math.floor(EX.acc);
+      if (!experimentRunner.busy && days >= Math.max(1, EX.speed / 4)) {
+        EX.acc -= days;
+        experimentRunner.advance(days, () => {});
+      }
     }
     if (EX.A) { drawMini(EX.A, $('mA'), EX.tA); drawMini(EX.B, $('mB'), EX.tB); }
     if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
     requestAnimationFrame(frame); return;
   }
-  const t0b = performance.now();
   if (playing) {
-    acc += dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000);
-    let n = Math.min(Math.floor(acc), 900); acc -= n; if (acc > 60) acc = 0;
-    for (let i = 0; i < n; i++) {
-      SIM.step(S);
-      if (S.tick % 30 === 0) { checkStops(now); if (!playing) { acc = 0; break; } }
-      if ((i & 7) === 7 && performance.now() - t0b > 14) { acc = 0; break; }
+    acc = Math.min(60, acc + dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000));
+    // Stop at the same monthly checkpoints as the synchronous simulation.
+    const checkpoint = 30 - S.tick % 30;
+    const days = Math.min(Math.floor(acc), checkpoint);
+    const batch = dayWatch ? 1 : Math.min(checkpoint, Math.max(1, speed / 2));
+    if (!mainRunner.busy && days >= batch) {
+      acc -= days;
+      mainRunner.advance(days, completed => {
+        if (!completed || S.tick % 30) return;
+        checkStops(performance.now());
+        if (!playing) acc = 0;
+      });
     }
   }
-  updateDailyView();
-  if (V3.on && V3.ready) render3D(now); else draw(now);
+  // At high speed leave time for controls and snapshots between canvas draws.
+  if (dayWatch || speed < 16 || now - lastPaint >= 32) {
+    updateDailyView();
+    if (V3.on && V3.ready) render3D(now); else draw(now);
+    lastPaint = now;
+  }
   if (now - lastUi > 350) { ui(); lastUi = now; }
   requestAnimationFrame(frame);
 }
 
-$('play').addEventListener('click', () => { playing = !playing; if (playing && focusEv) closeFocus(); syncPlay(); });
+$('play').addEventListener('click', () => {
+  playing = !playing;
+  if (!playing && mainRunner.busy) mainRunner.reset();
+  if (playing && focusEv) closeFocus();
+  syncPlay();
+});
 document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
   dayWatch = e.target.value === 'day';
   if (!dayWatch) speed = +e.target.value;
@@ -6601,7 +6874,7 @@ $('back').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
-  SIM.shock(S, b.dataset.shock); seenEv = S.evId || 0; ui(true);
+  SIM.shock(S, b.dataset.shock); mainRunner.reset(); seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
 }));
 $('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
@@ -6694,6 +6967,18 @@ function start(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 window.__lab = () => S; window.__v3 = () => V3;
+window.__labAdvance = async days => {
+  playing = false;
+  if (mainRunner.busy) mainRunner.reset();
+  syncPlay();
+  const target = S.tick + days;
+  while (S.tick < target) {
+    const completed = await new Promise(resolve => mainRunner.advance(Math.min(360, target - S.tick), resolve));
+    if (!completed) throw new Error('World advance interrupted');
+  }
+  seenEv = S.evId || 0;
+  ui(true);
+};
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 }
 

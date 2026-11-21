@@ -171,17 +171,19 @@ function specialSpot(S, g, kind) {
     : kind === 'well' && wellOk(S, choice.x, choice.y) < 0.5 ? 120 : 60;
   return { kind, ...choice, angle, prog: 0, need };
 }
+const CARGO_JOB = { food: 'farm', wood: 'wood', stone: 'stone' };
 const HAUL = 2.5, CAP = { food: 4, wood: 3, stone: 2 };
 function load(m, k, v) { if (m.lk && m.lk !== k && m.load > 0) return; m.lk = k; m.load = (m.load || 0) + v; if (m.load >= CAP[k]) m.haul = true; }
 function storeOf(g, k) { return k === 'food' && g.granary ? g.granary : k === 'stone' && g.workshop ? g.workshop : g.home; }
 function deliver(S) {
+  const winter = seasonOf(S.tick) === 0;
   for (const a of S.agents) {
     if (!a.load) continue;
-    const g = a.group && S._g.get(a.group);
+    const g = a.group && S._groupsById[a.group];
     if (!g || !g.home) { a.load = 0; a.haul = false; a.lk = null; continue; }
     const st = storeOf(g, a.lk);
-    if (a.haul && Math.hypot(a.x - st.x, a.y - st.y) < 16) { addStock(g, a.lk, a.load); a.load = 0; a.haul = false; a.lk = null; }
-    else if (!a.haul && seasonOf(S.tick) === 0 && a.lk === 'food' && a.job !== 'gather') a.haul = true;
-    else if (!a.haul && a.job !== ({ food: a.job === 'gather' ? 'gather' : 'farm', wood: 'wood', stone: 'stone' })[a.lk]) a.haul = true;
+    if (a.haul && within(a.x - st.x, a.y - st.y, 16)) { addStock(g, a.lk, a.load); a.load = 0; a.haul = false; a.lk = null; }
+    else if (!a.haul && winter && a.lk === 'food' && a.job !== 'gather') a.haul = true;
+    else if (!a.haul && a.job !== (a.lk === 'food' && a.job === 'gather' ? 'gather' : CARGO_JOB[a.lk])) a.haul = true;
   }
 }

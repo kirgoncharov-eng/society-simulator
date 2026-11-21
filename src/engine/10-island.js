@@ -82,9 +82,9 @@ function seaMonth(S) {
     const d = Math.hypot(bs.x - S.isle.x, bs.y - S.isle.y) || 1;
     S.boats.push({ x0: bs.x, y0: bs.y, x1: bs.x + (bs.x - S.isle.x) / d * 160, y1: bs.y + (bs.y - S.isle.y) / d * 160, t: S.tick, out: true });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
-    log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
+    const departure = log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
     S.firstEmigr = true;
-    for (const m of fam) removeAgent(S, m, 'emigr');
+    for (const m of fam) removeAgent(S, m, 'emigr', departure.id);
   }
 }
 function beachNear(S, x, y, R0) { let best = null, bd = R0; const ci = Math.floor(x / CS), cj = Math.floor(y / CS), r = Math.ceil(R0 / CS); for (let j = cj - r; j <= cj + r; j++) for (let i = ci - r; i <= ci + r; i++) { if (i < 0 || j < 0 || i >= N || j >= N) continue; const c = j * N + i; if (S.ter[c] !== 'b') continue; const bx = i * CS + 10, by = j * CS + 10, d = Math.hypot(bx - x, by - y); if (d < bd && reach(S, x, y, bx, by)) { bd = d; best = { x: bx, y: by }; } } return best; }

@@ -8,12 +8,23 @@ function set3D(on) {
   document.body.classList.toggle('flat', !on);
   V3.wanted = on;
   if (!on) { V3.on = false; $('camZoom').value = Math.round(100 * Math.log(vt.z) / Math.log(5)); cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
-  if (V3.ready) { V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
+  if (V3.ready) { $('v3msg').hidden = true; V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); syncCameraZoom(); return; }
   if (V3.loading) return;
   V3.loading = true; $('v3msg').hidden = false; $('v3msg').textContent = 'Загружаю 3D…';
   (async () => {
-    try { if (!window.THREE) await loadScript(URL3[0]); if (!THREE.OrbitControls) await loadScript(URL3[1]); init3D(); V3.ready = true; $('v3msg').hidden = true; set3D(V3.wanted); }
-    catch (e) { $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.'; V3.loading = false; }
+    try {
+      if (!window.THREE) await loadScript(URL3[0]);
+      if (!THREE.OrbitControls) await loadScript(URL3[1]);
+      if (V3.wanted) {
+        init3D();
+        V3.ready = true;
+        set3D(true);
+      }
+    } catch (e) {
+      $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.';
+    } finally {
+      V3.loading = false;
+    }
   })();
 }
 function cellH(t) { return t === 's' ? -16 : t === 'b' ? 0.2 : t === 'h' ? 26 : t === 'f' ? 3 : t === 'w' ? -9 : t === 'r' ? 0.5 : 1.5; }
@@ -190,7 +201,8 @@ function rebuildStatic(W0, now) {
     V3.trees.count = V3.trunks.count = n; V3.trees.instanceMatrix.needsUpdate = V3.trunks.instanceMatrix.needsUpdate = true;
   }
   const xk = `${Math.floor(W0.tick / 30)}|${C.dark}|${W0.groups.length}|${(W0.states || []).length}|${W0.frozen}|${W0.roadV}|${Object.keys(W0.bridge || {}).length}`;
-  if (xk !== V3.texKey || now - V3.texAt > 8000) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
+  const texAge = now - V3.texAt;
+  if (!V3.texKey || texAge > 8000 || (xk !== V3.texKey && texAge >= 200)) { V3.texKey = xk; V3.texAt = now; paint3DTexture(W0); }
   if (now - V3.objAt < 500) return;
   V3.objAt = now;
   let h = 0, b = 0, s = 0, sp = 0;
