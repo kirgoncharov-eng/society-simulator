@@ -1,8 +1,8 @@
-import { availableParallelism, cpus } from 'node:os';
+import * as os from 'node:os';
 import { Worker } from 'node:worker_threads';
 
 export async function runIslands(moduleUrl, runIsland, count, years, report) {
-  const workers = Number(process.env.SOCIETY_WORKERS ?? (availableParallelism?.() || cpus().length));
+  const workers = Number(process.env.SOCIETY_WORKERS ?? (os.availableParallelism?.() || os.cpus().length));
   if (!Number.isSafeInteger(workers) || workers < 1) throw new Error('SOCIETY_WORKERS must be a positive integer');
   if (workers === 1 || count <= 1) {
     for (let i = 0; i < count; i++) report(runIsland(i, years), i);

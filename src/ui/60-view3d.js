@@ -3,16 +3,28 @@ const V3 = { on: false, ready: false, loading: false, texAt: 0, texKey: '', objA
 const URL3 = ['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'];
 function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
 function set3D(on) {
+  V3.requested = on;
   $('v2d').classList.toggle('on', !on); $('v3d').classList.toggle('on', on);
   $('v2d').setAttribute('aria-pressed', String(!on)); $('v3d').setAttribute('aria-pressed', String(on));
   document.body.classList.toggle('flat', !on);
   if (!on) { V3.on = false; cv.style.visibility = ''; if (V3.ren) V3.ren.domElement.style.display = 'none'; $('v3lab').hidden = true; $('v3msg').hidden = true; return; }
-  if (V3.ready) { V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); return; }
+  if (V3.ready) { $('v3msg').hidden = true; V3.on = true; cv.style.visibility = 'hidden'; V3.ren.domElement.style.display = ''; $('v3lab').hidden = false; size3D(); return; }
   if (V3.loading) return;
   V3.loading = true; $('v3msg').hidden = false; $('v3msg').textContent = 'Загружаю 3D…';
   (async () => {
-    try { if (!window.THREE) await loadScript(URL3[0]); if (!THREE.OrbitControls) await loadScript(URL3[1]); init3D(); V3.ready = true; $('v3msg').hidden = true; set3D(true); }
-    catch (e) { $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.'; V3.loading = false; }
+    try {
+      if (!window.THREE) await loadScript(URL3[0]);
+      if (!THREE.OrbitControls) await loadScript(URL3[1]);
+      if (V3.requested) {
+        init3D();
+        V3.ready = true;
+        set3D(true);
+      }
+    } catch (e) {
+      $('v3msg').textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и нажмите «3D» ещё раз.';
+    } finally {
+      V3.loading = false;
+    }
   })();
 }
 function cellH(t) { return t === 's' ? -16 : t === 'b' ? 0.2 : t === 'h' ? 26 : t === 'f' ? 3 : t === 'w' ? -9 : t === 'r' ? 0.5 : 1.5; }
