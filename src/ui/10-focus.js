@@ -14,7 +14,7 @@ function focus(e, pause) {
     if (mainRunner.busy) mainRunner.reset();
     syncPlay();
   }
-  if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; }
+  if (e.x !== undefined && e.x !== null) { const z = 1.9; vt = { x: e.x, y: e.y + 150 / z, z }; if (!V3.on) $('camZoom').value = Math.round(100 * Math.log(z) / Math.log(5)); fly3D(e.x, e.y); }
   else vt = { x: 500, y: 500, z: 1 };
   const box = $('focus');
   box.style.setProperty('--c', typeColor(e.type, 1, e.hue));
@@ -26,7 +26,8 @@ function focus(e, pause) {
   if ($('follow')) $('follow').onclick = () => { sel = people[0].id; closeFocus(); playing = true; syncPlay(); card(); };
 }
 function closeFocus(silent) {
-  focusEv = null; vt = { x: 500, y: 500, z: 1 };
+  focusEv = null;
+  if (S) islandCamera();
   $('focus').hidden = true;
   if (!silent) lastStop = performance.now();
 }

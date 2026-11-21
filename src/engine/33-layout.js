@@ -68,53 +68,108 @@ function streetClear(g, p, width) {
   const street = g.plan?.street;
   return !street || distanceToSegment(p, street.a, street.b) >= street.width / 2 + width;
 }
-function wallPlan(S, g) {
-  planOf(S, g);
-  const point = (x, y) => alongStreet(g, x, y);
-  const buildings = g.houses.filter(h => !h.ruined);
-  buildings.sort((a, b) => dist(a, g.home) - dist(b, g.home));
-  if (g.granary) buildings.unshift(g.granary);
-  const occupied = buildings.concat([g.well, g.shrine, g.workshop].filter(Boolean));
-  // Draw one fixed perimeter around the occupied core, with gates where the street crosses it.
-  for (let count = Math.min(8, buildings.length); count >= Math.min(2, buildings.length); count--) {
-    let left = -17, right = 17, lower = -17, upper = 17;
-    for (const b of buildings.slice(0, count)) {
-      const dx = b.x - g.home.x, dy = b.y - g.home.y;
-      const along = dx * g.plan.ux + dy * g.plan.uy, across = -dx * g.plan.uy + dy * g.plan.ux;
-      left = Math.min(left, along - 9); right = Math.max(right, along + 9);
-      lower = Math.min(lower, across - 9); upper = Math.max(upper, across + 9);
+function lineCrossing(a, b, c, d) {
+  const x = b.x - a.x, y = b.y - a.y, u = d.x - c.x, v = d.y - c.y;
+  const den = x * v - y * u;
+  if (Math.abs(den) < 1e-8) return null;
+  const dx = c.x - a.x, dy = c.y - a.y;
+  const t = (dx * v - dy * u) / den, q = (dx * y - dy * x) / den;
+  return t > 0 && t < 1.000001 && q >= 0 && q <= 1 ? t : null;
+}
+
+function wallSite(S, g) {
+  const existing = g.fortifications || [];
+  if (existing.length && S.tick - existing[existing.length - 1].built < 360) return null;
+  const candidates = S.groups.filter(o => o !== g && o.home && !allied(S, g.id, o.id) && dist(g.home, o.home) < 460)
+    .map(o => ({ o, threat: S.wars.some(w => w.att === o.id && w.def === g.id) ? 2 : S.hostility[key(g.id, o.id)] || 0 }))
+    .filter(({ threat }) => threat > 0.6)
+    .sort((a, b) => b.threat - a.threat || dist(g.home, a.o.home) - dist(g.home, b.o.home));
+  if (!candidates.length) return null;
+  const street = planOf(S, g).street;
+  const core = g.houses.filter(h => !h.ruined && dist(h, g.home) < 50);
+  if (g.granary && dist(g.granary, g.home) < 65) core.push(g.granary);
+  const buildings = g.houses.concat([g.well, g.granary, g.workshop, g.shrine].filter(Boolean));
+  for (const { o } of candidates) {
+    const d = dist(g.home, o.home), ux = (o.home.x - g.home.x) / d, uy = (o.home.y - g.home.y) / d;
+    if (existing.some(w => w.facing && w.facing.x * ux + w.facing.y * uy > 0.7)) continue;
+    const forward = p => (p.x - g.home.x) * ux + (p.y - g.home.y) * uy;
+    const side = p => (p.y - g.home.y) * ux - (p.x - g.home.x) * uy;
+    const beyond = Math.max(15, ...core.map(forward)) + 9;
+    const center = core.length ? core.reduce((sum, p) => sum + side(p), 0) / core.length : 0;
+    let best = null, bestScore = -Infinity;
+    for (const extra of [0, 10, 20]) for (const offset of [0, -8, 8]) {
+      for (const bend of [0, -8, 8]) for (const half of [20, 27]) {
+        const point = (front, across) => ({ x: g.home.x + ux * front - uy * across, y: g.home.y + uy * front + ux * across });
+        const a = point(beyond + extra - bend, center + offset - half);
+        const b = point(beyond + extra + bend, center + offset + half);
+        const length = dist(a, b);
+        if (!lineOnLand(S, a, b)) continue;
+        const at = t => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        const crossing = lineCrossing(a, b, street.a, street.b);
+        const gap = 9 / length;
+        if (crossing !== null && (crossing < gap || crossing > 1 - gap)) continue;
+        const segments = crossing === null ? [{ a, b }] : [
+          { a, b: at(crossing - gap / 2) }, { a: at(crossing + gap / 2), b },
+        ];
+        const gates = crossing === null ? [] : [{ ...at(crossing), width: 9, angle: Math.atan2(b.y - a.y, b.x - a.x) }];
+        const work = gates[0] || at(0.5);
+        if (!usable(S, cellAt(work.x, work.y), g) || !reach(S, g.home.x, g.home.y, work.x, work.y)) continue;
+        if (buildings.some(p => distanceToSegment(p, a, b) < (p.footprint ? Math.hypot(p.footprint.width, p.footprint.depth) / 2 + 2 : 10))) continue;
+        if (g.fields.some(p => distanceToSegment(p, a, b) < 13)) continue;
+        if (g.cemetery && distanceToSegment(g.cemetery, a, b) < 14) continue;
+        if (existing.some(w => w.segments.some(p => lineCrossing(a, b, p.a, p.b) !== null ||
+          Math.min(distanceToSegment(p.a, a, b), distanceToSegment(p.b, a, b)) < 6))) continue;
+        let hardGround = 0, roadConflict = false;
+        for (const segment of segments) {
+          const steps = Math.ceil(dist(segment.a, segment.b) / 4);
+          for (let i = 0; i <= steps; i++) {
+            const f = i / steps, p = { x: segment.a.x + (segment.b.x - segment.a.x) * f, y: segment.a.y + (segment.b.y - segment.a.y) * f };
+            const cell = cellAt(p.x, p.y);
+            if (!usable(S, cell, g) || (S.road[cell] && distanceToSegment(p, street.a, street.b) > 10)) roadConflict = true;
+            if (S.ter[cell] === 'f') hardGround++;
+          }
+        }
+        if (roadConflict) continue;
+        const cover = core.filter(p => Math.abs(side(p) - center - offset) < half).length;
+        const score = cover * 12 - extra * 0.5 - Math.abs(offset) * 0.3 - Math.abs(bend) * 0.2 - length * 0.14 - hardGround;
+        if (score <= bestScore) continue;
+        bestScore = score;
+        const posts = segments.reduce((n, s) => n + Math.ceil(dist(s.a, s.b) / 1.55), 0);
+        const layout = { segments, gates, facing: { x: ux, y: uy }, posts, height: 11, threatId: o.id, threatName: o.name };
+        best = { kind: 'palisade', ...work, prog: 0, need: 22 + posts * 3, wood: Math.ceil(posts / 3) + (gates.length ? 2 : 0), layout };
+      }
     }
-    const points = [point(left, lower), point(right, lower), point(right, upper), point(left, upper)];
-    const edges = points.map((a, i) => ({ a, b: points[(i + 1) % points.length] }));
-    if (!edges.every(({ a, b }) => lineOnLand(S, a, b))) continue;
-    if (occupied.some(p => edges.some(({ a, b }) => distanceToSegment(p, a, b) < 7))) continue;
-    const street = g.plan.street;
-    const segments = [edges[0], edges[2]], gates = [];
-    for (const along of [left, right]) {
-      const at = point(along, 0);
-      if (distanceToSegment(at, street.a, street.b) < 1) {
-        gates.push({ ...at, width: 9 });
-        segments.push({ a: point(along, lower), b: point(along, -4.5) }, { a: point(along, 4.5), b: point(along, upper) });
-      } else segments.push({ a: point(along, lower), b: point(along, upper) });
-    }
-    if (!gates.length) continue;
-    return { points, segments, gates, bounds: { left, right, lower, upper }, length: segments.reduce((n, { a, b }) => n + dist(a, b), 0) };
+    if (best) return best;
   }
   return null;
 }
-function insideWall(g, wall, point) {
-  const dx = point.x - g.home.x, dy = point.y - g.home.y;
-  const x = dx * g.plan.ux + dy * g.plan.uy, y = -dx * g.plan.uy + dy * g.plan.ux;
-  const { left, right, lower, upper } = wall.bounds;
-  return x > left && x < right && y > lower && y < upper;
+
+function wallCover(g, from) {
+  if (!from || !g.home) return false;
+  return g.fortifications?.some(wall => wall.segments.some(({ a, b }) => lineCrossing(g.home, from, a, b) !== null));
 }
-function wallSite(S, g) {
-  const prior = g.wallPlan;
-  const outside = prior ? g.houses.filter(h => !h.ruined && !insideWall(g, prior, h)) : [];
-  if (g.walls && (!prior || outside.length < 3 || S.tick - prior.built < 360 * 6)) return null;
-  const layout = wallPlan(S, g);
-  if (!layout) return null;
-  if (prior && (layout.length <= prior.length || outside.filter(h => insideWall(g, layout, h)).length < 3)) return null;
-  return { kind: 'walls', ...g.home, prog: 0, need: Math.max(90, Math.round(layout.length * 0.5)),
-    wood: Math.max(8, Math.ceil(layout.length * 0.07)), layout };
+
+function wallCells(S) {
+  if (S._wallCells && S._wallV === S.wallV) return S._wallCells;
+  const cells = [];
+  for (const g of S.groups) for (const wall of g.fortifications || []) for (const segment of wall.segments) {
+    const { a, b } = segment;
+    const x0 = (cellAt(Math.min(a.x, b.x) - 6, 0) % N), x1 = (cellAt(Math.max(a.x, b.x) + 6, 0) % N);
+    const y0 = (cellAt(0, Math.min(a.y, b.y) - 6) / N) | 0, y1 = (cellAt(0, Math.max(a.y, b.y) + 6) / N) | 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) (cells[y * N + x] ||= []).push(segment);
+  }
+  S._wallV = S.wallV;
+  return S._wallCells = cells;
+}
+
+function wallWalk(a, to, goal, segments) {
+  const hit = segments.find(s => lineCrossing(a, to, s.a, s.b) !== null);
+  if (!hit) return to;
+  const { a: start, b: end } = hit, length = dist(start, end);
+  const from = dist(a, start) + dist(start, goal) < dist(a, end) + dist(end, goal) ? start : end;
+  const dir = from === start ? -1 : 1;
+  const target = { x: from.x + dir * (end.x - start.x) / length * 3, y: from.y + dir * (end.y - start.y) / length * 3 };
+  const d = dist(a, target) || 1, step = Math.min(d, dist(a, to));
+  const around = { x: a.x + (target.x - a.x) * step / d, y: a.y + (target.y - a.y) * step / d };
+  return segments.some(s => lineCrossing(a, around, s.a, s.b) !== null) ? a : around;
 }
