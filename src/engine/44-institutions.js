@@ -31,16 +31,17 @@ function institutions(S, g, L) {
   }
   // assembly
   if (g.gov === 'assembly' && P.assembly >= 0.5 && L.ambition > 0.55 && (g.room !== undefined && g.room < 0.35 || g.warsLost > (g.wl0 || 0)) && mem.filter(m => m.patron === L.id).length >= 2 && rnd(S) < 0.015) {
-    g.gov = 'chief'; g.wl0 = g.warsLost;
+    g.gov = g.dynasty ? 'monarch' : 'chief'; g.wl0 = g.warsLost;
     log(S, 'gov', `${L.name} разгоняет вече «${g.name}» и правит один`, g.home.x, g.home.y, g.hue, { why: sent([`у ${L.name} своя дружина: ${mem.filter(m => m.patron === L.id).length} ${pl(mem.filter(m => m.patron === L.id).length, 'человек', 'человека', 'человек')} на жалованье`, g.room < 0.35 ? 'вокруг тесно: недовольным некуда уйти' : 'деревня проиграла войну, и люди хотят сильной руки', 'вече не может помешать тому, у кого есть оружие']), who: [L.id], gs: [g.id] });
   }
   if (g.gov === 'assembly' && P.assembly < 0.5) {
     g.gov = 'chief';
     log(S, 'gov', `В «${g.name}» распускают вече`, g.home.x, g.home.y, g.hue, { why: 'Народное собрание запрещено вводными.', gs: [g.id] });
-  } else if (g.gov === 'chief' && P.assembly >= 0.5 && !g.dynasty && n >= 8 && g.norm > 0.45 && avg(mem, m => m.coop) > 0.42 && (g.trauma > 0 || g.coupCount > 0 || g.warsLost > 0 || g.scarce > S.tick) && (imA = imitP(S, g, o => o.gov === 'assembly'), rnd(S) < (0.003 + imA.p * 0.45) * (0.2 + 0.8 * (g.room === undefined ? 1 : g.room)))) {
+  } else if ((g.gov === 'chief' || g.gov === 'monarch') && P.assembly >= 0.5 && n >= 8 && g.norm > 0.45 && avg(mem, m => m.coop) > 0.42 && (g.trauma > 0 || g.coupCount > 0 || g.warsLost > 0 || g.scarce > S.tick) && (imA = imitP(S, g, o => o.gov === 'assembly'), rnd(S) < (0.003 + imA.p * 0.45) * (0.2 + 0.8 * (g.room === undefined ? 1 : g.room)))) {
+    // under a hereditary chief the assembly is his council: the office still passes in the line, but war and his share are decided together (Schapera 1956)
     g.gov = 'assembly'; g.imFrom = imA.p > 0.003 && imA.from && rnd(S) < imA.p * 0.45 / (imA.p * 0.45 + 0.003) ? imA.from.name : null;
     const first = !S.firstAssembly; S.firstAssembly = true;
-    log(S, 'gov', first ? `Впервые в мире: «${g.name}» собирает вече` : `«${g.name}» собирает вече`, g.home.x, g.home.y, g.hue, { first, why: sent([g.coupCount ? `деревня пережила ${g.coupCount} ${pl(g.coupCount, 'переворот', 'переворота', 'переворотов')}` : g.warsLost ? 'деревня проиграла войну по воле одного человека' : 'деревня пережила тяжёлые годы', `люди здесь склонны делить поровну (${P0(g.norm)}) и договариваться`, 'теперь о войне, доле лидера и преемнике решает собрание', 'вече реже начинает войны и мягче к недовольным, но решения даются дольше']), gs: [g.id] });
+    log(S, 'gov', g.dynasty ? `В «${g.name}» наследный вождь ${L.name} отныне правит с советом` : first ? `Впервые в мире: «${g.name}» собирает вече` : `«${g.name}» собирает вече`, g.home.x, g.home.y, g.hue, { first, why: sent([g.coupCount ? `деревня пережила ${g.coupCount} ${pl(g.coupCount, 'переворот', 'переворота', 'переворотов')}` : g.warsLost ? 'деревня проиграла войну по воле одного человека' : 'деревня пережила тяжёлые годы', `люди здесь склонны делить поровну (${P0(g.norm)}) и договариваться`, 'теперь о войне, доле лидера и преемнике решает собрание', 'вече реже начинает войны и мягче к недовольным, но решения даются дольше']), gs: [g.id] });
     imNote(S, g);
   }
 }

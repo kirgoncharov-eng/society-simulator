@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm24', date: '2026-11-21', note: 'цели и дуги: месть, власть, возвращение, выгодная партия, отцовский дом' };
+const MODEL = { v: 'm25', date: '2026-11-21', note: 'роды и партии: род от основателя, стороны в борьбе за власть, наследование в роду, вождь с советом' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);

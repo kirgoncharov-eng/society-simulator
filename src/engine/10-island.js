@@ -95,6 +95,6 @@ function spawnBand(S, size, bx, by, kidsMax) {
   const fs = band.filter(a => a.sex === 'f'), ms = band.filter(a => a.sex === 'm');
   for (let i = 0; i < Math.min(fs.length, ms.length); i++) if (rnd(S) < 0.75) { fs[i].spouse = ms[i].id; ms[i].spouse = fs[i].id; fs[i].trust[ms[i].id] = 0.8; ms[i].trust[fs[i].id] = 0.8; }
   if (band.length >= 3) { const L = band.slice().sort((p, q) => (q.ambition * 0.7 + q.skill * 0.3) - (p.ambition * 0.7 + p.skill * 0.3))[0]; const g = createGroup(S, L, band.filter(a => a !== L)); g.treasury = band.length * 7; }
-  for (const a of band) if (a.spouse && a.sex === 'f' && rnd(S) < 0.6) { const n = 1 + Math.floor(rnd(S) * 3); for (let c = 0; c < n; c++) S.kids.push({ t: -Math.floor(rnd(S) * 360 * 12), mo: a.id, fa: a.spouse, g: null, sex: rnd(S) < 0.5 ? 'f' : 'm', x: a.x, y: a.y }); }
+  for (const a of band) if (a.spouse && a.sex === 'f' && rnd(S) < 0.6) { const n = 1 + Math.floor(rnd(S) * 3); for (let c = 0; c < n; c++) S.kids.push({ t: -Math.floor(rnd(S) * 360 * 12), mo: a.id, fa: a.spouse, lin: linOf(S, S._a.get(a.spouse)), g: null, sex: rnd(S) < 0.5 ? 'f' : 'm', x: a.x, y: a.y }); }
   return band;
 }
