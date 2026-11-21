@@ -12,13 +12,16 @@ const inFeed = (S, id) => S.events.some(e => e.id === id);
 function noDangling(S, where) {
   let n = 0;
   const check = (id, what) => { if (!id) return; n++; assert.ok(SIM.eventById(S, id), `${where}: dangling reference ${id} in ${what}`); };
+  // an arc's opening, turns and ending all open their events
+  const goals = (G, what) => { for (const x of G || []) { check(x.ev, what); check(x.endEv, what); for (const t of x.turns || []) check(t[2], what); } };
   for (const a of S.agents) {
     for (const b of a.bio || []) check(b[3], `chronicle of ${a.name}`);
     for (const m of a.grainMemories || []) check(m.ev, `grain memory of ${a.name}`);
     for (const id in a.bonds || {}) check(a.bonds[id][5], `tie of ${a.name}`);
     if (a.feud && a.feud.ev && !a.feud.done) check(a.feud.ev, `feud of ${a.name}`);
+    goals(a.goals, `arcs of ${a.name}`);
   }
-  for (const l of S.legends || []) for (const b of l.bio || []) check(b[3], `legend of ${l.name}`);
+  for (const l of S.legends || []) { for (const b of l.bio || []) check(b[3], `legend of ${l.name}`); goals(l.goals, `arcs in the legend of ${l.name}`); }
   for (const e of S.events) for (const c of e.causes || []) check(c, `causes of event ${e.id}`);
   return n;
 }
