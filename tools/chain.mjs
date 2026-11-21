@@ -13,7 +13,14 @@ function noDangling(S, where) {
   let n = 0;
   const check = (id, what) => { if (!id) return; n++; assert.ok(SIM.eventById(S, id), `${where}: dangling reference ${id} in ${what}`); };
   // an arc's opening, turns and ending all open their events
-  const goals = (G, what) => { for (const x of G || []) { check(x.ev, what); check(x.endEv, what); for (const t of x.turns || []) check(t[2], what); } };
+  const goals = (G, what) => {
+    for (const x of G || []) {
+      if (x.end && x.out !== 'died') assert.ok(x.endEv, `${where}: ${what} has an ending without a chronicle reference`);
+      check(x.ev, what);
+      check(x.endEv, what);
+      for (const t of x.turns || []) check(t[2], what);
+    }
+  };
   for (const a of S.agents) {
     for (const b of a.bio || []) check(b[3], `chronicle of ${a.name}`);
     for (const m of a.grainMemories || []) check(m.ev, `grain memory of ${a.name}`);

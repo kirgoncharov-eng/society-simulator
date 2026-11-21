@@ -40,7 +40,19 @@ function goalEnd(S, a, x, out, txt, ev, quiet) {
 }
 // a life ends (or leaves the island): what was still wanted stays undone
 function goalsOnDeath(S, a, why, ev) {
-  for (const x of a.goals || []) if (!x.end) { x.end = S.tick; if (ev) x.endEv = cite(S, ev); const away = why === 'emigr' || why === 'move'; x.out = away ? 'abandoned' : 'died'; x.endTxt = away ? 'уплывает с острова, так и не добившись своего' : 'умирает, так и не добившись своего'; const k = 'arc_' + x.k + '_' + x.out; S.stats[k] = (S.stats[k] || 0) + 1; }
+  const away = why === 'emigr' || why === 'move';
+  for (const x of a.goals || []) if (!x.end) {
+    if (away) {
+      goalEnd(S, a, x, 'abandoned', 'уплывает с острова, так и не добившись своего', ev, true);
+    } else {
+      x.end = S.tick;
+      if (ev) x.endEv = cite(S, ev);
+      x.out = 'died';
+      x.endTxt = 'умирает, так и не добившись своего';
+      const key = 'arc_' + x.k + '_died';
+      S.stats[key] = (S.stats[key] || 0) + 1;
+    }
+  }
 }
 // the event of the line just written about a.leadership (a coup, a succession, a founding): the ending of a road to power
 function lastRef(a, kinds, since) { for (let i = (a.bio || []).length - 1; i >= 0 && a.bio[i][0] >= since; i--) if (kinds.includes(a.bio[i][1]) && a.bio[i][3]) return a.bio[i][3]; return null; }

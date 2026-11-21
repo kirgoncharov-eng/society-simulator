@@ -652,9 +652,9 @@ function seaMonth(S) {
     const d = Math.hypot(bs.x - S.isle.x, bs.y - S.isle.y) || 1;
     S.boats.push({ x0: bs.x, y0: bs.y, x1: bs.x + (bs.x - S.isle.x) / d * 160, y1: bs.y + (bs.y - S.isle.y) / d * 160, t: S.tick, out: true });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
-    log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
+    const departure = log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
     S.firstEmigr = true;
-    for (const m of fam) removeAgent(S, m, 'emigr');
+    for (const m of fam) removeAgent(S, m, 'emigr', departure.id);
   }
 }
 function beachNear(S, x, y, R0) { let best = null, bd = R0; const ci = Math.floor(x / CS), cj = Math.floor(y / CS), r = Math.ceil(R0 / CS); for (let j = cj - r; j <= cj + r; j++) for (let i = ci - r; i <= ci + r; i++) { if (i < 0 || j < 0 || i >= N || j >= N) continue; const c = j * N + i; if (S.ter[c] !== 'b') continue; const bx = i * CS + 10, by = j * CS + 10, d = Math.hypot(bx - x, by - y); if (d < bd && reach(S, x, y, bx, by)) { bd = d; best = { x: bx, y: by }; } } return best; }
@@ -3369,7 +3369,19 @@ function goalEnd(S, a, x, out, txt, ev, quiet) {
 }
 // a life ends (or leaves the island): what was still wanted stays undone
 function goalsOnDeath(S, a, why, ev) {
-  for (const x of a.goals || []) if (!x.end) { x.end = S.tick; if (ev) x.endEv = cite(S, ev); const away = why === 'emigr' || why === 'move'; x.out = away ? 'abandoned' : 'died'; x.endTxt = away ? 'уплывает с острова, так и не добившись своего' : 'умирает, так и не добившись своего'; const k = 'arc_' + x.k + '_' + x.out; S.stats[k] = (S.stats[k] || 0) + 1; }
+  const away = why === 'emigr' || why === 'move';
+  for (const x of a.goals || []) if (!x.end) {
+    if (away) {
+      goalEnd(S, a, x, 'abandoned', 'уплывает с острова, так и не добившись своего', ev, true);
+    } else {
+      x.end = S.tick;
+      if (ev) x.endEv = cite(S, ev);
+      x.out = 'died';
+      x.endTxt = 'умирает, так и не добившись своего';
+      const key = 'arc_' + x.k + '_died';
+      S.stats[key] = (S.stats[key] || 0) + 1;
+    }
+  }
 }
 // the event of the line just written about a.leadership (a coup, a succession, a founding): the ending of a road to power
 function lastRef(a, kinds, since) { for (let i = (a.bio || []).length - 1; i >= 0 && a.bio[i][0] >= since; i--) if (kinds.includes(a.bio[i][1]) && a.bio[i][3]) return a.bio[i][3]; return null; }
@@ -3811,12 +3823,12 @@ function lifecycle(S) {
   for (const [a, why] of dead) removeAgent(S, a, why);
 }
 
-function removeAgent(S, a, why) {
+function removeAgent(S, a, why, departure) {
   if (!S._a.has(a.id)) return;
   if (why !== 'move' && why !== 'emigr') houseOwnerDies(S, a);
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
-  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why);
+  if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why, departure);
   if (why === 'emigr') legend(S, a, 'emigr');
   if (why !== 'move' && why !== 'emigr') {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
