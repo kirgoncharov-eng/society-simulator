@@ -88,8 +88,10 @@ export function runIsland(i, years) {
     if (x.out === 'died' && !x.endEv) { arcs.lost++; continue; } // died at sea or murdered: no funeral to point at
     arcs.closed++; if (x.ev && SIM.eventById(S, x.ev) && SIM.eventById(S, x.endEv)) arcs.linked++;
   }
+  // drama of the top 20 lives (the Fates tab): variety of turns, finished arcs, repeats and the loops behind them
+  const drama = SIM.dramaMeasure(SIM.topFates(S, 20));
   for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
-  return { history, st, arcs, pops, villages, cbr, adults: adults.length, age, minPop,
+  return { history, st, arcs, drama, pops, villages, cbr, adults: adults.length, age, minPop,
     famN, houseN, villN, roofN, lodgerN, customW, customI, bondN, adultN, feuds, feudsNamed, refK, bondRef, bondK };
 }
 
@@ -109,6 +111,7 @@ async function main() {
   const age = { deaths: 0, sum: 0, eligible: 0, reached: 0, left: 0 };
   const islandHistory = [], allV = [], vMed = [], vSmall = [];
   const arcs = { old: 0, lived: 0, closed: 0, linked: 0, open: 0, lost: 0, kinds: {} };
+  const drama = { n: 0, kinds: 0, distinct: 0, repeats: 0, arcs: 0, loops: {}, worst: 0 };
   let B = 0, CD = 0, minPop = Infinity, customN = 0;
   let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
   await runIslands(import.meta.url, runIsland, W, Y, island => {
@@ -121,6 +124,7 @@ async function main() {
       const total = arcs.kinds[kind] || (arcs.kinds[kind] = {});
       for (const [outcome, count] of Object.entries(outcomes)) total[outcome] = (total[outcome] || 0) + count;
     }
+    { const m = island.drama; drama.n++; drama.kinds += m.kinds; drama.distinct += m.distinct; drama.repeats += m.repeats; drama.arcs += m.arcs; drama.worst = Math.max(drama.worst, m.repeats); for (const k in m.loops) drama.loops[k] = (drama.loops[k] || 0) + m.loops[k]; }
     for (const key of causes) tot[key] = (tot[key] || 0) + (st[key] || 0);
     for (const key in st) if (key.startsWith('case_')) caseN[key] = (caseN[key] || 0) + st[key];
     for (const key in island.bondK) bondK[key] = (bondK[key] || 0) + island.bondK[key];
@@ -153,13 +157,15 @@ async function main() {
   console.log(`bonds: ${(bondN / Math.max(1, adultN)).toFixed(1)} per adult (${Object.entries(bondK).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}); enmities (trust < -0.3) with a named cause ${Math.round(feudsNamed / Math.max(1, feuds) * 100)}% of ${feuds}`);
   { const K = arcs.kinds, line = Object.keys(K).sort().map(k => `${k} ${Object.entries(K[k]).sort((p, q) => q[1] - p[1]).map(([o, n]) => `${o} ${n}`).join('/')}`).join('; ');
     console.log(`arcs: adults over 40 with a finished arc ${percent(arcs.lived, arcs.old)} (${arcs.lived}/${arcs.old}); kept arcs with opening and ending in the chronicle ${coverage(arcs.linked, arcs.closed)}, still open ${arcs.open}, cut short by a death with no funeral ${arcs.lost}; by kind and outcome: ${line}`); }
+  { const d = drama, n = Math.max(1, d.n), loops = Object.entries(d.loops).sort((p, q) => q[1] - p[1]).slice(0, 6).map(([k, v]) => `${k} ${v}`).join(', ');
+    console.log(`drama of the top 20 lives per island: ${(d.kinds / n).toFixed(1)} kinds of turn per life, ${(d.distinct / n).toFixed(0)} across the 20; repeats ${Math.round(d.repeats / n * 100)}% (worst island ${Math.round(d.worst * 100)}%); with a finished arc ${Math.round(d.arcs / n * 100)}%; loops (a turn 3+ times in one life, lives): ${loops || 'none'}`); }
   console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
   console.log(`grain memories: ${memoryMoves} moves changed (${sponsoredMoves} through sponsorship), ${aidReturned} gifts returned (${aidChanged} decisions changed)`);
   console.log(`mean adult age at death (15+): ${age.deaths ? (age.sum / age.deaths).toFixed(1) + ' years, n=' + age.deaths : 'n/a'}`);
   console.log(age.eligible
     ? `survived to 60 (island-born): ${(100 * age.reached / age.eligible).toFixed(1)}% (${age.reached}/${age.eligible}; ${age.left} left before 60)`
     : 'survived to 60 (island-born): n/a (no eligible birth cohort)');
-  console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out; median village >= 15 adults, at most 2 villages under 5 per island; 2-5 bonds per adult, >= 30% of enmities with a cause; 0.8-1.2 living houses per family; >= 30% of adults over 40 with a finished arc');
+  console.log('targets: child mortality 0.30-0.50; war 5-12%; water and sea < 5%; hunger < 10%; old age + sickness > 60%; births 30-50 per 1000 per year; no island dies out; median village >= 15 adults, at most 2 villages under 5 per island; 2-5 bonds per adult, >= 30% of enmities with a cause; 0.8-1.2 living houses per family; >= 30% of adults over 40 with a finished arc; top 20 lives: >= 25 kinds of turn across them, repeats < 45%');
 
   console.log('\nИстория островов');
   let sheltersLinked = 0;
