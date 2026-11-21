@@ -3,7 +3,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm22', date: '2026-11-21', note: 'стройплощадки с доставкой и этапами, частокол по отдельным участкам' };
+const MODEL = { v: 'm23', date: '2026-11-21', note: 'стройплощадки с доставкой и этапами, частокол по отдельным участкам' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -663,6 +663,7 @@ function plotOk(S, g, p, radius = 6) {
   if (!reach(S, g.home.x, g.home.y, p.x, p.y)) return false;
   for (const h of g.houses) if (dist(h, p) < radius + 5) return false;
   for (const b of [g.workshop, g.granary, g.shrine, g.well]) if (b && dist(b, p) < radius + 8) return false;
+  if (g.cemetery && dist(g.cemetery, p) < radius + 14) return false;
   return !g.fortifications?.some(w => w.segments.some(({ a, b }) => distanceToSegment(p, a, b) < radius + 2));
 }
 
@@ -825,7 +826,7 @@ function placedSite({ x, y, angle, footprint, entrance, frontage, id, started, m
 function specialSpot(S, g, kind) {
   const plan = planOf(S, g);
   const angle = Math.atan2(plan.uy, plan.ux);
-  const radius = kind === 'house' ? 6 : kind === 'well' ? 5 : 8;
+  const radius = kind === 'house' ? 6 : kind === 'well' ? 5 : kind === 'cemetery' ? 10 : 8;
   const field = g.fields.reduce((near, f) => !near || dist(f, g.home) < dist(near, g.home) ? f : near, null);
   const quarry = g.stoneCell == null ? null : { x: (g.stoneCell % N) * CS + 10, y: Math.floor(g.stoneCell / N) * CS + 10 };
   let choice = null, best = -Infinity;
@@ -840,6 +841,7 @@ function specialSpot(S, g, kind) {
       if (kind === 'granary') score += Math.min(50, riverDist(S, p.x, p.y) - 24) - (field ? dist(p, field) * 0.5 : 0);
       if (kind === 'workshop') score -= (quarry ? dist(p, quarry) * 0.6 : 0) + Math.max(0, 24 - r) * 2;
       if (kind === 'well') score += wellOk(S, p.x, p.y) * 85;
+      if (kind === 'cemetery') score = (r < 42 ? -500 : -Math.abs(r - 75)) + Math.min(40, street) * 0.8;
       if (score > best) { best = score; choice = p; }
     }
     if (choice && kind === 'house') break;
@@ -981,6 +983,7 @@ function wallSite(S, g) {
         if (!usable(S, cellAt(work.x, work.y), g) || !reach(S, g.home.x, g.home.y, work.x, work.y)) continue;
         if (buildings.some(p => distanceToSegment(p, a, b) < (p.footprint ? Math.hypot(p.footprint.width, p.footprint.depth) / 2 + 2 : 10))) continue;
         if (g.fields.some(p => distanceToSegment(p, a, b) < 13)) continue;
+        if (g.cemetery && distanceToSegment(g.cemetery, a, b) < 14) continue;
         if (existing.some(w => w.segments.some(p => lineCrossing(a, b, p.a, p.b) !== null ||
           Math.min(distanceToSegment(p.a, a, b), distanceToSegment(p.b, a, b)) < 6))) continue;
         let hardGround = 0, roadConflict = false;
@@ -2142,6 +2145,7 @@ function marry(S, f, m) {
   f.spouse = m.id; m.spouse = f.id; bump(f, m, 0.5); bump(m, f, 0.5);
   // the wedding is an event: the couple's house, the spurned suitor's grudge and an alliance of villages point to it
   const wev = note(S, 'marriage', `Свадьба: ${f.name} и ${m.name}`, f.x, f.y, (S._g.get(m.group) || {}).hue || 0, { who: [f.id, m.id], gs: [f.group, m.group].filter(Boolean) }).id; f.marryEv = m.marryEv = cite(S, wev);
+  weddingFeast(S, f, m, wev);
   bio(S, f, 'marry', `Выходит замуж за ${m.name}${m.group && m.group !== f.group ? ` из «${groupName(S, m.group)}»` : ''}`, wev); bio(S, m, 'marry', `Женится на ${f.name}${f.group && f.group !== m.group ? ` из «${groupName(S, f.group)}»` : ''}`, wev);
   S.stats.marriages = (S.stats.marriages || 0) + 1;
   // the one who hoped for her: a spurned suitor turns rival to the groom
@@ -2414,8 +2418,9 @@ function householdsMonth(S) {
       const widow = inside.find(m => m.spouse === h.owner || (h.spouseOf && m.id === h.spouseOf));
       const heirs = inside.filter(m => m.mother === h.owner || m.father === h.owner).sort((a, b) => b.age - a.age);
       const next = widow || heirs[0] || inside.sort((a, b) => b.age - a.age)[0];
-      const ref = dead && h.deathEv && eventById(S, h.deathEv) ? h.deathEv : null;
-      delete h.deathEv;
+      // only the death of this very owner, and only once: a stale mark from an earlier owner must not be reused
+      const ref = dead && h.deathEv && h.deathOwner === h.owner && eventById(S, h.deathEv) ? h.deathEv : null;
+      h.deathEv = null; h.deathOwner = null;
       if (next) {
         h.owner = next.id; h.oname = next.name; h.spouseOf = null;
         if (dead) bio(S, next, 'inheritHouse', next === widow ? `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме` : `Наследует дом ${oname}`, ref);
@@ -2459,7 +2464,7 @@ function householdsMonth(S) {
 // call from removeAgent: remember the owner's death so the heir's line can point to it
 function houseOwnerDies(S, a) {
   const g = a.group && S._g.get(a.group); if (!g || !g.home) return;
-  const h = houseOf(g, a.house); if (h && h.owner === a.id) { h.deathEv = ownerDeath(S, g, a); h.oname = a.name; }
+  const h = houseOf(g, a.house); if (h && h.owner === a.id) { h.deathEv = ownerDeath(S, g, a); h.deathOwner = a.id; h.oname = a.name; }
 }
 // who shares a's house, for the person card
 function housemates(S, a) {
@@ -2767,6 +2772,69 @@ function affairsMonth(S) {
     if (rnd(S) < 0.4) { const w = g.members.map(id => S._a.get(id)).filter(m => m && m !== a && m !== o && !betrayed.includes(m.id)); if (w.length) learn(S, ev, w[Math.floor(rnd(S) * w.length)], a); }
   }
 }
+/* ---------- rites: a wedding feast, a funeral to the burial ground, the harvest festival ---------- */
+// S.rites: gatherings the map shows for a few days [{ kind, x, y, t, until, g }]; g.cemetery = { x, y, graves }
+function gathering(S, kind, x, y, days, gid) {
+  (S.rites || (S.rites = [])).push({ kind, x, y, t: S.tick, until: S.tick + days, g: gid });
+  if (S.rites.length > 40) S.rites.shift();
+}
+function cemeteryOf(S, g) {
+  if (g.cemetery) return g.cemetery;
+  const p = specialSpot(S, g, 'cemetery'); if (!p) return null;
+  g.cemetery = { x: p.x, y: p.y, graves: 0 };
+  log(S, 'rite', `У «${g.name}» появляется кладбище`, p.x, p.y, g.hue, { why: 'умерших теперь хоронят в одном месте, на окраине деревни, в стороне от улицы', gs: [g.id] });
+  return g.cemetery;
+}
+// the wedding: kin gather at the groom's house, the families and the village spend on a feast, the two kins draw closer
+function weddingFeast(S, f, m, wev) {
+  const gm = S._g.get(m.group), gf = S._g.get(f.group), g = gm && gm.home ? gm : gf && gf.home ? gf : null;
+  if (!g) return;
+  const cost = Math.min(g.treasury * 0.04, 2 + 0.15 * g.members.length); g.treasury -= cost;
+  const side = p => S.agents.filter(o => o !== f && o !== m && o.group === g.id && kin(o, p));
+  const fk = side(f), mk = side(m);
+  for (const a of fk.slice(0, 6)) for (const b of mk.slice(0, 6)) { bump(a, b, 0.04); bump(b, a, 0.04); }
+  const h = houseOf(g, m.house) || houseOf(g, f.house) || g.home;
+  for (const o of fk.concat(mk).slice(0, 12)) o.rite = { x: h.x, y: h.y, until: S.tick + 2 };
+  gathering(S, 'wedding', h.x, h.y, 3, g.id);
+  S.stats.weddings = (S.stats.weddings || 0) + 1;
+  const L = S._a.get(g.leader), notable = L && (L === m || L === f || kin(L, m) || kin(L, f));
+  if (notable) log(S, 'rite', `Свадьба ${m.name} и ${f.name} в «${g.name}»: пир у дома ${m.name}`, h.x, h.y, g.hue, { why: sent([L === m || L === f ? 'женится сам вождь' : `${kin(L, m) ? m.name : f.name} — родня вождя ${L.name}`, `на пир уходит ${qty(cost, 'food')}`, 'роды жениха и невесты теперь ближе друг к другу']), who: [m.id, f.id, L.id], gs: [g.id], causes: wev ? [wev] : undefined });
+}
+// a funeral: kin walk to the burial ground; the grave stays; the leader's funeral is the whole village's
+function funeral(S, a, why) {
+  const g = a.group && S._g.get(a.group);
+  if (!g || !g.home || why === 'lostAtSea' || why === 'move' || why === 'emigr') return null;
+  const cem = cemeteryOf(S, g); if (!cem) return null;
+  cem.graves++;
+  const mourners = S.agents.filter(o => o !== a && o.group === g.id && (o.id === a.spouse || o.mother === a.id || o.father === a.id || o.id === a.mother || o.id === a.father));
+  for (const o of mourners) { o.rite = { x: cem.x, y: cem.y, until: S.tick + 3 }; for (const p of mourners) if (p !== o) bump(o, p, 0.03); }
+  gathering(S, 'funeral', cem.x, cem.y, 3, g.id);
+  S.stats.funerals = (S.stats.funerals || 0) + 1;
+  const isL = g.leader === a.id;
+  const ex = { who: [a.id, ...mourners.map(o => o.id)].slice(0, 8), gs: [g.id] };
+  const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${a.name} на кладбище` : `Похороны ${a.name} в «${g.name}»`;
+  const ev = isL ? log(S, 'rite', text, cem.x, cem.y, g.hue, Object.assign({ why: sent([`${a.name} ${fem(a, 'правил', 'правила')} «${g.name}» ${yrs(Math.max(1, Math.round((S.tick - (g.since || g.founded)) / 360)))}`, mourners.length ? `за гробом идут ${mourners.map(o => o.name).slice(0, 4).join(', ')}` : '', `на кладбище «${g.name}» уже ${cem.graves} ${pl(cem.graves, 'могила', 'могилы', 'могил')}`]) }, ex)) : note(S, 'rite', text, cem.x, cem.y, g.hue, ex);
+  return ev.id;
+}
+// the harvest festival at the end of autumn: a village with stores feasts together; a rich leader who hosts gains renown
+function harvestFestival(S) {
+  for (const g of S.groups) {
+    if (!g.home || g.dead || g.members.length < 5) continue;
+    const n = g.members.length, L = S._a.get(g.leader); if (!L) continue;
+    const host = L.wealth > 20 + n * 0.3;
+    if (!host && g.treasury < n * 3) continue;
+    if (host) { L.wealth -= n * 0.3; L.status += 1.5; L.rep = clamp((L.rep || 0) + 0.05, -1, 1); } else g.treasury -= n * 0.4;
+    const mem = g.members.map(id => S._a.get(id)).filter(Boolean);
+    for (let i = 0; i < mem.length; i++) { const a = mem[i], b = mem[(i + 1) % mem.length]; bump(a, b, 0.03); bump(b, a, 0.03); if (host && a !== L) bump(a, L, 0.04); }
+    gathering(S, 'feast', g.home.x, g.home.y, 3, g.id);
+    S.stats.festivals = (S.stats.festivals || 0) + 1;
+    g.fests = (g.fests || 0) + 1;
+    const text = host ? `Праздник урожая в «${g.name}»: ${L.name} ${fem(L, 'угощает', 'угощает')} всю деревню` : `Праздник урожая в «${g.name}»`;
+    const ex = { why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
+    // the first festival of a village and a leader's feast go to the chronicle; ordinary years leave a quiet record
+    if (g.fests === 1 || (host && S.tick - (g.feastLog || -1e9) > 360 * 5)) { log(S, 'rite', text, g.home.x, g.home.y, g.hue, ex); if (host) g.feastLog = S.tick; } else note(S, 'rite', text, g.home.x, g.home.y, g.hue, ex);
+  }
+}
 function step(S) {
   S.tick++;
   advanceWeather(S);
@@ -2830,6 +2898,7 @@ function move(S) {
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
+      if (a.rite && S.tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
       const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
       tx = p.x + j * spread; ty = p.y + j2 * spread;
@@ -3059,6 +3128,7 @@ function removeAgent(S, a, why) {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
     if (why !== 'killed') bio(S, a, why === 'drown' || why === 'lostAtSea' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
     const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'lostAtSea' ? ', в море' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
+    { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); }
     legend(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
     const w = Math.max(0, a.wealth), g = S._g.get(a.group);
@@ -3193,6 +3263,7 @@ function monthly(S) {
   householdsMonth(S);
   affairsMonth(S);
   gossipMonth(S);
+  if (S.tick % 360 === 330) harvestFestival(S);
   relations(S);
   tradeMonth(S);
   warMonth(S);

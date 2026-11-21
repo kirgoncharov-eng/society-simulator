@@ -406,6 +406,19 @@ function draw(now) {
     ctx.strokeStyle = hueC(g.hue, fgs && !fgs.has(g.id) ? .1 : g.home ? .16 : .45); ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.stroke();
   }
   const base = Math.max(2, Math.min(3.4, Math.min(plate.clientWidth, plate.clientHeight) / 220)) * Math.sqrt(view.z);
+  // burial grounds: rows of small stones, one per grave (up to 24); a gathering ring where a rite is going on
+  for (const g of S.groups) {
+    const c = g.home && g.cemetery; if (!c || !c.graves) continue;
+    const k = Math.min(24, c.graves), cols = 6;
+    ctx.fillStyle = C.dark ? 'rgba(190,195,205,.75)' : 'rgba(110,115,125,.75)';
+    for (let i = 0; i < k; i++) { const x = c.x - 9 + (i % cols) * 3.6, y = c.y - 5 + Math.floor(i / cols) * 3.6; ctx.fillRect(x - px(.9), y - px(1.3), px(1.8), px(2.6)); }
+    ctx.strokeStyle = C.dark ? 'rgba(190,195,205,.35)' : 'rgba(110,115,125,.35)'; ctx.lineWidth = px(1); ctx.strokeRect(c.x - 12, c.y - 8, 24, 16);
+  }
+  for (const r of S.rites || []) {
+    if (S.tick >= r.until) continue;
+    const col = r.kind === 'funeral' ? (C.dark ? 'rgba(200,205,215,.55)' : 'rgba(80,85,95,.5)') : (C.dark ? 'rgba(240,200,110,.6)' : 'rgba(200,140,40,.55)');
+    ctx.strokeStyle = col; ctx.lineWidth = px(1.6); ctx.setLineDash([px(3), px(3)]); ctx.beginPath(); ctx.arc(r.x, r.y, r.kind === 'feast' ? 26 : 12, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  }
   // small children play by their parents' house
   for (const k of dailyNight > 0.85 ? [] : S.kids || []) {
     const c = S._a.get(k.mo) || S._a.get(k.fa), g = c && c.group && S._g.get(c.group);

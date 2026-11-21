@@ -116,6 +116,7 @@ function wallSite(S, g) {
         if (!usable(S, cellAt(work.x, work.y), g) || !reach(S, g.home.x, g.home.y, work.x, work.y)) continue;
         if (buildings.some(p => distanceToSegment(p, a, b) < (p.footprint ? Math.hypot(p.footprint.width, p.footprint.depth) / 2 + 2 : 10))) continue;
         if (g.fields.some(p => distanceToSegment(p, a, b) < 13)) continue;
+        if (g.cemetery && distanceToSegment(g.cemetery, a, b) < 14) continue;
         if (existing.some(w => w.segments.some(p => lineCrossing(a, b, p.a, p.b) !== null ||
           Math.min(distanceToSegment(p.a, a, b), distanceToSegment(p.b, a, b)) < 6))) continue;
         let hardGround = 0, roadConflict = false;

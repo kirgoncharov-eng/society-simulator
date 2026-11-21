@@ -43,8 +43,9 @@ function householdsMonth(S) {
       const widow = inside.find(m => m.spouse === h.owner || (h.spouseOf && m.id === h.spouseOf));
       const heirs = inside.filter(m => m.mother === h.owner || m.father === h.owner).sort((a, b) => b.age - a.age);
       const next = widow || heirs[0] || inside.sort((a, b) => b.age - a.age)[0];
-      const ref = dead && h.deathEv && eventById(S, h.deathEv) ? h.deathEv : null;
-      delete h.deathEv;
+      // only the death of this very owner, and only once: a stale mark from an earlier owner must not be reused
+      const ref = dead && h.deathEv && h.deathOwner === h.owner && eventById(S, h.deathEv) ? h.deathEv : null;
+      h.deathEv = null; h.deathOwner = null;
       if (next) {
         h.owner = next.id; h.oname = next.name; h.spouseOf = null;
         if (dead) bio(S, next, 'inheritHouse', next === widow ? `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме` : `Наследует дом ${oname}`, ref);
@@ -88,7 +89,7 @@ function householdsMonth(S) {
 // call from removeAgent: remember the owner's death so the heir's line can point to it
 function houseOwnerDies(S, a) {
   const g = a.group && S._g.get(a.group); if (!g || !g.home) return;
-  const h = houseOf(g, a.house); if (h && h.owner === a.id) { h.deathEv = ownerDeath(S, g, a); h.oname = a.name; }
+  const h = houseOf(g, a.house); if (h && h.owner === a.id) { h.deathEv = ownerDeath(S, g, a); h.deathOwner = a.id; h.oname = a.name; }
 }
 // who shares a's house, for the person card
 function housemates(S, a) {
