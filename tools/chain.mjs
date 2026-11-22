@@ -69,9 +69,11 @@ export function runIsland(i, years) {
   };
 }
 
-async function main() {
+// shelter stories are rare and chaotic (17 to 35 on 24 islands between close model versions): when the first islands give
+// no story that left the feed, look further, up to 12 islands; every island is still checked for dangling references
+async function run(count) {
   let stories = 0, afterLoad = 0, fromLegend = 0, refs = 0;
-  await runIslands(import.meta.url, runIsland, W, Y, island => {
+  await runIslands(import.meta.url, runIsland, count, Y, island => {
     stories += island.stories;
     afterLoad += island.afterLoad;
     fromLegend += island.fromLegend;
@@ -79,8 +81,13 @@ async function main() {
     console.log(`seed ${island.seed}: shelter stories ${island.stories}, grain event opened after leaving the feed ${island.afterLoad}, from a dead person's legend ${island.fromLegend}, archive ${island.archive} events`);
   });
   console.log(`\nshelter stories ${stories}; source opened after leaving the feed and after save/load ${afterLoad}; from legends of the dead ${fromLegend}; references checked ${refs}, none dangling`);
-  assert.ok(stories > 0, 'no shelter story found: the chain was not exercised');
-  assert.ok(afterLoad > 0, 'no grain event was opened after leaving the feed and after save/load');
+  return { stories, afterLoad };
+}
+async function main() {
+  let r = await run(W);
+  if ((!r.stories || !r.afterLoad) && W < 12) { console.log(`\nno shelter story left the feed on ${W} islands: checking 12`); r = await run(12); }
+  assert.ok(r.stories > 0, 'no shelter story found: the chain was not exercised');
+  assert.ok(r.afterLoad > 0, 'no grain event was opened after leaving the feed and after save/load');
   console.log('chain: all good');
 }
 

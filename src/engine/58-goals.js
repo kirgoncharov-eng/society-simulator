@@ -163,8 +163,8 @@ function goalsMonth(S) {
         const kinL = isLeaderKin(S, d);
         if (!kinL && rnd(S) < 0.5) {
           const target = sons.filter(s => s.group === a.group || Math.hypot(s.x - a.x, s.y - a.y) < 320)[0];
-          if (target) {
-            const L = isLeaderKin(S, target);
+          const L = target && isLeaderKin(S, target); // the list is from the start of the month: the parent may have lost power since
+          if (target && L) {
             const ev = note(S, 'arc', `${a.name} задумывает выдать дочь ${d.name} за ${target === L ? `вождя ${L.name}` : `${target.name}, сына вождя ${L.name}`}`, a.x, a.y, g.hue, { who: [a.id, d.id, target.id], gs: [g.id] }).id;
             goalOpen(S, a, 'match', `Задумывает выдать дочь ${d.name} за сына вождя`, ev, { d: d.id, dName: d.name }, true);
           }
