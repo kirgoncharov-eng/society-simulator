@@ -13,11 +13,15 @@ function yearly(S) {
     const r = regime(S, g);
     g.rhist = g.rhist || []; const lp = g.rhist[g.rhist.length - 1]; g.rhist.push(lp ? [+(lp[0] * 0.6 + r.c * 0.4).toFixed(3), +(lp[1] * 0.6 + r.b * 0.4).toFixed(3)] : [+r.c.toFixed(3), +r.b.toFixed(3)]); if (g.rhist.length > 30) g.rhist.shift();
     if (g.members.length < 6) { g.rcand = null; continue; }
-    if (!g.rtype) { g.rtype = r.type; continue; }
+    if (!g.rtype) { g.rtype = r.type; g.rT = S.tick; g.rBase = regimeBase(g); continue; }
     if (r.type === g.rtype) { g.rcand = null; continue; }
-    if (g.rcand !== r.type) { g.rcand = r.type; continue; }
-    const from = g.rtype; g.rtype = r.type; g.rcand = null;
-    log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why, gs: [g.id], who: [g.leader] });
+    // the regime changes with history (П4): at once after a law, a coup, a conquest or a revolt; otherwise only when the
+    // new order has held for ten years, so a few more trades in a good year do not relabel a village
+    const base = regimeBase(g), cause = base !== g.rBase && g.instT && g.instT > (g.rT || 0) && g.instEv && eventById(S, g.instEv) ? g.instEv : null;
+    if (!cause) { if (g.rcand !== r.type) { g.rcand = r.type; g.rcandT = S.tick; continue; } if (S.tick - g.rcandT < 360 * 10) continue; }
+    const from = g.rtype; g.rtype = r.type; g.rcand = null; g.rT = S.tick; g.rBase = base;
+    const rev = log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why + (cause ? '' : ' Перемена копилась десять лет.'), gs: [g.id], who: [g.leader], causes: cause ? [cause] : undefined, drift: !cause });
+    (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
   if (S.tick % 3600 === 0) era(S);
 }

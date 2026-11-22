@@ -134,12 +134,15 @@ function battle(S, w, A, B, band) {
     if (LB) LB.rep = clamp((LB.rep || 0) - 0.08, -1, 1);
     for (const m of band) { m.status += 0.6; m.xp.guard = (m.xp.guard || 0) + 0.35; if (m.xp.guard >= 1 && !m.master) m.master = 'guard'; }
     for (const m of B.members.map(id => S._a.get(id))) if (m && m.id !== B.leader) { m.res = clamp(m.res + 0.12, 0, 1); if (LB) bump(m, LB, -0.1); }
-    conquer = !B.lord && B.members.length < A.members.length && ratio > 1.3 && LA && LA.ambition > 0.5 && rnd(S) < 0.6;
+    // Carneiro 1970: where the beaten have nowhere to go, defeat means submission rather than flight
+    const room = B.room === undefined ? 1 : B.room;
+    conquer = !B.lord && B.members.length < A.members.length && ratio > 1.2 && LA && rnd(S) < (0.25 + 0.6 * (1 - room)) * (0.6 + 0.6 * LA.ambition);
+    B.lostT = S.tick;
     text = `Битва у «${B.name}»: войско «${A.name}» ${rout ? 'наголову разбивает защитников' : 'берёт верх'}, уносит ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${burnt ? ', один дом сожжён' : ''}${annexed ? `, отрезает ${annexed} ${pl(annexed, 'клетку', 'клетки', 'клеток')} земли` : ''}`;
     why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
   } else {
     if (LA) { LA.status = Math.max(0, LA.status - 2); A.legit = Math.max(0.2, A.legit - 0.25); LA.rep = clamp((LA.rep || 0) - 0.12, -1, 1); }
-    A.warsLost++; B.warsWon++; A.trauma++;
+    A.lostT = S.tick; A.warsLost++; B.warsWon++; A.trauma++;
     for (const m of A.members.map(id => S._a.get(id))) if (m && m.id !== A.leader) { m.res = clamp(m.res + 0.15, 0, 1); if (LA) bump(m, LA, -0.12); }
     for (const m of defenders) { m.status += 0.4; m.xp.guard = (m.xp.guard || 0) + 0.25; }
     text = `Битва у «${B.name}»: защитники ${rout ? 'обращают в бегство' : 'отбивают'} войско «${A.name}»`;
@@ -147,6 +150,7 @@ function battle(S, w, A, B, band) {
   }
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
   const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
+  (win ? B : A).lostEv = cite(S, bev.id);
   for (const m of band) { if (deadA.includes(m)) continue; bio(S, m, win ? 'battleW' : 'battleL', `Ходит в поход на «${B.name}»: ${win ? 'победа' : 'поражение'}`); if (m.exiledFrom === B.id && !m.returned) { m.returned = S.tick; bio(S, m, 'returned', `Возвращается к «${B.name}», откуда ${m.sex === 'f' ? 'её' : 'его'} изгнали, — с чужим войском`); } if (win && m.feud && !m.feud.done && m.feud.g === B.id) revengeDone(S, m, `Ходит в поход на «${B.name}» и побеждает`); }
   for (const m of defenders) { if (deadB.includes(m)) continue; bio(S, m, win ? 'battleL' : 'battleW', `Защищает «${B.name}» от войска «${A.name}»: ${win ? 'поражение' : 'победа'}`); if (!win && m.feud && !m.feud.done && m.feud.g === A.id) revengeDone(S, m, `Отбивает войско «${A.name}» у стен родной деревни`); }
   // a death in battle has a face: the kin will remember who struck the blow
@@ -158,17 +162,20 @@ function battle(S, w, A, B, band) {
   if (killedL) for (const o of S.agents) if (o.feud && !o.feud.done && o.feud.L === killedL.id && band.concat(defenders).includes(o)) revengeDone(S, o, `В битве гибнет ${killedL.name}, тот, кто вёл врагов`);
   for (const m of deadA.concat(deadB)) removeAgent(S, m, 'war');
   if (conquer && !A.dead && !B.dead) {
-    B.lord = A.id; B.tribRate = 0.12; S.stats.conquests++;
+    B.lord = A.id; B.tribRate = 0.02; S.stats.conquests++; // about a fifth of the store a year, not the store itself
     if (A.faith && B.faith !== A.faith && rnd(S) < 0.4) B.faith = A.faith;
     const LA2 = S._a.get(A.leader), LB2 = S._a.get(B.leader);
-    log(S, 'conquest', `«${B.name}» становится данником «${A.name}»`, B.home.x, B.home.y, A.hue, { why: `Перевес нападавших в ${ratio.toFixed(1)} раза, и ${LA2 ? LA2.name : 'лидер'} решает не грабить, а подчинить. Теперь «${B.name}» каждый месяц отдаёт восьмую часть еды и десятую часть орудий. Держится это на страхе: как только данник окрепнет, он попробует восстать.`, who: [LA2 && LA2.id, LB2 && LB2.id].filter(Boolean), gs: [A.id, B.id] });
+    const cqe = log(S, 'conquest', `«${B.name}» становится данником «${A.name}»`, B.home.x, B.home.y, A.hue, { why: `Перевес нападавших в ${ratio.toFixed(1)} раза, и ${LA2 ? LA2.name : 'лидер'} решает не грабить, а подчинить. Теперь «${B.name}» каждый месяц отдаёт восьмую часть еды и десятую часть орудий. Держится это на страхе: как только данник окрепнет, он попробует восстать.`, who: [LA2 && LA2.id, LB2 && LB2.id].filter(Boolean), gs: [A.id, B.id] });
+    instMark(S, B, cqe.id); instMark(S, A, cqe.id);
+    for (const h of lineHeads(S, B)) bio(S, h, 'tribute', `«${B.name}» платит дань «${A.name}»: часть урожая семьи уходит победителям`, cqe.id);
   }
   w.phase = 'return';
 }
 function tribute(S, g) {
   const lord = S._g.get(g.lord);
   if (!lord || !lord.home) { g.lord = null; return; }
-  const rate = g.tribRate || 0.12, f = g.treasury * rate, t = (g.tools || 0) * rate * 0.8;
+  if (!g.home) return; // a daughter village still on its way pays once it has settled
+  const rate = Math.min(g.tribRate || 0.02, 0.02), f = g.treasury * rate, t = (g.tools || 0) * rate * 0.8;
   g.treasury -= f; g.tools -= t; lord.treasury += f; lord.tools += t;
   const LL = S._a.get(lord.leader), LG = S._a.get(g.leader);
   if (LL) LL.status += 0.3;
@@ -176,10 +183,15 @@ function tribute(S, g) {
   if (LG && LL) bump(LG, LL, -0.04);
   const mine = defence(S, g), theirs = lord.members.length ? defence(S, lord) : 0;
   const busy = S.wars.some(w => w.att === lord.id);
-  if (mine > theirs * 0.8 || (busy && rnd(S) < 0.3) || (LG && LG.ambition > 0.6 && rnd(S) < 0.02)) {
+  // the yoke holds while the overlord is strong; a new ruler there, a lost war or a ruler without standing is the moment
+  // to throw it off (Gavrilets, Anderson & Turchin 2010: polities fall apart at succession)
+  const weak = S.tick - (lord.since || 0) < 360 * 2 ? 'new' : S.tick - (lord.lostT || -1e9) < 360 * 2 ? 'lost' : lord.legit < 0.35 ? 'legit' : null;
+  if ((mine > theirs * 1.1 && rnd(S) < 0.1) || (weak && rnd(S) < 0.02) || (busy && rnd(S) < 0.06) || (LG && LG.ambition > 0.7 && rnd(S) < 0.004)) {
     g.lord = null; S.stats.revolts++;
     S.hostility[key(g.id, lord.id)] = 1.2;
-    log(S, 'revolt', `«${g.name}» сбрасывает власть «${lord.name}» и перестаёт платить дань`, g.home.x, g.home.y, g.hue, { why: sent([mine > theirs * 0.8 ? `данник окреп: его оборона ${mine.toFixed(1)} против ${theirs.toFixed(1)} у хозяина` : '', busy ? `«${lord.name}» увяз в другой войне` : '', LG && LG.ambition > 0.6 ? `${LG.name} амбициозен (${P0(LG.ambition)})` : '', 'годы дани копили обиду']), who: [LG && LG.id, LL && LL.id].filter(Boolean), gs: [g.id, lord.id] });
+    const wc = weak === 'new' && lord.powerEv && eventById(S, lord.powerEv) ? lord.powerEv : weak === 'lost' && lord.lostEv && eventById(S, lord.lostEv) ? lord.lostEv : null;
+    const rve = log(S, 'revolt', `«${g.name}» сбрасывает власть «${lord.name}» и перестаёт платить дань`, g.home.x, g.home.y, g.hue, { why: sent([mine > theirs * 1.1 ? `данник окреп: его оборона ${mine.toFixed(1)} против ${theirs.toFixed(1)} у хозяина` : '', weak === 'new' ? `в «${lord.name}» только что сменилась власть` : weak === 'lost' ? `«${lord.name}» недавно проиграл войну` : weak === 'legit' ? `власть в «${lord.name}» шатается` : '', busy ? `«${lord.name}» увяз в другой войне` : '', LG && LG.ambition > 0.7 ? `${LG.name} ${fem(LG, 'амбициозен', 'амбициозна')} (${P0(LG.ambition)})` : '', 'годы дани копили обиду']), who: [LG && LG.id, LL && LL.id].filter(Boolean), gs: [g.id, lord.id], causes: wc ? [wc] : undefined });
+    instMark(S, g, rve.id); instMark(S, lord, rve.id);
   }
 }
 
