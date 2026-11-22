@@ -1,5 +1,5 @@
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, goal: 1, goalTurn: 1.5, goalEnd: 2, law: 2, lawLost: 1.5, tyranny: 2.5, tax: 1, feedAll: 2, fedByLeader: 1, tribute: 1.5, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, goal: 1, goalTurn: 1.5, goalEnd: 2, law: 2, lawLost: 1.5, temper: 1.5, tyranny: 2.5, tax: 1, feedAll: 2, fedByLeader: 1, tribute: 1.5, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 // Drama counts turns of fate, not events. Everyday lines (a child born, a move, a house of one's own) are part of the
 // chronicle but weigh nothing; the same turn again over the whole life weighs 1/(n+1)² of the first, so repeats add up to
 // at most 1.64 of one turn; a turn that undoes an
@@ -22,6 +22,7 @@ function bio(S, a, k, s, ref) {
   const kc = a.kc || (a.kc = {}); kc[k] = (kc[k] || 0) + 1;
   b.push(ref ? [S.tick, k, s, cite(S, ref)] : [S.tick, k, s]);
   if (b.length > 46) b.splice(6, b.length - 46);
+  temper(S, a, k, ref); // a turn of fate may change the character (Д6)
 }
 // the lives the Fates tab shows: the living and the legends of the dead, by the weight of their turns
 const FATE_MIN = 9;
@@ -171,7 +172,7 @@ function elope(S, f, m) {
   const txt = `Бегут вместе: «${gf ? gf.name : '?'}» и «${gm ? gm.name : '?'}» враждуют, свадьбы им не дали`;
   bio(S, f, 'elope', `${txt}. С ${m.name} ${f.sex === 'f' ? 'она' : 'он'} основывает свою семью`, eev); bio(S, m, 'elope', `${txt}. С ${f.name} основывает свою семью`, eev);
   S.stats.elopes = (S.stats.elopes || 0) + 1;
-  log(S, 'elope', `${f.name} из «${gf ? gf.name : '?'}» и ${m.name} из «${gm ? gm.name : '?'}» бегут вместе и уходят жить своим домом`, (f.x + m.x) / 2, (f.y + m.y) / 2, ng.hue, { first: !S.firstElope, why: sent([`деревни враждуют: вражда ${P0(Math.min(1, S.hostility[key(gf ? gf.id : 0, gm ? gm.id : 0)] || 0))}`, 'вожди не отдают своих людей за врагов', `${f.name} и ${m.name} доверяют друг другу больше, чем своим деревням`]), who: [f.id, m.id], gs: [ng.id] });
+  log(S, 'elope', `${f.name} из «${gf ? gf.name : '?'}» и ${m.name} из «${gm ? gm.name : '?'}» бегут вместе и уходят жить своим домом`, (f.x + m.x) / 2, (f.y + m.y) / 2, ng.hue, { first: !S.firstElope, why: sent([`между деревнями ${hostWord(S.hostility[key(gf ? gf.id : 0, gm ? gm.id : 0)] || 0)}`, 'вожди не отдают своих людей за врагов', `${f.name} и ${m.name} доверяют друг другу больше, чем своим деревням`]), who: [f.id, m.id], gs: [ng.id] });
   S.firstElope = true;
 }
 

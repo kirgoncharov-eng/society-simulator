@@ -1,7 +1,7 @@
 /* ---------- two worlds ---------- */
 const EX = { on: false, A: null, B: null, k: 'scarcity', va: 0.3, vb: 0.8, playing: true, speed: 16, acc: 0, seed: null, tA: { terr: document.createElement('canvas'), key: '', at: 0, id: 'A' }, tB: { terr: document.createElement('canvas'), key: '', at: 0, id: 'B' }, lastUi: 0 };
 const experimentRunner = backgroundWorlds(() => [EX.A, EX.B], ([a, b]) => { EX.A = a; EX.B = b; });
-const XK = { scarcity: 'дефицит', inflow: 'приток', synergy: 'синергия', memory: 'память', ambition: 'амбиции', noise: 'только случайность', landPriv: 'частная земля', assembly: 'вече', coin: 'монета', usury: 'проценты' };
+const XK = { scarcity: 'дефицит', inflow: 'приток', synergy: 'сила артели', memory: 'память', ambition: 'властолюбие', noise: 'только случайность', landPriv: 'частная земля', assembly: 'вече', coin: 'монета', usury: 'проценты' };
 const BOOL = { landPriv: ['разрешена', 'запрещена'], assembly: ['разрешено', 'запрещено'], coin: ['разрешена', 'запрещена'], usury: ['разрешены', 'запрещены'] };
 const xval = v => BOOL[EX.k] ? (v >= 0.5 ? BOOL[EX.k][0] : BOOL[EX.k][1]) : pct(v) + '%';
 const CA = () => C.slate, CB = () => (C.dark ? '#e08a6e' : '#b5523b');

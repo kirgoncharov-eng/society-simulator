@@ -38,10 +38,10 @@ function relations(S) {
     if (h < 0.01) delete S.hostility[k]; else S.hostility[k] = h;
     if (!al && mutual > 0.2 && h < 0.3 && d < 450 && rnd(S) < 0.12) {
       S.alliances.push({ a: A.id, b: B.id, since: S.tick });
-      log(S, 'alliance', `«${A.name}» и «${B.name}» заключают союз`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, A.hue, { why: `Лидеры ${LA.name} и ${LB.name} доверяют друг другу (${P0(mutual)}), а вражды между группами почти нет. Союзники не воюют и помогают друг другу в стычках.`, who: [LA.id, LB.id], gs: [A.id, B.id] });
+      log(S, 'alliance', `«${A.name}» и «${B.name}» заключают союз`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, A.hue, { why: `Вожди ${LA.name} и ${LB.name} ${trustWord(mutual)}, а вражды между деревнями почти нет. Союзники не воюют и помогают друг другу в стычках.`, who: [LA.id, LB.id], gs: [A.id, B.id] });
     } else if (al && (mutual < -0.05 || h > 0.7)) {
       S.alliances = S.alliances.filter(x => x !== al);
-      log(S, 'break', `Союз «${A.name}» и «${B.name}» распадается`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, A.hue, { why: mutual < -0.05 ? `Доверие между лидерами ${LA.name} и ${LB.name} ушло в минус.` : 'Группы снова делят один источник, и вражда пересилила дружбу.', who: [LA.id, LB.id], gs: [A.id, B.id] });
+      log(S, 'break', `Союз «${A.name}» и «${B.name}» распадается`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, A.hue, { why: mutual < -0.05 ? `Вожди ${LA.name} и ${LB.name} больше не доверяют друг другу.` : 'Деревни снова делят один источник, и вражда пересилила дружбу.', who: [LA.id, LB.id], gs: [A.id, B.id] });
     } else if (al && S.tick - al.since > 720) {
       const [big, sm] = A.members.length >= B.members.length ? [A, B] : [B, A];
       const sL = S._a.get(sm.leader), bL = S._a.get(big.leader);
@@ -76,14 +76,14 @@ function conflict(S, A, B) {
   pickTarget(S, Lg.dead ? W : Lg);
   const n = nodeOf(S, W.target) || { x: (A.cx + B.cx) / 2, y: (A.cy + B.cy) / 2 };
   const pw = winA ? pA : pB, pl = winA ? pB : pA;
-  const why = sent([node0 ? 'обе группы кормятся у одного источника' : 'группы соседствуют и перехватывают друг у друга добычу', node0 && node0.amt / node0.cap < 0.35 ? 'источник почти исчерпан' : '', S.params.scarcity > 0.6 ? 'ресурсов в мире мало' : '', mut0 < -0.2 ? 'лидеры давно не доверяют друг другу' : '', pw >= pl ? `победитель сильнее в ${(pw / Math.max(0.1, pl)).toFixed(1)} раза` : 'победил более слабый: в стычке решает и случай', wAl.length ? 'победителям помогли союзники' : '']);
+  const why = sent([node0 ? 'обе деревни кормятся у одного угодья' : 'деревни соседствуют и перехватывают друг у друга добычу на промысле', node0 && node0.amt / node0.cap < 0.35 ? 'источник почти исчерпан' : '', S.params.scarcity > 0.6 ? 'ресурсов в мире мало' : '', mut0 < -0.2 ? 'вожди давно не доверяют друг другу' : '', pw >= pl ? `победитель сильнее в ${(pw / Math.max(0.1, pl)).toFixed(1)} раза` : 'победил более слабый: в стычке решает и случай', wAl.length ? 'победителям помогли союзники' : '']);
   log(S, 'conflict', `Стычка за источник: «${W.name}» берёт верх над «${Lg.name}»${def ? (one(def) ? `, ${def} проигравший переходит к победителям` : `, ${def} проигравших переходят к победителям`) : ''}${wAl.length ? ' при поддержке союзников' : ''}`, n.x, n.y, W.hue, { why, who: [WL.id, LL.id], gs: [W.id, Lg.id], big: W.members.length + Lg.members.length >= 8 });
 }
 
 function merge(S, big, sm) {
   const sL = S._a.get(sm.leader), bL0 = S._a.get(big.leader);
   const al0 = S.alliances.find(x => (x.a === big.id && x.b === sm.id) || (x.a === sm.id && x.b === big.id));
-  const why = `Союз длился ${yrs(Math.round((S.tick - (al0 ? al0.since : S.tick)) / 360))}. «${big.name}» как минимум вдвое больше, а ${sL.name} доверяет ${bL0.name} (${P0(sL.trust[bL0.id] || 0)}). Малой группе выгоднее влиться, чем стоять отдельно.`;
+  const why = `Союз длился ${yrs(Math.round((S.tick - (al0 ? al0.since : S.tick)) / 360))}. «${big.name}» как минимум вдвое больше, а ${sL.name} ${(sL.trust[bL0.id] || 0) > 0.6 ? 'верит как себе' : 'доверяет'} ${bL0.name}. Малой деревне выгоднее влиться, чем стоять отдельно.`;
   if (S.arch && S.arch[sm.id]) S.arch[sm.id].into = big.id;
   if (S.own) for (let c = 0; c < S.own.length; c++) if (S.own[c] === sm.id) S.own[c] = big.home ? big.id : 0; // a band without a village cannot hold land
   for (const id of sm.members) {
@@ -117,7 +117,7 @@ function protection(S) {
     if (!best || rnd(S) > 0.35) continue;
     g.lord = best.id; g.tribRate = 0.012;
     const LO = S._a.get(best.leader);
-    const pe = log(S, 'state', `«${g.name}» просит покровительства «${best.name}» и становится её вассалом`, g.home.x, g.home.y, best.hue, { why: sent([`маленькой деревне (${g.members.length} чел.) угрожают соседи: угроза ${P0(Math.min(1, g.threat))}`, `«${best.name}» сильнее вдвое и ей доверяют${S.routes[key(g.id, best.id)] ? ': они давно торгуют' : ''}${best.faith && best.faith === g.faith ? ', и вера у них одна' : ''}`, 'за защиту вассал платит половину обычной дани', LO ? `покровитель — ${LO.name}` : '']), gs: [g.id, best.id] });
+    const pe = log(S, 'state', `«${g.name}» просит покровительства «${best.name}» и становится её вассалом`, g.home.x, g.home.y, best.hue, { why: sent([`маленькой деревне (${g.members.length} чел.) ${(g.threat || 0) > 0.6 ? 'всерьёз угрожают' : 'угрожают'} соседи`, `«${best.name}» сильнее вдвое и ей доверяют${S.routes[key(g.id, best.id)] ? ': они давно торгуют' : ''}${best.faith && best.faith === g.faith ? ', и вера у них одна' : ''}`, 'за защиту вассал платит половину обычной дани', LO ? `покровитель — ${LO.name}` : '']), gs: [g.id, best.id] });
     instMark(S, g, pe.id); instMark(S, best, pe.id);
     for (const h of lineHeads(S, g)) bio(S, h, 'tribute', `«${g.name}» уходит под руку «${best.name}» и платит ей дань за защиту`, pe.id);
   }
@@ -204,11 +204,11 @@ function regime(S, g) {
   else if (b < 0.38) type = c > 0.5 ? 'Военная деспотия' : 'Воинское братство';
   else type = c > 0.6 ? 'Вождество' : c < 0.33 ? 'Община равных' : 'Земледельческая община';
   const why = sent([
-    `власть ${c > 0.6 ? 'сосредоточена наверху' : c < 0.35 ? 'размыта' : 'распределена умеренно'}: лидер берёт ${P0(g.take)}, уровней ${g.depth}, неравенство ${gi.toFixed(2)}${g.norm < 0.4 ? ', делят по статусу' : g.norm > 0.6 ? ', делят поровну' : ''}`,
-    `опора ${b > 0.62 ? 'на торговлю и ремесло' : b < 0.38 ? 'на силу' : 'смешанная'}: ${g.trades || 0} ${pl(g.trades || 0, 'сделка', 'сделки', 'сделок')}${g.workshop ? ', мастерская' : ''}${g.warsWon ? `, побед ${g.warsWon}` : ''}${vass ? `, данников ${vass}` : ''}${guards > 0.1 ? `, в страже ${P0(guards)}` : ''}`,
+    `власть ${c > 0.6 ? 'сосредоточена в одних руках' : c < 0.35 ? 'размыта' : 'распределена умеренно'}: вождь берёт себе ${P0(g.take)} общего урожая, ${stepsWord(g.depth)}, ${gi > 0.5 ? 'богатые и бедные живут очень по-разному' : gi > 0.3 ? 'есть богатые и бедные' : 'живут примерно одинаково'}${g.norm < 0.4 ? ', делят по положению' : g.norm > 0.6 ? ', делят поровну' : ''}`,
+    `опора ${b > 0.62 ? 'на торговлю и ремесло' : b < 0.38 ? 'на силу' : 'смешанная'}: ${g.trades || 0} ${pl(g.trades || 0, 'сделка', 'сделки', 'сделок')}${g.workshop ? ', мастерская' : ''}${g.warsWon ? `, побед ${g.warsWon}` : ''}${vass ? `, данников ${vass}` : ''}${guards > 0.1 ? `, в страже каждый ${Math.max(2, Math.round(1 / guards))}-й` : ''}`,
     g.coin ? 'в ходу монета' : '', (() => { const b = g.members.filter(id => { const m = S._a.get(id); return m && m.bond; }).length; return b ? `в кабале ${b} ${pl(b, 'человек', 'человека', 'человек')}` : ''; })(),
     g.gov === 'assembly' ? 'решения принимает вече' : '', g.land === 'private' ? `поля в частной собственности${landTop(g) ? `, у крупнейшего хозяина ${P0(landTop(g).share)} земли` : ''}` : '',
-    g.dynasty ? `правит династия ${g.dynName}` : '', g.priestRule ? 'правит бывший жрец' : '', merchantRule ? `богатейший — купец ${rich.name}, он богаче лидера` : ''
+    g.dynasty ? `правит династия ${g.dynName}` : '', g.priestRule ? 'правит бывший жрец' : '', merchantRule ? `богатейший — купец ${rich.name}, он богаче вождя` : ''
   ]);
   return { type, c, b, gi, vass, merchantRule, why };
 }

@@ -52,7 +52,7 @@ function warMonth(S) {
     S.wars.push(w); S.stats.wars++;
     const pa0 = A.treasury / A.members.length, pb0 = B.treasury / Math.max(1, B.members.length);
     const blen = (S.borders || {})[key(A.id, B.id)] || 0;
-    const reasons = [blen > 6 ? `спор за межу: общая граница ${blen} ${pl(blen, 'клетка', 'клетки', 'клеток')}` : '', hungry ? `в «${A.name}» голодная зима, а у «${B.name}» ${Math.round(B.treasury)} еды` : pb0 > pa0 * 2 ? `«${B.name}» вдвое богаче на человека` : '', S.arch[A.id] && S.arch[A.id].parent === B.id ? `«${A.name}» когда-то откололась от «${B.name}»` : S.arch[B.id] && S.arch[B.id].parent === A.id ? `«${B.name}» когда-то откололась от «${A.name}»` : '', A.lord === B.id ? `«${A.name}» платит «${B.name}» дань и хочет свободы` : '', `вражда ${P0(Math.min(1, best.h / 2))}`, `амбиции ${LA.name}: ${P0(LA.ambition)}`, `шансы на победу ${P0(best.odds)}`];
+    const reasons = [blen > 6 ? `спор за межу: общая граница ${blen} ${pl(blen, 'клетка', 'клетки', 'клеток')}` : '', hungry ? `в «${A.name}» голодная зима, а у «${B.name}» ${Math.round(B.treasury)} еды` : pb0 > pa0 * 2 ? `«${B.name}» вдвое богаче на человека` : '', S.arch[A.id] && S.arch[A.id].parent === B.id ? `«${A.name}» когда-то откололась от «${B.name}»` : S.arch[B.id] && S.arch[B.id].parent === A.id ? `«${B.name}» когда-то откололась от «${A.name}»` : '', A.lord === B.id ? `«${A.name}» платит «${B.name}» дань и хочет свободы` : '', `между деревнями ${hostWord(best.h)}`, `${LA.name} ${word('ambition', LA.ambition, LA)}`, `вожди считают, что победят ${best.odds > 0.75 ? 'наверняка' : best.odds > 0.55 ? 'скорее всего' : 'если повезёт'}`];
     w.why = sent(reasons);
     log(S, 'war', `«${A.name}» идёт войной на «${B.name}»: ${fighters.length} ${pl(fighters.length, 'воин', 'воина', 'воинов')}`, A.home.x, A.home.y, A.hue, { why: w.why, who: [LA.id, ...w.fighters], gs: [A.id, B.id] });
   }
@@ -74,7 +74,7 @@ function parley(S, A, B, LA, best, av) {
   S.stats.ransoms = (S.stats.ransoms || 0) + 1;
   LA.status += 1; LA.rep = clamp((LA.rep || 0) + 0.04, -1, 1); LB.rep = clamp((LB.rep || 0) - 0.03, -1, 1);
   for (const id of B.members) { const m = S._a.get(id); if (m && m.id !== B.leader) m.res = clamp(m.res + 0.05, 0, 1); }
-  log(S, 'ransom', `«${B.name}» откупается от войны с «${A.name}»: ${paid.join(', ')}`, B.home.x, B.home.y, A.hue, { why: sent([`${LA.name} собирает ${best.fighters.length} ${pl(best.fighters.length, 'воина', 'воинов', 'воинов')}, но сначала шлёт к «${B.name}» гонцов`, `${LB.name} видит, что шансы отбиться невелики (${P0(1 - best.oddsR)}), и предпочитает заплатить, а не хоронить своих`, LB.coop > 0.6 ? `${LB.name} миролюбив${LB.sex === 'f' ? 'а' : ''}` : '', 'на три года между деревнями мир, но в «' + B.name + '» многие недовольны откупом']), who: [LA.id, LB.id], gs: [A.id, B.id] });
+  log(S, 'ransom', `«${B.name}» откупается от войны с «${A.name}»: ${paid.join(', ')}`, B.home.x, B.home.y, A.hue, { why: sent([`${LA.name} собирает ${best.fighters.length} ${pl(best.fighters.length, 'воина', 'воинов', 'воинов')}, но сначала шлёт к «${B.name}» гонцов`, `${LB.name} видит, что ${best.oddsR > 0.7 ? 'отбиться почти невозможно' : 'отбиться вряд ли удастся'}, и предпочитает заплатить, а не хоронить своих`, LB.coop > 0.6 ? `${LB.name} миролюбив${LB.sex === 'f' ? 'а' : ''}` : '', 'на три года между деревнями мир, но в «' + B.name + '» многие недовольны откупом']), who: [LA.id, LB.id], gs: [A.id, B.id] });
   return true;
 }
 function warband(S, A) {
@@ -146,9 +146,9 @@ function battle(S, w, A, B, band) {
     for (const m of A.members.map(id => S._a.get(id))) if (m && m.id !== A.leader) { m.res = clamp(m.res + 0.15, 0, 1); if (LA) bump(m, LA, -0.12); }
     for (const m of defenders) { m.status += 0.4; m.xp.guard = (m.xp.guard || 0) + 0.25; }
     text = `Битва у «${B.name}»: защитники ${rout ? 'обращают в бегство' : 'отбивают'} войско «${A.name}»`;
-    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'лидера'}: в «${A.name}» растёт обида`]);
+    why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', B.members.filter(id => { const m = S._a.get(id); return m && m.job === 'guard'; }).length ? 'у защитников была стража' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}`, `проигранная война бьёт по авторитету ${LA ? LA.name : 'вождя'}: в «${A.name}» растёт обида`]);
   }
-  if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
+  if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали лёгкой победы, а силы были ${w.oddsR < 0.35 ? 'далеко не равны' : 'почти равны'}.`;
   const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
   (win ? B : A).lostEv = cite(S, bev.id);
   for (const m of band) { if (deadA.includes(m)) continue; bio(S, m, win ? 'battleW' : 'battleL', `Ходит в поход на «${B.name}»: ${win ? 'победа' : 'поражение'}`); if (m.exiledFrom === B.id && !m.returned) { m.returned = S.tick; bio(S, m, 'returned', `Возвращается к «${B.name}», откуда ${m.sex === 'f' ? 'её' : 'его'} изгнали, — с чужим войском`); } if (win && m.feud && !m.feud.done && m.feud.g === B.id) revengeDone(S, m, `Ходит в поход на «${B.name}» и побеждает`); }
@@ -165,7 +165,7 @@ function battle(S, w, A, B, band) {
     B.lord = A.id; B.tribRate = 0.02; S.stats.conquests++; // about a fifth of the store a year, not the store itself
     if (A.faith && B.faith !== A.faith && rnd(S) < 0.4) B.faith = A.faith;
     const LA2 = S._a.get(A.leader), LB2 = S._a.get(B.leader);
-    const cqe = log(S, 'conquest', `«${B.name}» становится данником «${A.name}»`, B.home.x, B.home.y, A.hue, { why: `Перевес нападавших в ${ratio.toFixed(1)} раза, и ${LA2 ? LA2.name : 'лидер'} решает не грабить, а подчинить. Теперь «${B.name}» каждый месяц отдаёт восьмую часть еды и десятую часть орудий. Держится это на страхе: как только данник окрепнет, он попробует восстать.`, who: [LA2 && LA2.id, LB2 && LB2.id].filter(Boolean), gs: [A.id, B.id] });
+    const cqe = log(S, 'conquest', `«${B.name}» становится данником «${A.name}»`, B.home.x, B.home.y, A.hue, { why: `Перевес нападавших в ${ratio.toFixed(1)} раза, и ${LA2 ? LA2.name : 'вождь'} решает не грабить, а подчинить. Теперь «${B.name}» каждый месяц отдаёт восьмую часть еды и десятую часть орудий. Держится это на страхе: как только данник окрепнет, он попробует восстать.`, who: [LA2 && LA2.id, LB2 && LB2.id].filter(Boolean), gs: [A.id, B.id] });
     instMark(S, B, cqe.id); instMark(S, A, cqe.id);
     for (const h of lineHeads(S, B)) bio(S, h, 'tribute', `«${B.name}» платит дань «${A.name}»: часть урожая семьи уходит победителям`, cqe.id);
   }
@@ -190,7 +190,7 @@ function tribute(S, g) {
     g.lord = null; S.stats.revolts++;
     S.hostility[key(g.id, lord.id)] = 1.2;
     const wc = weak === 'new' && lord.powerEv && eventById(S, lord.powerEv) ? lord.powerEv : weak === 'lost' && lord.lostEv && eventById(S, lord.lostEv) ? lord.lostEv : null;
-    const rve = log(S, 'revolt', `«${g.name}» сбрасывает власть «${lord.name}» и перестаёт платить дань`, g.home.x, g.home.y, g.hue, { why: sent([mine > theirs * 1.1 ? `данник окреп: его оборона ${mine.toFixed(1)} против ${theirs.toFixed(1)} у хозяина` : '', weak === 'new' ? `в «${lord.name}» только что сменилась власть` : weak === 'lost' ? `«${lord.name}» недавно проиграл войну` : weak === 'legit' ? `власть в «${lord.name}» шатается` : '', busy ? `«${lord.name}» увяз в другой войне` : '', LG && LG.ambition > 0.7 ? `${LG.name} ${fem(LG, 'амбициозен', 'амбициозна')} (${P0(LG.ambition)})` : '', 'годы дани копили обиду']), who: [LG && LG.id, LL && LL.id].filter(Boolean), gs: [g.id, lord.id], causes: wc ? [wc] : undefined });
+    const rve = log(S, 'revolt', `«${g.name}» сбрасывает власть «${lord.name}» и перестаёт платить дань`, g.home.x, g.home.y, g.hue, { why: sent([mine > theirs * 1.1 ? `данник окреп: его оборона ${mine.toFixed(1)} против ${theirs.toFixed(1)} у хозяина` : '', weak === 'new' ? `в «${lord.name}» только что сменилась власть` : weak === 'lost' ? `«${lord.name}» недавно проиграл войну` : weak === 'legit' ? `власть в «${lord.name}» шатается` : '', busy ? `«${lord.name}» увяз в другой войне` : '', LG && LG.ambition > 0.7 ? `${LG.name} ${word('ambition', LG.ambition, LG)}` : '', 'годы дани копили обиду']), who: [LG && LG.id, LL && LL.id].filter(Boolean), gs: [g.id, lord.id], causes: wc ? [wc] : undefined });
     instMark(S, g, rve.id); instMark(S, lord, rve.id);
   }
 }

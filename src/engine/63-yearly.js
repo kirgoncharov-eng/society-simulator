@@ -4,6 +4,7 @@ function yearly(S) {
   droughtYear(S);
   roadsYear(S);
   for (const g of S.groups) { g.cross12 = g.cross || 0; g.cross = 0; }
+  for (const a of S.agents) ageTemper(S, a);
   roomYear(S);
   plagueYear(S);
   territories(S);
@@ -80,14 +81,14 @@ function shock(S, kind) {
     const side = rnd(S) < 0.5 ? 0 : 1, ids = [];
     for (let i = 0; i < 15; i++) ids.push(spawn(S, 'out', { side, culture: () => ({ norm: clamp(1 - avgNorm + gauss(S) * 0.15, 0, 1), ambition: clamp(0.75 + gauss(S) * 0.2, 0, 1), coop: clamp(0.55 + gauss(S) * 0.2, 0, 1), wealth: 6 }) }));
     for (const a of ids) for (const b of ids) if (a !== b) a.trust[b.id] = 0.4;
-    log(S, 'shock', `С ${side === 0 ? 'востока' : 'запада'} приходят 15 чужаков со своими нормами`, side === 0 ? 960 : 40, 500, 0, { why: 'Их нормы распределения противоположны местному большинству, амбиции высоки, и они доверяют друг другу. Скорее всего, они сплотятся в свою группу и начнут спорить за ресурсы.', who: ids.map(a => a.id) });
+    log(S, 'shock', `С ${side === 0 ? 'востока' : 'запада'} приходят 15 чужаков со своими нормами`, side === 0 ? 960 : 40, 500, 0, { why: 'Их понятие справедливости противоположно здешнему, они рвутся к власти и держатся друг друга. Скорее всего, они сплотятся в свою общину и начнут спорить за землю и добычу.', who: ids.map(a => a.id) });
   }
   if (kind === 'decap' && big[0]) removeAgent(S, S._a.get(big[0].leader), 'vanish');
   if (kind === 'rumor' && big[1]) {
     const A = big[0], B = big[1], LA = S._a.get(A.leader), LB = S._a.get(B.leader);
     bump(LA, LB, -0.6); bump(LB, LA, -0.6);
     S.hostility[key(A.id, B.id)] = (S.hostility[key(A.id, B.id)] || 0) + 0.8;
-    log(S, 'shock', `Слух: «${A.name}» будто бы готовит удар по «${B.name}»`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, 0, { why: `Доверие между лидерами ${LA.name} и ${LB.name} резко упало, вражда выросла. Дальше всё решит их характер.`, who: [LA.id, LB.id], gs: [A.id, B.id] });
+    log(S, 'shock', `Слух: «${A.name}» будто бы готовит удар по «${B.name}»`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, 0, { why: `Вожди ${LA.name} и ${LB.name} резко перестали доверять друг другу, вражда выросла. Дальше всё решит их характер.`, who: [LA.id, LB.id], gs: [A.id, B.id] });
   }
 }
 
@@ -111,5 +112,5 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
