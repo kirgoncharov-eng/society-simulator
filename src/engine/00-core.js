@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm29', date: '2026-11-22', note: 'понятный характер: черты и показатели словами, характер меняется от жизни, хроника без жаргона' };
+const MODEL = { v: 'm30', date: '2026-11-23', note: 'одни часы мира, план дня и время в дороге' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -54,7 +54,7 @@ function log(S, type, text, x, y, hue, ex) {
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
-  if (x !== undefined) S.flashes.push({ id: S.flashId++, t: S.tick, type, x, y, hue });
+  if (x !== undefined) S.flashes.push({ id: S.flashId++, t: ev.t, minute: ev.minute, type, x, y, hue });
   if (S.flashes.length > 60) S.flashes.splice(0, S.flashes.length - 60);
   return ev;
 }

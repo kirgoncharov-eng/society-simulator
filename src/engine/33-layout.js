@@ -161,15 +161,3 @@ function wallCells(S) {
   S._wallV = S.wallV;
   return S._wallCells = cells;
 }
-
-function wallWalk(a, to, goal, segments) {
-  const hit = segments.find(s => lineCrossing(a, to, s.a, s.b) !== null);
-  if (!hit) return to;
-  const { a: start, b: end } = hit, length = dist(start, end);
-  const from = dist(a, start) + dist(start, goal) < dist(a, end) + dist(end, goal) ? start : end;
-  const dir = from === start ? -1 : 1;
-  const target = { x: from.x + dir * (end.x - start.x) / length * 3, y: from.y + dir * (end.y - start.y) / length * 3 };
-  const d = dist(a, target) || 1, step = Math.min(d, dist(a, to));
-  const around = { x: a.x + (target.x - a.x) * step / d, y: a.y + (target.y - a.y) * step / d };
-  return segments.some(s => lineCrossing(a, around, s.a, s.b) !== null) ? a : around;
-}

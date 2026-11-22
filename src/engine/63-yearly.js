@@ -95,6 +95,7 @@ function shock(S, kind) {
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
 function restore(str) {
   const S = JSON.parse(str); index(S);
+  if (!Number.isInteger(S.minute) || S.minute < 0 || S.minute >= DAY_MINUTES) S.minute = 0;
   for (const g of S.groups) {
     if (!g.home) continue;
     if (g.plan && !g.plan.street) g.plan.street = streetFor(S, g);
@@ -112,5 +113,5 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 

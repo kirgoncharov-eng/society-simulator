@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
-    "test": "node tools/build.mjs && node tools/smoke.mjs 3 40",
+    "test": "node tools/build.mjs && node tools/clock-check.mjs && node tools/smoke.mjs 3 40",
     "audit": "node tools/build.mjs && node tools/audit.mjs 6 80",
     "audit:long": "node tools/build.mjs && node tools/audit.mjs 12 80",
     "atlas": "node tools/build.mjs && node tools/atlas.mjs 100 100",

@@ -1,5 +1,6 @@
-function step(S) {
+function step(S, plans) {
   S.tick++;
+  S.minute = 0;
   advanceWeather(S);
   if (!S.wear) navInit(S);
   if (!S.springs) springsInit(S);
@@ -15,7 +16,7 @@ function step(S) {
     for (const id of g.members) { const m = S._agentsById[id]; sx += m.x; sy += m.y; }
     g.cx = sx / g.members.length; g.cy = sy / g.members.length;
   }
-  move(S);
+  move(S, plans);
   deliver(S);
   caravans(S);
   wars(S);
@@ -40,27 +41,24 @@ function moveDistance(dx, dy) {
   return Math.sqrt(1 + ratio * ratio) * max;
 }
 
-function walkNoise(t) {
-  return (randomAt((t + RNG_STEP) | 0) + randomAt((t + 2 * RNG_STEP) | 0) +
-    randomAt((t + 3 * RNG_STEP) | 0) - 1.5) / 1.5 * 0.5;
-}
-
-function move(S) {
-  const A = S.agents;
-  const tick = S.tick;
+function move(S, plans) {
+  const A = S.agents, tick = S.tick;
   const day = tick % 360, frozen = S.frozen;
   const fordRisk = frozen ? (day < 20 || day >= 70 ? 0.002 : 0.0004)
     : day >= 90 && day < 150 ? 0.008 : 0.00025;
   const guardPost = Math.floor(tick / 160), guardWall = Math.floor(tick / 120);
   const storm = S.weather?.kind === 'storm';
-  const costs = navigationCosts(S), drag = S._moveDrag, walls = wallCells(S);
+  const costs = navigationCosts(S), light = daylightHours(tick);
   for (const a of A) {
     let tx, ty;
     const gH = a.group && S._groupsById[a.group];
     const wp = a.war ? warTarget(S, a) : null;
     const cp = !wp && a.car ? carTarget(S, a) : null;
+    const escape = a.escape && nodeOf(S, gH?.target);
     if (wp) { tx = wp.x + ((a.id * 7) % 15 - 7); ty = wp.y + ((a.id * 11) % 15 - 7); }
     else if (cp) { tx = cp.x + ((a.id * 7) % 9 - 4); ty = cp.y + ((a.id * 11) % 9 - 4); }
+    else if (a.relocation && gH?.home) { tx = gH.home.x; ty = gH.home.y; }
+    else if (escape) { tx = escape.x; ty = escape.y; }
     else if (gH && gH.home) {
       const g = gH, j = ((a.id * 37) % 13) - 6, j2 = ((a.id * 53) % 11) - 5;
       let p = null;
@@ -85,10 +83,11 @@ function move(S) {
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
-      if (a.rite && tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
+      if (a.rite && tick < a.rite.until) p = a.rite;
       const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
       tx = p.x + j * spread; ty = p.y + j2 * spread;
+      if (a.job === 'home' || !costs[cellAt(tx, ty)]) { tx = p.x; ty = p.y; }
     } else if (a.group) {
       const g = S._groupsById[a.group];
       if (a.role === 'leader') {
@@ -111,121 +110,36 @@ function move(S) {
       }
       tx = n ? n.x + Math.cos(a.id) * 22 : a.x; ty = n ? n.y + Math.sin(a.id) * 22 : a.y;
     }
-    let ca = cellAt(a.x, a.y);
-    const terrain = S.ter[ca];
-    if (terrain === 's' || (terrain === 'w' && !costs[ca])) {
-      toLand(S, a);
-      ca = cellAt(a.x, a.y);
-    }
-    const ct = cellAt(tx, ty);
-    let onPath = false;
-    if (ca !== ct) {
-      const far = Math.abs(ca % N - ct % N) + Math.abs(((ca / N) | 0) - ((ct / N) | 0)) > 2;
-      const bk = ca * 2500 + ct; if (a.bkK !== bk || a.bkV !== S.navV) { a.bkK = bk; a.bkV = S.navV; a.bkR = !far && blocked(S, a.x, a.y, tx, ty); }
-      if (far || a.bkR) {
-        const cell = nextPathCell(S, a, ca, ct);
-        if (cell >= 0) {
-          const offset = ((a.id * 13) % 7) - 3;
-          tx = (cell % N) * CS + 10 + offset;
-          ty = ((cell / N) | 0) * CS + 10 + offset;
-          a.stuck = 0;
-          onPath = far;
-        } else {
-          tx = a.x;
-          ty = a.y;
-          a.stuck = (a.stuck || 0) + 1;
-        }
-      }
-    }
-    const dx = tx - a.x, dy = ty - a.y, d = moveDistance(dx, dy) || 1;
-    const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
-    const rng = S.rng;
-    let nx = a.x + dx / d * sp + walkNoise(rng);
-    let ny = a.y + dy / d * sp + walkNoise((rng + 3 * RNG_STEP) | 0);
-    S.rng = (rng + 6 * RNG_STEP) | 0;
-    if (walls[ca]) { const next = wallWalk(a, { x: nx, y: ny }, { x: tx, y: ty }, walls[ca]); nx = next.x; ny = next.y; }
-    let nc = cellAt(nx, ny);
-    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; nc = ca; }
-    a.x = nx; a.y = ny;
-    if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
-    if (nc !== a.lc) {
-      if (S.ter[nc] === 'w' && !S.bridge[nc]) {
-        const gg = a.group && S._groupsById[a.group]; if (gg) gg.cross = (gg.cross || 0) + 1;
-        // a ford is dangerous in the spring flood and with a load on the back; thin ice at the start and end of winter
-        if (rnd(S) < fordRisk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
-      }
-      a.lc = nc;
-    }
+    if (!costs[cellAt(a.x, a.y)]) toLand(S, a);
+    tx = clamp(tx, 6, 994);
+    ty = clamp(ty, 6, 994);
+    if (!costs[cellAt(tx, ty)] && (wp || cp)) { tx = (wp || cp).x; ty = (wp || cp).y; }
+    const trip = wp ? 'war' : cp ? 'caravan' : a.relocation && gH?.home ? 'relocation' : escape ? 'escape' : null;
+    const home = !trip && gH?.home ? houseOf(gH, a.house) : null;
+    const shelter = !trip && gH?.home && (home && !home.ruined ? home : gH.home);
+    planMovement(S, a, tx, ty, trip, shelter, home, light, fordRisk, plans);
   }
-  if (S._drown && S._drown.length) { for (const a of S._drown) drown(S, a); S._drown = []; }
-  meet(S, A, walls);
-  for (const a of A) { a.x = clamp(a.x, 6, 994); a.y = clamp(a.y, 6, 994); }
+  if (S._drown?.length) {
+    for (const a of S._drown) drown(S, a);
+    S._drown.length = 0;
+  }
+  meet(S, S.agents);
 }
 
-function meet(S, agents, walls) {
-  // Agents are appended in ID order. Use that same tie order even when the
-  // previous day's list makes the sort largely incremental.
-  const tail = agents[agents.length - 1];
-  if (S._meetingAgents !== agents || S._meetingTail !== tail) {
-    S._meetingAgents = agents;
-    S._meetingTail = tail;
-    S._meetingOrder = agents.slice().sort((p, q) => p.x - q.x);
-  } else {
-    const order = S._meetingOrder;
-    for (let i = 1; i < order.length; i++) {
-      const agent = order[i], x = agent.x;
-      let slot = i;
-      while (slot > 0) {
-        const previous = order[slot - 1];
-        if (previous.x < x || (previous.x === x && previous.id < agent.id)) break;
-        order[slot--] = previous;
-      }
-      order[slot] = agent;
-    }
-  }
-  const order = S._meetingOrder;
-  const size = order.length;
-  if (!S._meetingX || S._meetingX.length < size) {
-    S._meetingX = new Float64Array(size + 32);
-    S._meetingY = new Float64Array(size + 32);
-  }
-  const xs = S._meetingX, ys = S._meetingY;
-  for (let i = 0; i < size; i++) {
-    xs[i] = order[i].x;
-    ys[i] = order[i].y;
-  }
-  let rng = S.rng;
-  for (let i = 0; i < size; i++) {
+function meet(S, agents) {
+  const order = S._meetingOrder || (S._meetingOrder = []);
+  order.length = agents.length;
+  for (let i = 0; i < agents.length; i++) order[i] = agents[i];
+  order.sort((a, b) => a.x - b.x || a.id - b.id);
+  for (let i = 0; i < order.length; i++) {
     const a = order[i];
-    let ax = xs[i], ay = ys[i];
-    for (let j = i + 1; j < size; j++) {
-      const dx = xs[j] - ax;
+    for (let j = i + 1; j < order.length; j++) {
+      const b = order[j], dx = b.x - a.x;
       if (dx > 55) break;
-      const dy = ys[j] - ay;
-      if (dy > 55 || dy < -55) continue;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < 81) {
-        const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
-        const b = order[j];
-        const nearA = walls[cellAt(ax, ay)], nearB = walls[cellAt(xs[j], ys[j])];
-        const shiftX = dx * f, shiftY = dy * f;
-        if (!nearA?.some(w => lineCrossing(a, { x: ax - shiftX, y: ay - shiftY }, w.a, w.b) !== null)) {
-          a.x = ax -= shiftX;
-          a.y = ay -= shiftY;
-        }
-        if (!nearB?.some(w => lineCrossing(b, { x: xs[j] + shiftX, y: ys[j] + shiftY }, w.a, w.b) !== null)) {
-          b.x = xs[j] += shiftX;
-          b.y = ys[j] += shiftY;
-        }
-      }
-      if (d2 < 3025 && randomAt(rng = (rng + RNG_STEP) | 0) < 0.02) {
-        S.rng = rng;
-        interact(S, a, order[j]);
-        rng = S.rng;
-      }
+      const dy = b.y - a.y;
+      if (dx * dx + dy * dy < 3025 && rnd(S) < 0.02) interact(S, a, b);
     }
   }
-  S.rng = rng;
 }
 
 function bump(a, b, d) { a.trust[b.id] = clamp((a.trust[b.id] || 0) + d, -1, 1); }
@@ -295,7 +209,7 @@ function produce(S) {
     const tm = 1 + 0.5 * Math.min(1, g.tools / Math.max(1, k * 0.6));
     for (const id of g.members) {
       const m = S._agentsById[id];
-      if (m.haul) continue;
+      if (m.haul || m._travel || m._workBlocked || (m.rite && S.tick < m.rite.until)) continue;
       const e = jobSkill(m, m.job) * m.energy * tm;
       let worked = false;
       if (m.job === 'gather') { if (n && within(m.x - n.x, m.y - n.y, 70)) { const pt = 0.12 * e * syn * HAUL; gpot += pt; g._gath.push([m, pt]); worked = true; } }

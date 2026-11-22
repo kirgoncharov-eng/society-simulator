@@ -16,19 +16,17 @@ function frame(now) {
     if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
     requestAnimationFrame(frame); return;
   }
-  if (playing) {
-    acc = Math.min(60, acc + dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000));
+  if (playing && dayWatch) {
+    if (!mainRunner.busy && advanceObservedClock(dt)) mainRunner.advance(1, dayAdvanced);
+  } else if (playing) {
+    acc = Math.min(60, acc + dt * 12 * speed / 1000);
     // Stop at the same monthly checkpoints as the synchronous simulation.
     const checkpoint = 30 - S.tick % 30;
     const days = Math.min(Math.floor(acc), checkpoint);
-    const batch = dayWatch ? 1 : Math.min(checkpoint, Math.max(1, speed / 2));
+    const batch = Math.min(checkpoint, Math.max(1, speed / 2));
     if (!mainRunner.busy && days >= batch) {
       acc -= days;
-      mainRunner.advance(days, completed => {
-        if (!completed || S.tick % 30) return;
-        checkStops(performance.now());
-        if (!playing) acc = 0;
-      });
+      mainRunner.advance(days, dayAdvanced);
     }
   }
   // At high speed leave time for controls and snapshots between canvas draws.
@@ -41,6 +39,12 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+function dayAdvanced(completed) {
+  if (!completed || S.tick % 30) return;
+  checkStops(performance.now());
+  if (!playing) acc = 0;
+}
+
 $('play').addEventListener('click', () => {
   playing = !playing;
   if (!playing && mainRunner.busy) mainRunner.reset();
@@ -50,9 +54,11 @@ $('play').addEventListener('click', () => {
 document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
   dayWatch = e.target.value === 'day';
   if (!dayWatch) speed = +e.target.value;
-  acc = dayWatch ? dawnFraction() : 0;
+  if (mainRunner.busy) mainRunner.reset();
+  acc = dayRemainder = 0;
+  routineWorld = null;
 }));
-$('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
+$('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick) + (S.minute ? ` · ${clockTime(S.minute)}` : ''); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
 $('back').addEventListener('click', () => {
   if (!forkSnap) return;
   const params = Object.assign({}, S.params);
@@ -64,7 +70,7 @@ $('back').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
-  SIM.shock(S, b.dataset.shock); mainRunner.reset(); seenEv = S.evId || 0; ui(true);
+  SIM.shock(S, b.dataset.shock); mainRunner.reset(); routineWorld = null; seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
 }));
 $('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
@@ -132,7 +138,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors
 let introOpen = false;
 function intro() {
   introOpen = true;
-  playing = false; acc = dayWatch ? dawnFraction() : 0; syncPlay();
+  playing = false; acc = dayRemainder = 0; syncPlay();
   const landing = firstLanding(S);
   if (landing) {
     vt = { x: landing.x1, y: landing.y1, z: 1.65 };
@@ -150,6 +156,12 @@ function start(data) {
   let restored = false;
   if (data && data.w) { try { S = SIM.restore(data.w); resetView(); restored = true; } catch (e) { world(2026); } }
   else world(2026);
+  if (restored && S.minute > 0) {
+    dayWatch = true;
+    $('spDay').checked = true;
+    playing = false;
+    syncPlay();
+  }
   if (data && data.fork) { forkSnap = data.fork; forkLabel = data.forkLabel || ''; $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; }
   window.claude?.hot?.snapshot?.(() => ({ w: SIM.serialize(S), fork: forkSnap, forkLabel }));
   if (!restored) intro();

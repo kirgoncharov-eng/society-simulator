@@ -1,6 +1,6 @@
 function newWorld(seed, params) {
   const S = {
-    seed, rng: seed | 0, tick: 0, nextId: 1, flashId: 1, hueI: 0,
+    seed, rng: seed | 0, tick: 0, minute: 0, nextId: 1, flashId: 1, hueI: 0,
     agents: [], groups: [], nodes: [], hostility: {}, alliances: [],
     events: [], flashes: [], drought: 0, kids: [], plague: null, ruins: [], occ: {},
     hist: { pop: [], groups: [], entropy: [], gini: [], big: [], gs: [], solo: [], pf: [], pw: [], ps: [], pt: [] }, arch: {},
@@ -71,11 +71,14 @@ function join(S, a, g, boss) {
   if (a.group) leave(S, a, 'move');
   if (pg && pg !== g.id && S.tick > 0) bio(S, a, 'move', `Переходит из «${groupName(S, pg)}» в «${g.name}»`);
   if (!S._g.has(g.id)) return;
+  if (g.home && pg !== g.id && !within(a.x - g.home.x, a.y - g.home.y, pg ? 1 : 55)) a.relocation = true;
   a.group = g.id; a.boss = boss && S._a.has(boss) ? boss : g.leader; a.role = 'member';
   a.joined = S.tick; a.res *= 0.3; g.members.push(a.id);
 }
 
 function leave(S, a, why) {
+  delete a.relocation;
+  delete a.escape;
   a.car = null; a.war = null; a.load = 0; a.haul = false; a.lk = null;
   const g = S._g.get(a.group);
   if (g && g.land === 'private') {

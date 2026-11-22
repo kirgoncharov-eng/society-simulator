@@ -18,18 +18,15 @@ function passCost(S, c) {
 function navigationCosts(S) {
   if (S._costs && S._costsVersion === S.navV) return S._costs;
   const costs = S._costs || (S._costs = new Float64Array(N * N));
-  const drag = S._moveDrag || (S._moveDrag = new Float64Array(costs.length));
   for (let c = 0; c < costs.length; c++) {
-    const cost = passCost(S, c);
-    costs[c] = cost;
-    drag[c] = Math.pow(Math.max(0.5, cost || 3), 0.4);
+    costs[c] = passCost(S, c);
   }
   S._costsVersion = S.navV;
   return costs;
 }
 function aStar(S, c0, c1) {
   if (c0 === c1) return [c0];
-  const costs = navigationCosts(S);
+  const costs = navigationCosts(S), walls = wallCells(S);
   if (!costs[c1] || !costs[c0] && S.ter[c0] === 'w' && !S.frozen && !S.ford[c0] && !S.bridge[c0]) { if (!costs[c1]) return null; }
   const NN = N * N, gS = S._gS || (S._gS = new Float64Array(NN)), from = S._from || (S._from = new Int32Array(NN)), seen = S._seen || (S._seen = new Int32Array(NN));
   S._stamp = (S._stamp || 0) + 1; const stamp = S._stamp;
@@ -77,6 +74,7 @@ function aStar(S, c0, c1) {
       if (!dx && !dy) continue; const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
       const nc = ny * N + nx, k = costs[nc]; if (!k) continue;
       if (dx && dy && (!costs[cy * N + nx] || !costs[ny * N + cx])) continue;
+      if ((walls[c] || walls[nc]) && wallBetween(walls, cellCenter(c), cellCenter(nc))) continue;
       const ng = gS[c] + k * (dx && dy ? 1.414 : 1);
       if (seen[nc] !== stamp || ng < gS[nc]) { seen[nc] = stamp; gS[nc] = ng; from[nc] = c; push(nc, ng + h(nc)); }
     }
@@ -84,7 +82,9 @@ function aStar(S, c0, c1) {
   return null;
 }
 function getPath(S, c0, c1) {
-  if (!S._pc || S._pcv !== S.navV) { S._pc = new Map(); S._pcv = S.navV; }
+  if (!S._pc || S._pcv !== S.navV || S._pcWall !== S.wallV) {
+    S._pc = new Map(); S._pcv = S.navV; S._pcWall = S.wallV;
+  }
   const k = c0 * 2500 + c1;
   if (S._pc.has(k)) return S._pc.get(k);
   const C = comps(S); if (!C[c1] || (C[c0] && C[c0] !== C[c1])) { S._pc.set(k, null); return null; }
@@ -143,23 +143,8 @@ function toLand(S, a) {
   for (let r = 1; r < 12; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; const x = ci + dx, y = cj + dy; if (x < 0 || y < 0 || x >= N || y >= N) continue;
     const q = y * N + x, t = S.ter[q]; if (t === 's' || t === 'w' || t === 'h') continue;
-    a.x = x * CS + 10 + gauss(S) * 3; a.y = y * CS + 10 + gauss(S) * 3; a.path = null; return;
+    a.x = x * CS + 10 + gauss(S) * 3; a.y = y * CS + 10 + gauss(S) * 3; return;
   }
-}
-function nextPathCell(S, a, ca, ct) {
-  if (a.pc !== ct || a.pv !== S.navV || !a.path) { a.path = getPath(S, ca, ct); a.pc = ct; a.pv = S.navV; a.pi = 0; }
-  const path = a.path;
-  if (!path) return -1;
-  if (path[a.pi] !== ca) {
-    const end = Math.min(path.length, a.pi + 6);
-    for (let k = a.pi + 1; k < end; k++) if (path[k] === ca) { a.pi = k; break; }
-    if (path[a.pi] !== ca && !path.includes(ca)) {
-      a.path = getPath(S, ca, ct);
-      a.pi = 0;
-      if (!a.path) return -1;
-    }
-  }
-  return a.path[Math.min(a.pi + 1, a.path.length - 1)];
 }
 function roadsYear(S) {
   let ch = 0;

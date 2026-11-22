@@ -67,10 +67,10 @@ function caravans(S) {
     const c = a.car; if (!c) continue;
     const A = S._g.get(c.from), B = S._g.get(c.to);
     if (!A || a.group !== c.from) { a.car = null; continue; }
-    if ((S.tick + a.id) % 6 === 0) {
+    if (a._travel?.arrived || (S.tick + a.id) % 6 === 0) {
       for (const H of S.groups) {
         if (!H.home || H === A || H.id === c.to || (S.hostility[key(H.id, A.id)] || 0) < 0.6) continue;
-        if (Math.hypot(a.x - H.home.x, a.y - H.home.y) > 120 || H.members.length < 4 || rnd(S) > 0.25 || (S.raidCool || {})[key(H.id, A.id)] > S.tick) continue;
+        if (!walkedNear(a, H.home, 120) || H.members.length < 4 || rnd(S) > 0.25 || (S.raidCool || {})[key(H.id, A.id)] > S.tick) continue;
         S.raidCool = S.raidCool || {}; S.raidCool[key(H.id, A.id)] = S.tick + 360;
         const good = c.phase === 'go' ? c.x : c.y, q = c.phase === 'go' ? c.qx : c.qy;
         addStock(H, good, q); S.stats.raids++; A.raided = S.tick;
@@ -85,7 +85,7 @@ function caravans(S) {
     }
     if (c.phase === 'go') {
       if (!B || !B.home) { addStock(A, c.x, c.qx * 0.5); a.car = null; continue; }
-      if (Math.hypot(a.x - B.home.x, a.y - B.home.y) > 22) continue;
+      if (!a._travel?.arrived) continue;
       const pyNow = Math.sqrt(valueOf(A, c.y) * valueOf(B, c.y));
       let qy = Math.min(c.qx * c.px / pyNow, Math.max(0, stockOf(B, c.y) - needOf(B, c.y) * 0.8));
       if (qy < 0.2) { c.phase = 'back'; c.y = c.x; c.qy = c.qx * 0.7; c.failed = true; continue; }
@@ -125,7 +125,7 @@ function caravans(S) {
         a.richer = true;
         log(S, 'trade', `Купец ${a.name} становится богаче своего вождя ${LA.name}`, a.x, a.y, A.hue, { why: `После ${a.trades} ${pl(a.trades, 'каравана', 'караванов', 'караванов')} у него ${a.wealth.toFixed(0)}, а у вождя ${LA.wealth.toFixed(0)}. Восьмая часть каждой сделки оседает у купца. Богатство даёт вес и сторонников: рядом с вождём появляется вторая сила.`, who: [a.id, LA.id], gs: [A.id] });
       }
-    } else if (Math.hypot(a.x - A.home.x, a.y - A.home.y) < 22) {
+    } else if (a._travel?.arrived) {
       addStock(A, c.y, c.qy); a.car = null;
     }
   }

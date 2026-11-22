@@ -10,7 +10,8 @@ function landBoat(S, size, first) {
   const band = spawnBand(S, size, b.x - ux * 10, b.y - uy * 10, first ? 12 : 8);
   const g = band.length && S._g.get(band[0].group); if (g) { g.treasury = band.length * 9; g.goats = 2 + Math.floor(rnd(S) * 3); }
   for (const a of band) { a.bio = [[S.tick, 'born', first ? 'Среди первых приплывает на остров' : 'Приплывает на остров из-за моря']]; a.drama = 1; }
-  S.boats = S.boats || []; S.boats.push({ x0: b.x + ux * 140, y0: b.y + uy * 140, x1: b.x + ux * 8, y1: b.y + uy * 8, t: S.tick, out: false });
+  const from = { x: b.x + ux * 140, y: b.y + uy * 140 }, to = { x: b.x + ux * 8, y: b.y + uy * 8 };
+  S.boats = S.boats || []; S.boats.push({ x0: from.x, y0: from.y, x1: to.x, y1: to.y, t: S.tick, out: false, durationMinutes: boatMinutes(from, to) });
   if (S.boats.length > 30) S.boats.shift();
   S.stats.arrived = (S.stats.arrived || 0) + band.length;
   const firstEver = !S.firstBoat; S.firstBoat = true;
@@ -80,7 +81,8 @@ function seaMonth(S) {
       return false;
     });
     const d = Math.hypot(bs.x - S.isle.x, bs.y - S.isle.y) || 1;
-    S.boats.push({ x0: bs.x, y0: bs.y, x1: bs.x + (bs.x - S.isle.x) / d * 160, y1: bs.y + (bs.y - S.isle.y) / d * 160, t: S.tick, out: true });
+    const offshore = { x: bs.x + (bs.x - S.isle.x) / d * 160, y: bs.y + (bs.y - S.isle.y) / d * 160 };
+    S.boats.push({ x0: bs.x, y0: bs.y, x1: offshore.x, y1: offshore.y, t: S.tick, out: true, durationMinutes: boatMinutes(bs, offshore) });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
     const departure = log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
     S.firstEmigr = true;

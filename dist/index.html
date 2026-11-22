@@ -482,7 +482,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm29', date: '2026-11-22', note: 'понятный характер: черты и показатели словами, характер меняется от жизни, хроника без жаргона' };
+const MODEL = { v: 'm30', date: '2026-11-23', note: 'одни часы мира, план дня и время в дороге' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -534,7 +534,7 @@ function log(S, type, text, x, y, hue, ex) {
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
-  if (x !== undefined) S.flashes.push({ id: S.flashId++, t: S.tick, type, x, y, hue });
+  if (x !== undefined) S.flashes.push({ id: S.flashId++, t: ev.t, minute: ev.minute, type, x, y, hue });
   if (S.flashes.length > 60) S.flashes.splice(0, S.flashes.length - 60);
   return ev;
 }
@@ -704,7 +704,8 @@ function landBoat(S, size, first) {
   const band = spawnBand(S, size, b.x - ux * 10, b.y - uy * 10, first ? 12 : 8);
   const g = band.length && S._g.get(band[0].group); if (g) { g.treasury = band.length * 9; g.goats = 2 + Math.floor(rnd(S) * 3); }
   for (const a of band) { a.bio = [[S.tick, 'born', first ? 'Среди первых приплывает на остров' : 'Приплывает на остров из-за моря']]; a.drama = 1; }
-  S.boats = S.boats || []; S.boats.push({ x0: b.x + ux * 140, y0: b.y + uy * 140, x1: b.x + ux * 8, y1: b.y + uy * 8, t: S.tick, out: false });
+  const from = { x: b.x + ux * 140, y: b.y + uy * 140 }, to = { x: b.x + ux * 8, y: b.y + uy * 8 };
+  S.boats = S.boats || []; S.boats.push({ x0: from.x, y0: from.y, x1: to.x, y1: to.y, t: S.tick, out: false, durationMinutes: boatMinutes(from, to) });
   if (S.boats.length > 30) S.boats.shift();
   S.stats.arrived = (S.stats.arrived || 0) + band.length;
   const firstEver = !S.firstBoat; S.firstBoat = true;
@@ -774,7 +775,8 @@ function seaMonth(S) {
       return false;
     });
     const d = Math.hypot(bs.x - S.isle.x, bs.y - S.isle.y) || 1;
-    S.boats.push({ x0: bs.x, y0: bs.y, x1: bs.x + (bs.x - S.isle.x) / d * 160, y1: bs.y + (bs.y - S.isle.y) / d * 160, t: S.tick, out: true });
+    const offshore = { x: bs.x + (bs.x - S.isle.x) / d * 160, y: bs.y + (bs.y - S.isle.y) / d * 160 };
+    S.boats.push({ x0: bs.x, y0: bs.y, x1: offshore.x, y1: offshore.y, t: S.tick, out: true, durationMinutes: boatMinutes(bs, offshore) });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
     const departure = log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
     S.firstEmigr = true;
@@ -794,7 +796,7 @@ function spawnBand(S, size, bx, by, kidsMax) {
 }
 function newWorld(seed, params) {
   const S = {
-    seed, rng: seed | 0, tick: 0, nextId: 1, flashId: 1, hueI: 0,
+    seed, rng: seed | 0, tick: 0, minute: 0, nextId: 1, flashId: 1, hueI: 0,
     agents: [], groups: [], nodes: [], hostility: {}, alliances: [],
     events: [], flashes: [], drought: 0, kids: [], plague: null, ruins: [], occ: {},
     hist: { pop: [], groups: [], entropy: [], gini: [], big: [], gs: [], solo: [], pf: [], pw: [], ps: [], pt: [] }, arch: {},
@@ -865,11 +867,14 @@ function join(S, a, g, boss) {
   if (a.group) leave(S, a, 'move');
   if (pg && pg !== g.id && S.tick > 0) bio(S, a, 'move', `Переходит из «${groupName(S, pg)}» в «${g.name}»`);
   if (!S._g.has(g.id)) return;
+  if (g.home && pg !== g.id && !within(a.x - g.home.x, a.y - g.home.y, pg ? 1 : 55)) a.relocation = true;
   a.group = g.id; a.boss = boss && S._a.has(boss) ? boss : g.leader; a.role = 'member';
   a.joined = S.tick; a.res *= 0.3; g.members.push(a.id);
 }
 
 function leave(S, a, why) {
+  delete a.relocation;
+  delete a.escape;
   a.car = null; a.war = null; a.load = 0; a.haul = false; a.lk = null;
   const g = S._g.get(a.group);
   if (g && g.land === 'private') {
@@ -1094,18 +1099,15 @@ function passCost(S, c) {
 function navigationCosts(S) {
   if (S._costs && S._costsVersion === S.navV) return S._costs;
   const costs = S._costs || (S._costs = new Float64Array(N * N));
-  const drag = S._moveDrag || (S._moveDrag = new Float64Array(costs.length));
   for (let c = 0; c < costs.length; c++) {
-    const cost = passCost(S, c);
-    costs[c] = cost;
-    drag[c] = Math.pow(Math.max(0.5, cost || 3), 0.4);
+    costs[c] = passCost(S, c);
   }
   S._costsVersion = S.navV;
   return costs;
 }
 function aStar(S, c0, c1) {
   if (c0 === c1) return [c0];
-  const costs = navigationCosts(S);
+  const costs = navigationCosts(S), walls = wallCells(S);
   if (!costs[c1] || !costs[c0] && S.ter[c0] === 'w' && !S.frozen && !S.ford[c0] && !S.bridge[c0]) { if (!costs[c1]) return null; }
   const NN = N * N, gS = S._gS || (S._gS = new Float64Array(NN)), from = S._from || (S._from = new Int32Array(NN)), seen = S._seen || (S._seen = new Int32Array(NN));
   S._stamp = (S._stamp || 0) + 1; const stamp = S._stamp;
@@ -1153,6 +1155,7 @@ function aStar(S, c0, c1) {
       if (!dx && !dy) continue; const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
       const nc = ny * N + nx, k = costs[nc]; if (!k) continue;
       if (dx && dy && (!costs[cy * N + nx] || !costs[ny * N + cx])) continue;
+      if ((walls[c] || walls[nc]) && wallBetween(walls, cellCenter(c), cellCenter(nc))) continue;
       const ng = gS[c] + k * (dx && dy ? 1.414 : 1);
       if (seen[nc] !== stamp || ng < gS[nc]) { seen[nc] = stamp; gS[nc] = ng; from[nc] = c; push(nc, ng + h(nc)); }
     }
@@ -1160,7 +1163,9 @@ function aStar(S, c0, c1) {
   return null;
 }
 function getPath(S, c0, c1) {
-  if (!S._pc || S._pcv !== S.navV) { S._pc = new Map(); S._pcv = S.navV; }
+  if (!S._pc || S._pcv !== S.navV || S._pcWall !== S.wallV) {
+    S._pc = new Map(); S._pcv = S.navV; S._pcWall = S.wallV;
+  }
   const k = c0 * 2500 + c1;
   if (S._pc.has(k)) return S._pc.get(k);
   const C = comps(S); if (!C[c1] || (C[c0] && C[c0] !== C[c1])) { S._pc.set(k, null); return null; }
@@ -1219,23 +1224,8 @@ function toLand(S, a) {
   for (let r = 1; r < 12; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; const x = ci + dx, y = cj + dy; if (x < 0 || y < 0 || x >= N || y >= N) continue;
     const q = y * N + x, t = S.ter[q]; if (t === 's' || t === 'w' || t === 'h') continue;
-    a.x = x * CS + 10 + gauss(S) * 3; a.y = y * CS + 10 + gauss(S) * 3; a.path = null; return;
+    a.x = x * CS + 10 + gauss(S) * 3; a.y = y * CS + 10 + gauss(S) * 3; return;
   }
-}
-function nextPathCell(S, a, ca, ct) {
-  if (a.pc !== ct || a.pv !== S.navV || !a.path) { a.path = getPath(S, ca, ct); a.pc = ct; a.pv = S.navV; a.pi = 0; }
-  const path = a.path;
-  if (!path) return -1;
-  if (path[a.pi] !== ca) {
-    const end = Math.min(path.length, a.pi + 6);
-    for (let k = a.pi + 1; k < end; k++) if (path[k] === ca) { a.pi = k; break; }
-    if (path[a.pi] !== ca && !path.includes(ca)) {
-      a.path = getPath(S, ca, ct);
-      a.pi = 0;
-      if (!a.path) return -1;
-    }
-  }
-  return a.path[Math.min(a.pi + 1, a.path.length - 1)];
 }
 function roadsYear(S) {
   let ch = 0;
@@ -1674,18 +1664,6 @@ function wallCells(S) {
   S._wallV = S.wallV;
   return S._wallCells = cells;
 }
-
-function wallWalk(a, to, goal, segments) {
-  const hit = segments.find(s => lineCrossing(a, to, s.a, s.b) !== null);
-  if (!hit) return to;
-  const { a: start, b: end } = hit, length = dist(start, end);
-  const from = dist(a, start) + dist(start, goal) < dist(a, end) + dist(end, goal) ? start : end;
-  const dir = from === start ? -1 : 1;
-  const target = { x: from.x + dir * (end.x - start.x) / length * 3, y: from.y + dir * (end.y - start.y) / length * 3 };
-  const d = dist(a, target) || 1, step = Math.min(d, dist(a, to));
-  const around = { x: a.x + (target.x - a.x) * step / d, y: a.y + (target.y - a.y) * step / d };
-  return segments.some(s => lineCrossing(a, around, s.a, s.b) !== null) ? a : around;
-}
 /* Building projects reserve stock, then require work and supplies at the plot. */
 const BUILD_FOOTPRINT = {
   house: [10, 10], workshop: [18, 13], granary: [10, 10], shrine: [10, 10], well: [9, 9], fboat: [12, 5],
@@ -1957,10 +1935,10 @@ function caravans(S) {
     const c = a.car; if (!c) continue;
     const A = S._g.get(c.from), B = S._g.get(c.to);
     if (!A || a.group !== c.from) { a.car = null; continue; }
-    if ((S.tick + a.id) % 6 === 0) {
+    if (a._travel?.arrived || (S.tick + a.id) % 6 === 0) {
       for (const H of S.groups) {
         if (!H.home || H === A || H.id === c.to || (S.hostility[key(H.id, A.id)] || 0) < 0.6) continue;
-        if (Math.hypot(a.x - H.home.x, a.y - H.home.y) > 120 || H.members.length < 4 || rnd(S) > 0.25 || (S.raidCool || {})[key(H.id, A.id)] > S.tick) continue;
+        if (!walkedNear(a, H.home, 120) || H.members.length < 4 || rnd(S) > 0.25 || (S.raidCool || {})[key(H.id, A.id)] > S.tick) continue;
         S.raidCool = S.raidCool || {}; S.raidCool[key(H.id, A.id)] = S.tick + 360;
         const good = c.phase === 'go' ? c.x : c.y, q = c.phase === 'go' ? c.qx : c.qy;
         addStock(H, good, q); S.stats.raids++; A.raided = S.tick;
@@ -1975,7 +1953,7 @@ function caravans(S) {
     }
     if (c.phase === 'go') {
       if (!B || !B.home) { addStock(A, c.x, c.qx * 0.5); a.car = null; continue; }
-      if (Math.hypot(a.x - B.home.x, a.y - B.home.y) > 22) continue;
+      if (!a._travel?.arrived) continue;
       const pyNow = Math.sqrt(valueOf(A, c.y) * valueOf(B, c.y));
       let qy = Math.min(c.qx * c.px / pyNow, Math.max(0, stockOf(B, c.y) - needOf(B, c.y) * 0.8));
       if (qy < 0.2) { c.phase = 'back'; c.y = c.x; c.qy = c.qx * 0.7; c.failed = true; continue; }
@@ -2015,7 +1993,7 @@ function caravans(S) {
         a.richer = true;
         log(S, 'trade', `Купец ${a.name} становится богаче своего вождя ${LA.name}`, a.x, a.y, A.hue, { why: `После ${a.trades} ${pl(a.trades, 'каравана', 'караванов', 'караванов')} у него ${a.wealth.toFixed(0)}, а у вождя ${LA.wealth.toFixed(0)}. Восьмая часть каждой сделки оседает у купца. Богатство даёт вес и сторонников: рядом с вождём появляется вторая сила.`, who: [a.id, LA.id], gs: [A.id] });
       }
-    } else if (Math.hypot(a.x - A.home.x, a.y - A.home.y) < 22) {
+    } else if (a._travel?.arrived) {
       addStock(A, c.y, c.qy); a.car = null;
     }
   }
@@ -2127,9 +2105,9 @@ function wars(S) {
     const band = w.fighters.map(id => S._a.get(id)).filter(m => m && m.war === w.id);
     if (!band.length) { endWar(S, w); continue; }
     if (w.phase === 'march') {
-      const near = band.filter(m => Math.hypot(m.x - B.home.x, m.y - B.home.y) < 30).length;
+      const near = band.filter(m => m._travel?.arrived).length;
       if (near >= Math.ceil(band.length * 0.6)) battle(S, w, A, B, band);
-    } else if (band.every(m => Math.hypot(m.x - A.home.x, m.y - A.home.y) < 40)) endWar(S, w);
+    } else if (band.every(m => m._travel?.arrived)) endWar(S, w);
   }
 }
 function battle(S, w, A, B, band) {
@@ -2897,6 +2875,7 @@ function elope(S, f, m) {
   matchWedding(S, f, m, eev, true);
   bond(S, f, m, 'love', 'бежали вместе против воли родни', 0.9, false, eev); bond(S, m, f, 'love', 'бежали вместе против воли родни', 0.9, false, eev);
   const ng = createGroup(S, m.ambition >= f.ambition ? m : f, [m.ambition >= f.ambition ? f : m]);
+  f.escape = m.escape = true;
   ng.x0 = (f.x + m.x) / 2;
   for (const g of [gf, gm]) if (g && !g.dead) S.hostility[key(g.id, ng.id)] = 0.5;
   const txt = `Бегут вместе: «${gf ? gf.name : '?'}» и «${gm ? gm.name : '?'}» враждуют, свадьбы им не дали`;
@@ -3451,59 +3430,197 @@ function customsYear(S) {
     }
   }
 }
-/* ---------- daily routine for close observation ---------- */
+/* ---------- time and movement within a simulated day ---------- */
+const DAY_MINUTES = 24 * 60;
+const CELL_METRES = 240;
+const METRES_PER_UNIT = CELL_METRES / CS;
+const WALK_SPEED = 4000 / 60 / METRES_PER_UNIT;
+const LOAD_SPEED = 3000 / 60 / METRES_PER_UNIT;
+const LONG_WALK = 24000 / METRES_PER_UNIT;
+const CAMP_WALK = WALK_SPEED * 25;
+const RETURN_LOAD = new Set(['farm', 'gather', 'wood', 'stone', 'water', 'fish']);
+const boatMinutes = (a, b) => Math.ceil(moveDistance(b.x - a.x, b.y - a.y) * METRES_PER_UNIT / (5500 / 60));
+
 function daylightHours(tick) {
   const halfDay = 6 - 2 * Math.cos((tick % 360 - 45) * Math.PI / 180);
   return { sunrise: 12 - halfDay, sunset: 12 + halfDay };
 }
 
-function dailyRoutine(S, a) {
-  if (a.war || a.car || !a.group) return null;
-  const g = S._g.get(a.group);
-  if (!g) return null;
-  const house = houseOf(g, a.house);
-  const home = house && !house.ruined ? house : null;
-  const shelter = home || g.home || { x: g.cx, y: g.cy };
-  const start = cellAt(shelter.x, shelter.y), end = cellAt(a.x, a.y);
-  const costs = navigationCosts(S);
-  if (!costs[start] || !costs[end]) return null;
-  const path = getPath(S, start, end);
-  if (!path) return null;
-  const bed = { x: shelter.x, y: shelter.y };
-  if (home) {
-    const x = (start % N) * CS, y = Math.floor(start / N) * CS;
-    bed.x = clamp(bed.x + a.id % 7 - 3, x + 1, x + CS - 1);
-    bed.y = clamp(bed.y + Math.floor(a.id / 7) % 7 - 3, y + 1, y + CS - 1);
-  }
-  const route = [bed];
-  if (start !== end) {
-    for (const cell of path) {
-      route.push({ x: (cell % N) * CS + CS / 2, y: Math.floor(cell / N) * CS + CS / 2 });
-    }
-  }
-  route.push({ x: a.x, y: a.y });
-  return {
-    route, home: home?.id ?? null,
-    departure: (a.id % 11) * 0.035,
-    travel: Math.min(3, 0.35 + (path.length - 1) * 0.18),
-  };
+// The committed world is the one at the start of the displayed day. An
+// observed day can be calculated ahead from that same world, including its RNG.
+function prepareDay(S) {
+  const end = restore(serialize(S)), plans = new Map();
+  step(end, plans);
+  return { end, plans };
 }
 
-function routinePosition(routine, hour, light, position) {
-  const { route, departure, travel } = routine;
-  const out = light.sunrise + departure;
-  const homeBy = light.sunset - departure;
-  if (hour <= out || hour >= homeBy) {
-    position.x = route[0].x;
-    position.y = route[0].y;
+function advanceMinutes(S, elapsed) {
+  if (!Number.isSafeInteger(elapsed) || elapsed < 0) throw new RangeError('Expected nonnegative whole minutes');
+  const total = S.minute + elapsed;
+  for (let days = Math.floor(total / DAY_MINUTES); days > 0; days--) step(S);
+  S.minute = total % DAY_MINUTES;
+}
+
+function eventTime(ev) {
+  // An untimed event belongs to the midnight at which its day's outcome commits.
+  return Number.isInteger(ev.minute) && ev.minute >= 0 && ev.minute < DAY_MINUTES
+    ? Math.max(0, ev.t - 1) * DAY_MINUTES + ev.minute
+    : ev.t * DAY_MINUTES;
+}
+
+function wallBetween(walls, a, b) {
+  const from = walls[cellAt(a.x, a.y)], to = walls[cellAt(b.x, b.y)];
+  const cuts = segment => lineCrossing(a, b, segment.a, segment.b) !== null;
+  return from?.some(cuts) || (from !== to && to?.some(cuts));
+}
+
+function cellCenter(c) {
+  return { x: (c % N + 0.5) * CS, y: (Math.floor(c / N) + 0.5) * CS };
+}
+
+function walkingRoute(S, a, x0, y0, x1, y1) {
+  const saved = a._walkRoute;
+  if (saved && saved.nav === S.navV && saved.wall === S.wallV &&
+      saved.x0 === x0 && saved.y0 === y0 && saved.x1 === x1 && saved.y1 === y1) return saved.route;
+
+  const c0 = cellAt(x0, y0), c1 = cellAt(x1, y1);
+  const cells = getPath(S, c0, c1);
+  let route = null;
+  if (cells && navigationCosts(S)[c0]) {
+    const start = { x: x0, y: y0 }, end = { x: x1, y: y1 };
+    const points = c0 === c1 ? [start, end] : [start, ...cells.map(cellCenter), end];
+    const walls = wallCells(S);
+    let length = 0;
+    const distances = [0];
+    for (let i = 1; i < points.length; i++) {
+      if (walls.length && wallBetween(walls, points[i - 1], points[i])) {
+        length = -1;
+        break;
+      }
+      length += moveDistance(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+      distances.push(length);
+    }
+    if (length >= 0) route = { points, distances, length };
+  }
+  a._walkRoute = { nav: S.navV, wall: S.wallV, x0, y0, x1, y1, route };
+  return route;
+}
+
+function positionOnRoute(route, distance, position) {
+  const { points, distances, length } = route;
+  if (distance <= 0) {
+    position.x = points[0].x;
+    position.y = points[0].y;
     return;
   }
-  const progress = Math.min(1, (hour - out) / travel, (homeBy - hour) / travel);
-  const index = progress * (route.length - 1);
-  const first = Math.floor(index), part = index - first;
-  const next = route[Math.min(first + 1, route.length - 1)];
-  position.x = route[first].x + (next.x - route[first].x) * part;
-  position.y = route[first].y + (next.y - route[first].y) * part;
+  if (distance >= length) {
+    position.x = points[points.length - 1].x;
+    position.y = points[points.length - 1].y;
+    return;
+  }
+  let i = 1;
+  while (distances[i] < distance) i++;
+  const f = (distance - distances[i - 1]) / (distances[i] - distances[i - 1]);
+  position.x = points[i - 1].x + f * (points[i].x - points[i - 1].x);
+  position.y = points[i - 1].y + f * (points[i].y - points[i - 1].y);
+}
+
+function followRoute(S, a, route, distance, reverse, wear, fordRisk, loaded) {
+  const { points, distances, length } = route;
+  const edge = reverse ? points.length - 1 : 0, direction = reverse ? -1 : 1;
+  let previous = cellAt(points[edge].x, points[edge].y);
+  for (let i = edge + direction; i >= 0 && i < points.length; i += direction) {
+    if (Math.abs(distances[i] - distances[edge]) > distance) break;
+    const p = points[i], cell = cellAt(p.x, p.y);
+    if (previous === cell) continue;
+    S.wear[cell] += wear;
+    if (S.ter[cell] === 'w' && !S.bridge[cell] && (S.ter[previous] !== 'w' || S.bridge[previous])) {
+      const g = S._groupsById[a.group];
+      if (g) g.cross = (g.cross || 0) + 1;
+      if (rnd(S) < fordRisk * (loaded ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) {
+        a.x = p.x;
+        a.y = p.y;
+        (S._drown || (S._drown = [])).push(a);
+        return false;
+      }
+    }
+    previous = cell;
+  }
+  if (!reverse) positionOnRoute(route, Math.min(distance, length), a);
+  return true;
+}
+
+function walkedNear(a, place, radius) {
+  const trip = a._travel;
+  if (!trip?.route || !trip.distance) return within(a.x - place.x, a.y - place.y, radius);
+  const { points, distances } = trip.route;
+  for (let i = 1; i < points.length; i++) {
+    const partial = distances[i] >= trip.distance;
+    if (distanceToSegment(place, points[i - 1], partial ? a : points[i]) < radius) return true;
+    if (partial) return false;
+  }
+  return false;
+}
+
+function planMovement(S, a, tx, ty, trip, shelter, house, light, fordRisk, plans) {
+  const x = a.x, y = a.y;
+  const originX = shelter?.x ?? x, originY = shelter?.y ?? y;
+  const route = walkingRoute(S, a, originX, originY, tx, ty);
+  const start = Math.ceil(light.sunrise * 60 + a.id % 11 * 2);
+  const finish = Math.floor(light.sunset * 60);
+  const laden = !!(a.haul || a.car), carryBack = !a.haul && RETURN_LOAD.has(a.job);
+  const speed = laden ? LOAD_SPEED : WALK_SPEED;
+  const backSpeed = carryBack ? LOAD_SPEED : WALK_SPEED;
+  const outMinutes = route ? Math.ceil(route.length / speed) : 0;
+  const backMinutes = route && shelter ? Math.ceil(route.length / backSpeed) : 0;
+  const local = !!shelter;
+  a._workBlocked = !route || (local && start + outMinutes + backMinutes > finish);
+  a.commute = local ? (a._workBlocked ? null : outMinutes + backMinutes) : 0;
+  a._travel = null;
+
+  let distance = 0;
+  const wear = a.car ? 7 : a.war ? 3 : 1;
+  if (!a._workBlocked) {
+    distance = local ? route.length : Math.min(route.length, trip ? LONG_WALK : CAMP_WALK, (finish - start) * speed);
+    const safe = followRoute(S, a, route, distance, false, wear, fordRisk, laden);
+    if (safe && local) followRoute(S, a, route, distance, true, wear, fordRisk, carryBack);
+    if (safe && distance === route.length) {
+      if (trip === 'relocation') delete a.relocation;
+      if (trip === 'escape') delete a.escape;
+    }
+  } else if (local && navigationCosts(S)[cellAt(originX, originY)]) {
+    a.x = originX;
+    a.y = originY;
+  }
+
+  if (trip) a._travel = { route, distance, arrived: !!route && distance === route.length };
+  if (plans) {
+    plans.set(a.id, {
+      kind: trip || (a._workBlocked ? 'home' : a.haul ? 'delivery' : a.rite && S.tick < a.rite.until ? 'rite' : a.job || 'gather'),
+      home: house && !house.ruined ? house.id : null,
+      origin: { x: originX, y: originY },
+      destination: { x: a.x, y: a.y },
+      route: distance > 0 ? route : null,
+      distance, depart: start, arrive: start + Math.ceil(distance / speed),
+      leave: local && distance > 0 ? finish - backMinutes : null,
+      finish,
+      commuteMinutes: a.commute,
+      blocked: a._workBlocked
+    });
+  }
+}
+
+function routinePosition(plan, minute, position) {
+  if (!plan.route || minute <= plan.depart) {
+    position.x = plan.origin.x;
+    position.y = plan.origin.y;
+    return;
+  }
+  let progress = Math.min(1, (minute - plan.depart) / (plan.arrive - plan.depart));
+  if (plan.leave !== null && minute > plan.leave) {
+    progress = Math.max(0, (plan.finish - minute) / (plan.finish - plan.leave));
+  }
+  positionOnRoute(plan.route, progress * plan.distance, position);
 }
 /* ---------- secrets and rumours: an event not everybody knows, and people act on what they know ---------- */
 // A secret is a quiet event with ev.secret (kind), ev.guilty, ev.know (ids of those who know). S.secrets keeps the open ones.
@@ -3900,8 +4017,8 @@ function returnStep(S, a, x) {
   if (a.exiledFrom === g.id) a.exiledFrom = null;
   if (a.exiled) delete a.exiled[g.id]; if (a.quit) delete a.quit[g.id];
   const sp = a.spouse && S._a.get(a.spouse), old = a.group;
-  join(S, a, g, L.id); a.x = g.home.x + gauss(S) * 12; a.y = g.home.y + gauss(S) * 12;
-  if (sp && sp.group === old && sp.role !== 'leader' && rnd(S) < 0.7) { join(S, sp, g, L.id); sp.x = a.x; sp.y = a.y; }
+  join(S, a, g, L.id);
+  if (sp && sp.group === old && sp.role !== 'leader' && rnd(S) < 0.7) join(S, sp, g, L.id);
   const kinB = kinLeftIn(S, a, g);
   const why = sent([`${yrs(Math.max(1, Math.round((S.tick - x.t) / 360)))} назад ${a.name} ${was} из «${g.name}»${x.byName ? ` при вожде ${x.byName}` : ''}`, by && by.group === g.id ? '' : x.byName ? `${x.byName} ${by ? 'больше не правит' : 'уже нет в живых'}` : '', `${L.name} ${fem(L, 'принимает', 'принимает')} ${fem(a, 'его', 'её')} обратно`, kinB ? `в деревне ${fem(a, 'его', 'её')} ждёт ${kinB.name}` : '']);
   const ev = (x.how === 'exile' ? log : note)(S, 'exile', `${a.name} возвращается в «${g.name}»${x.how === 'exile' ? ', откуда был' + fem(a, '', 'а') + ' изгнан' + fem(a, '', 'а') : ''}`, a.x, a.y, g.hue, { why, who: [a.id, L.id], gs: [g.id], causes: x.ev ? [x.ev] : undefined });
@@ -3974,8 +4091,9 @@ function linHeir(S, g, old) {
   const line = mem.filter(m => m !== old && m.age >= 18 && linOf(S, m) === lin).sort((a, b) => b.age - a.age);
   return line.length ? { W: line[0], how: 'line' } : null;
 }
-function step(S) {
+function step(S, plans) {
   S.tick++;
+  S.minute = 0;
   advanceWeather(S);
   if (!S.wear) navInit(S);
   if (!S.springs) springsInit(S);
@@ -3991,7 +4109,7 @@ function step(S) {
     for (const id of g.members) { const m = S._agentsById[id]; sx += m.x; sy += m.y; }
     g.cx = sx / g.members.length; g.cy = sy / g.members.length;
   }
-  move(S);
+  move(S, plans);
   deliver(S);
   caravans(S);
   wars(S);
@@ -4016,27 +4134,24 @@ function moveDistance(dx, dy) {
   return Math.sqrt(1 + ratio * ratio) * max;
 }
 
-function walkNoise(t) {
-  return (randomAt((t + RNG_STEP) | 0) + randomAt((t + 2 * RNG_STEP) | 0) +
-    randomAt((t + 3 * RNG_STEP) | 0) - 1.5) / 1.5 * 0.5;
-}
-
-function move(S) {
-  const A = S.agents;
-  const tick = S.tick;
+function move(S, plans) {
+  const A = S.agents, tick = S.tick;
   const day = tick % 360, frozen = S.frozen;
   const fordRisk = frozen ? (day < 20 || day >= 70 ? 0.002 : 0.0004)
     : day >= 90 && day < 150 ? 0.008 : 0.00025;
   const guardPost = Math.floor(tick / 160), guardWall = Math.floor(tick / 120);
   const storm = S.weather?.kind === 'storm';
-  const costs = navigationCosts(S), drag = S._moveDrag, walls = wallCells(S);
+  const costs = navigationCosts(S), light = daylightHours(tick);
   for (const a of A) {
     let tx, ty;
     const gH = a.group && S._groupsById[a.group];
     const wp = a.war ? warTarget(S, a) : null;
     const cp = !wp && a.car ? carTarget(S, a) : null;
+    const escape = a.escape && nodeOf(S, gH?.target);
     if (wp) { tx = wp.x + ((a.id * 7) % 15 - 7); ty = wp.y + ((a.id * 11) % 15 - 7); }
     else if (cp) { tx = cp.x + ((a.id * 7) % 9 - 4); ty = cp.y + ((a.id * 11) % 9 - 4); }
+    else if (a.relocation && gH?.home) { tx = gH.home.x; ty = gH.home.y; }
+    else if (escape) { tx = escape.x; ty = escape.y; }
     else if (gH && gH.home) {
       const g = gH, j = ((a.id * 37) % 13) - 6, j2 = ((a.id * 53) % 11) - 5;
       let p = null;
@@ -4061,10 +4176,11 @@ function move(S) {
       }
       else if (a.job === 'gather') p = nodeOf(S, g.target);
       else if (a.job === 'home') p = houseOf(g, a.house);
-      if (a.rite && tick < a.rite.until) p = a.rite; // a wedding at a kinsman's house, a funeral at the burial ground
       if (!p || a.role === 'leader' || a.job === 'lead') { const ang = a.id * 2.39996, r = a.role === 'leader' ? 4 : 10 + (a.id % 4) * 6; p = { x: g.home.x + Math.cos(ang) * r, y: g.home.y + Math.sin(ang) * r }; }
+      if (a.rite && tick < a.rite.until) p = a.rite;
       const spread = a.job === 'gather' ? 3 : a.job === 'build' ? 0.45 : 1.2;
       tx = p.x + j * spread; ty = p.y + j2 * spread;
+      if (a.job === 'home' || !costs[cellAt(tx, ty)]) { tx = p.x; ty = p.y; }
     } else if (a.group) {
       const g = S._groupsById[a.group];
       if (a.role === 'leader') {
@@ -4087,121 +4203,36 @@ function move(S) {
       }
       tx = n ? n.x + Math.cos(a.id) * 22 : a.x; ty = n ? n.y + Math.sin(a.id) * 22 : a.y;
     }
-    let ca = cellAt(a.x, a.y);
-    const terrain = S.ter[ca];
-    if (terrain === 's' || (terrain === 'w' && !costs[ca])) {
-      toLand(S, a);
-      ca = cellAt(a.x, a.y);
-    }
-    const ct = cellAt(tx, ty);
-    let onPath = false;
-    if (ca !== ct) {
-      const far = Math.abs(ca % N - ct % N) + Math.abs(((ca / N) | 0) - ((ct / N) | 0)) > 2;
-      const bk = ca * 2500 + ct; if (a.bkK !== bk || a.bkV !== S.navV) { a.bkK = bk; a.bkV = S.navV; a.bkR = !far && blocked(S, a.x, a.y, tx, ty); }
-      if (far || a.bkR) {
-        const cell = nextPathCell(S, a, ca, ct);
-        if (cell >= 0) {
-          const offset = ((a.id * 13) % 7) - 3;
-          tx = (cell % N) * CS + 10 + offset;
-          ty = ((cell / N) | 0) * CS + 10 + offset;
-          a.stuck = 0;
-          onPath = far;
-        } else {
-          tx = a.x;
-          ty = a.y;
-          a.stuck = (a.stuck || 0) + 1;
-        }
-      }
-    }
-    const dx = tx - a.x, dy = ty - a.y, d = moveDistance(dx, dy) || 1;
-    const sp = Math.min(d, 2.4 * (0.5 + a.energy) * (a.car ? 1.6 : 1) / drag[ca]);
-    const rng = S.rng;
-    let nx = a.x + dx / d * sp + walkNoise(rng);
-    let ny = a.y + dy / d * sp + walkNoise((rng + 3 * RNG_STEP) | 0);
-    S.rng = (rng + 6 * RNG_STEP) | 0;
-    if (walls[ca]) { const next = wallWalk(a, { x: nx, y: ny }, { x: tx, y: ty }, walls[ca]); nx = next.x; ny = next.y; }
-    let nc = cellAt(nx, ny);
-    if (nc !== ca && !costs[nc]) { nx = a.x; ny = a.y; nc = ca; }
-    a.x = nx; a.y = ny;
-    if (sp > 1.1) S.wear[nc] += a.car ? 7 : a.war ? 3 : onPath ? 2.5 : 1;
-    if (nc !== a.lc) {
-      if (S.ter[nc] === 'w' && !S.bridge[nc]) {
-        const gg = a.group && S._groupsById[a.group]; if (gg) gg.cross = (gg.cross || 0) + 1;
-        // a ford is dangerous in the spring flood and with a load on the back; thin ice at the start and end of winter
-        if (rnd(S) < fordRisk * (a.car ? 3 : 1) * (a.age > 55 ? 1.5 : 1)) (S._drown || (S._drown = [])).push(a);
-      }
-      a.lc = nc;
-    }
+    if (!costs[cellAt(a.x, a.y)]) toLand(S, a);
+    tx = clamp(tx, 6, 994);
+    ty = clamp(ty, 6, 994);
+    if (!costs[cellAt(tx, ty)] && (wp || cp)) { tx = (wp || cp).x; ty = (wp || cp).y; }
+    const trip = wp ? 'war' : cp ? 'caravan' : a.relocation && gH?.home ? 'relocation' : escape ? 'escape' : null;
+    const home = !trip && gH?.home ? houseOf(gH, a.house) : null;
+    const shelter = !trip && gH?.home && (home && !home.ruined ? home : gH.home);
+    planMovement(S, a, tx, ty, trip, shelter, home, light, fordRisk, plans);
   }
-  if (S._drown && S._drown.length) { for (const a of S._drown) drown(S, a); S._drown = []; }
-  meet(S, A, walls);
-  for (const a of A) { a.x = clamp(a.x, 6, 994); a.y = clamp(a.y, 6, 994); }
+  if (S._drown?.length) {
+    for (const a of S._drown) drown(S, a);
+    S._drown.length = 0;
+  }
+  meet(S, S.agents);
 }
 
-function meet(S, agents, walls) {
-  // Agents are appended in ID order. Use that same tie order even when the
-  // previous day's list makes the sort largely incremental.
-  const tail = agents[agents.length - 1];
-  if (S._meetingAgents !== agents || S._meetingTail !== tail) {
-    S._meetingAgents = agents;
-    S._meetingTail = tail;
-    S._meetingOrder = agents.slice().sort((p, q) => p.x - q.x);
-  } else {
-    const order = S._meetingOrder;
-    for (let i = 1; i < order.length; i++) {
-      const agent = order[i], x = agent.x;
-      let slot = i;
-      while (slot > 0) {
-        const previous = order[slot - 1];
-        if (previous.x < x || (previous.x === x && previous.id < agent.id)) break;
-        order[slot--] = previous;
-      }
-      order[slot] = agent;
-    }
-  }
-  const order = S._meetingOrder;
-  const size = order.length;
-  if (!S._meetingX || S._meetingX.length < size) {
-    S._meetingX = new Float64Array(size + 32);
-    S._meetingY = new Float64Array(size + 32);
-  }
-  const xs = S._meetingX, ys = S._meetingY;
-  for (let i = 0; i < size; i++) {
-    xs[i] = order[i].x;
-    ys[i] = order[i].y;
-  }
-  let rng = S.rng;
-  for (let i = 0; i < size; i++) {
+function meet(S, agents) {
+  const order = S._meetingOrder || (S._meetingOrder = []);
+  order.length = agents.length;
+  for (let i = 0; i < agents.length; i++) order[i] = agents[i];
+  order.sort((a, b) => a.x - b.x || a.id - b.id);
+  for (let i = 0; i < order.length; i++) {
     const a = order[i];
-    let ax = xs[i], ay = ys[i];
-    for (let j = i + 1; j < size; j++) {
-      const dx = xs[j] - ax;
+    for (let j = i + 1; j < order.length; j++) {
+      const b = order[j], dx = b.x - a.x;
       if (dx > 55) break;
-      const dy = ys[j] - ay;
-      if (dy > 55 || dy < -55) continue;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < 81) {
-        const d = Math.sqrt(d2) || 1, f = (9 - d) * 0.25 / d;
-        const b = order[j];
-        const nearA = walls[cellAt(ax, ay)], nearB = walls[cellAt(xs[j], ys[j])];
-        const shiftX = dx * f, shiftY = dy * f;
-        if (!nearA?.some(w => lineCrossing(a, { x: ax - shiftX, y: ay - shiftY }, w.a, w.b) !== null)) {
-          a.x = ax -= shiftX;
-          a.y = ay -= shiftY;
-        }
-        if (!nearB?.some(w => lineCrossing(b, { x: xs[j] + shiftX, y: ys[j] + shiftY }, w.a, w.b) !== null)) {
-          b.x = xs[j] += shiftX;
-          b.y = ys[j] += shiftY;
-        }
-      }
-      if (d2 < 3025 && randomAt(rng = (rng + RNG_STEP) | 0) < 0.02) {
-        S.rng = rng;
-        interact(S, a, order[j]);
-        rng = S.rng;
-      }
+      const dy = b.y - a.y;
+      if (dx * dx + dy * dy < 3025 && rnd(S) < 0.02) interact(S, a, b);
     }
   }
-  S.rng = rng;
 }
 
 function bump(a, b, d) { a.trust[b.id] = clamp((a.trust[b.id] || 0) + d, -1, 1); }
@@ -4271,7 +4302,7 @@ function produce(S) {
     const tm = 1 + 0.5 * Math.min(1, g.tools / Math.max(1, k * 0.6));
     for (const id of g.members) {
       const m = S._agentsById[id];
-      if (m.haul) continue;
+      if (m.haul || m._travel || m._workBlocked || (m.rite && S.tick < m.rite.until)) continue;
       const e = jobSkill(m, m.job) * m.energy * tm;
       let worked = false;
       if (m.job === 'gather') { if (n && within(m.x - n.x, m.y - n.y, 70)) { const pt = 0.12 * e * syn * HAUL; gpot += pt; g._gath.push([m, pt]); worked = true; } }
@@ -4669,7 +4700,7 @@ function groupMonth(S, g) {
     if (best) {
       const all = g.members.map(id => S._a.get(id)).filter(Boolean), nm = g.name;
       log(S, 'abandon', `Жители «${nm}» бросают ${dry0 ? 'деревню без воды' : 'голодную деревню'} и уходят в «${best.name}»`, g.home.x, g.home.y, g.hue, { why: sent(dry0 ? [`в «${nm}» ${g.thirst} ${pl(g.thirst, 'месяц', 'месяца', 'месяцев')} нет воды поблизости`, 'носить воду издалека больше нет сил', `у «${best.name}» вода есть, туда и уходят`] : [`в «${nm}» осталось ${all.length} ${pl(all.length, 'человек', 'человека', 'человек')}, запасов нет`, 'маленькой деревне не прокормиться: некому одновременно пахать, строить и рубить лес', `«${best.name}» рядом, ${best.members.length} ${pl(best.members.length, 'человек', 'человека', 'человек')} и есть еда`]), gs: [g.id, best.id] });
-      for (const m of all) { join(S, m, best, best.leader); m.x = best.home.x + gauss(S) * 15; m.y = best.home.y + gauss(S) * 15; }
+      for (const m of all) join(S, m, best, best.leader);
       if (!g.dead) dissolve(S, g, true);
       return;
     }
@@ -4722,7 +4753,7 @@ function groupMonth(S, g) {
           for (const o of S.groups) { if (o === g || !o.home || o.dead) continue; const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y), h0 = S.hostility[key(o.id, g.id)] || 0; if (d > 420) continue; const v = o.pay * 3 + o.treasury / Math.max(1, o.members.length) - d / 50 + h0 * 4; if (v > dv) { dv = v; dest = o; } }
           if (dest && g.home && reach(S, g.home.x, g.home.y, dest.home.x, dest.home.y)) {
             const who = [ch, ...sup];
-            for (const m of who) { join(S, m, dest, dest.leader); m.x = dest.home.x + gauss(S) * 15; m.y = dest.home.y + gauss(S) * 15; }
+            for (const m of who) join(S, m, dest, dest.leader);
             bump(ch, L, -0.4); S.stats.emigr = (S.stats.emigr || 0) + 1;
             log(S, 'exodus', `${ch.name} и ${sup.length} ${pl(sup.length, 'недовольный', 'недовольных', 'недовольных')} уходят из «${g.name}» в «${dest.name}»`, g.home.x, g.home.y, g.hue, { why: why + ` Своей деревни им не поднять: их слишком мало, поэтому они просятся к соседям.`, who: who.map(m => m.id), gs: [g.id, dest.id] });
             return;
@@ -5143,6 +5174,7 @@ function shock(S, kind) {
 function serialize(S) { return JSON.stringify(S, (k, v) => k[0] === '_' ? undefined : v); }
 function restore(str) {
   const S = JSON.parse(str); index(S);
+  if (!Number.isInteger(S.minute) || S.minute < 0 || S.minute >= DAY_MINUTES) S.minute = 0;
   for (const g of S.groups) {
     if (!g.home) continue;
     if (g.plan && !g.plan.street) g.plan.street = streetFor(S, g);
@@ -5160,7 +5192,7 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, daylightHours, dailyRoutine, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {
@@ -5247,7 +5279,7 @@ function world(seed) {
 function resetView() {
   mainRunner.reset();
   D = new Map(); F = []; sel = null; closeFocus(true);
-  acc = dayWatch ? dawnFraction() : 0;
+  acc = dayRemainder = 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
   seenEv = S.evId || 0; lastEvt = null; riverKey = ''; syncCtls(); ui(true);
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, дележ урожая, роды, ступени власти и неурядица, которая растёт с размером деревни, числом старших, недовольством и волокитой.`;
@@ -5263,10 +5295,12 @@ function stepWorlds(worlds, days, deadline = Infinity) {
 }
 
 function backgroundWorlds(read, display) {
-  let worker, pending, revision = 0;
+  let worker, pending, forecast, revision = 0;
   function reset() {
     pending?.finish(false);
     pending = null;
+    forecast?.(null);
+    forecast = null;
     revision++;
     if (worker) worker.postMessage({ revision, snapshots: read().map(SIM.serialize) });
   }
@@ -5275,18 +5309,33 @@ function backgroundWorlds(read, display) {
     worker = null;
     pending?.finish(false);
     pending = null;
+    forecast?.(null);
+    forecast = null;
   }
   if (typeof Worker !== 'undefined') {
     const code = `
-      let worlds;
+      let worlds, prepared;
       ${stepWorlds.toString()}
       onmessage = ({ data }) => {
         if (data.snapshots) {
           worlds = data.snapshots.map(SIM.restore);
+          prepared = null;
           return;
         }
         worlds.forEach((world, i) => { world.params = data.params[i]; });
-        stepWorlds(worlds, data.days);
+        if (data.forecast) {
+          const { end, plans } = SIM.prepareDay(worlds[0]);
+          prepared = { end, params: JSON.stringify(worlds[0].params) };
+          postMessage({ revision: data.revision, plans });
+          return;
+        }
+        let days = data.days;
+        if (days > 0 && prepared && prepared.params === JSON.stringify(worlds[0].params)) {
+          worlds[0] = prepared.end;
+          days--;
+        }
+        prepared = null;
+        stepWorlds(worlds, days);
         postMessage({ revision: data.revision, snapshots: worlds.map(SIM.serialize) });
       };
     `;
@@ -5296,7 +5345,14 @@ function backgroundWorlds(read, display) {
       worker.onerror = fallback;
       worker.onmessageerror = fallback;
       worker.onmessage = ({ data }) => {
-        if (data.revision !== revision || !pending) return;
+        if (data.revision !== revision) return;
+        if (data.plans) {
+          const finish = forecast;
+          forecast = null;
+          finish?.(data.plans);
+          return;
+        }
+        if (!pending) return;
         const old = read();
         const worlds = data.snapshots.map((snapshot, i) => {
           const world = SIM.restore(snapshot);
@@ -5314,6 +5370,14 @@ function backgroundWorlds(read, display) {
   return {
     reset,
     get busy() { return !!pending; },
+    forecast(finish) {
+      if (worker) {
+        forecast = finish;
+        worker.postMessage({ revision, forecast: true, params: read().map(world => world.params) });
+      } else {
+        finish(SIM.prepareDay(read()[0]).plans);
+      }
+    },
     advance(days, finish) {
       if (worker) {
         pending = { finish };
@@ -5375,52 +5439,69 @@ function checkStops(now) {
 
 const OBSERVED_DAY_MS = 16000;
 const dayClock = $('dayClock'), nightShade = $('nightShade');
-const dailyRoutes = new Map(), campfires = new Map();
-let dayWatch = false, dailyNight = 0, routineWorld, routineTick;
+let dailyRoutes = new Map();
+const campfires = new Map();
+let dayWatch = false, dailyNight = 0, routineWorld, dayRemainder = 0;
 
-function dawnFraction() {
-  return (SIM.daylightHours(S.tick).sunrise - 0.75) / 24;
+function advanceObservedClock(dt) {
+  const elapsed = dayRemainder + dt * SIM.DAY_MINUTES / OBSERVED_DAY_MS;
+  const minutes = Math.floor(elapsed);
+  dayRemainder = elapsed - minutes;
+  if (S.minute + minutes < SIM.DAY_MINUTES) {
+    S.minute += minutes;
+    return false;
+  }
+  S.minute = SIM.DAY_MINUTES - 1;
+  return true;
+}
+
+function clockTime(minute) {
+  return String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0');
+}
+
+function requestDailyView() {
+  routineWorld = S;
+  dailyRoutes.clear();
+  campfires.clear();
+  const opening = S;
+  mainRunner.forecast(plans => {
+    if (opening !== S || !dayWatch || !plans) {
+      if (routineWorld === opening) routineWorld = null;
+      return;
+    }
+    dailyRoutes = plans;
+    for (const a of S.agents) {
+      const plan = plans.get(a.id);
+      if (plan && !plan.home && plan.leave !== null && a.group) campfires.set(a.group, plan.origin);
+    }
+    card();
+  });
 }
 
 function updateDailyView() {
-  const hour = dayWatch ? 24 * acc : 12;
+  const hour = dayWatch ? S.minute / 60 : 12;
   const light = dayWatch ? SIM.daylightHours(S.tick) : null;
   dailyNight = 0;
   if (light) {
     const untilDawn = light.sunrise - hour;
     const sinceDusk = hour - light.sunset;
     dailyNight = Math.max(0, Math.min(1, Math.max(untilDawn, sinceDusk) + 0.5));
-    const minutes = Math.floor(hour * 60 / 5) * 5;
-    const time = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
     const name = hour < light.sunrise - 0.75 || hour >= light.sunset + 0.75 ? 'Ночь'
       : hour < light.sunrise + 2 ? 'Утро' : hour >= light.sunset - 2 ? 'Вечер' : 'День';
-    const label = `${time} · ${name}`;
+    const label = `${clockTime(S.minute)} · ${name}`;
     if (dayClock.textContent !== label) dayClock.textContent = label;
   }
   if (dayClock.hidden === dayWatch) dayClock.hidden = !dayWatch;
   const dark = dailyNight > 0;
   if (nightShade.hidden === dark) nightShade.hidden = !dark;
   if (dailyNight) nightShade.style.opacity = dailyNight * 0.48;
-  if (S !== routineWorld || S.tick !== routineTick) {
-    dailyRoutes.clear();
-    campfires.clear();
-    routineWorld = S;
-    routineTick = S.tick;
-  }
+  if (dayWatch && S !== routineWorld) requestDailyView();
   if (D.size > S.agents.length) for (const id of D.keys()) if (!S._a.has(id)) D.delete(id);
   for (const a of S.agents) {
     let p = D.get(a.id);
     if (!p) { p = { x: a.x, y: a.y }; D.set(a.id, p); }
-    let route = null;
-    if (light) {
-      if (!dailyRoutes.has(a.id)) {
-        const plan = SIM.dailyRoutine(S, a);
-        dailyRoutes.set(a.id, plan);
-        if (plan && !plan.home) campfires.set(a.group, plan.route[0]);
-      }
-      route = dailyRoutes.get(a.id);
-    }
-    if (route) SIM.routinePosition(route, hour, light, p);
+    const route = light && dailyRoutes.get(a.id);
+    if (route) SIM.routinePosition(route, S.minute, p);
     else {
       const ease = dayWatch ? 1 : .25;
       p.x += (a.x - p.x) * ease;
@@ -6325,6 +6406,14 @@ function bondsTxt(a) {
   if (!bs.length) return '';
   return `<p class="rel"><b>Связи</b><br>${bs.map(([o, b]) => `${esc(o.name)} — ${esc(SIM.bondLabel(a, o, b[0]))}: ${esc(b[3])}, г. ${yr(b[1])}${evLink(b[5])}`).join('<br>')}</p>`;
 }
+function dailyPlanText(a) {
+  const plan = dayWatch && routineWorld === S && dailyRoutes.get(a.id);
+  if (!plan) return '';
+  const label = { relocation: 'переселяется', caravan: 'едет с караваном', escape: 'уходит от родных мест', rite: 'идёт на обряд', delivery: 'несёт груз на склад' };
+  const task = plan.blocked ? 'ждёт прохода' : label[plan.kind] || JOB[plan.kind];
+  return task ? `<p class="rel">Сегодня ${task}.${plan.commuteMinutes ? ` Дорога туда и обратно — ${plan.commuteMinutes} мин.` : ''}</p>` : '';
+}
+
 function card() {
   const el = $('card');
   if (!sel) return;
@@ -6344,6 +6433,7 @@ function card() {
   ${g && g.home && ((g.pots || 0) >= 1 || (g.cloth || 0) >= 1 || (g.goats || 0) || g.fboats) ? `<p class="rel">Хозяйство: ${[g.goats ? `${g.goats} коз` : '', g.fboats ? `${g.fboats} ${g.fboats === 1 ? 'рыбацкая лодка' : g.fboats < 5 ? 'рыбацкие лодки' : 'рыбацких лодок'}` : '', (g.pots || 0) >= 1 ? `горшков ${Math.round(g.pots)}` : '', (g.cloth || 0) >= 1 ? `тканей ${Math.round(g.cloth)}` : ''].filter(Boolean).join(', ')}${(g.cloth || 0) >= g.members.length * 0.5 ? '. Тёплая одежда: зимой болеют реже' : ''}${(g.pots || 0) >= g.members.length * 0.5 ? '. Есть посуда: запасы хранятся дольше, воду носить легче' : ''}.</p>` : ''}
   ${famTxt(a, g, L)}
   ${houseTxt(a)}
+  ${dailyPlanText(a)}
   ${bondsTxt(a)}
   ${a.goals && a.goals.length ? `<div class="rel"><b>Цели и дуги</b>${arcsHtml(a.goals, true)}</div>` : ''}
   ${a.feud && !a.feud.done ? `<p class="rel"><b>Ждёт мести</b> за ${esc(a.feud.rel)} ${esc(a.feud.v)}: ${a.feud.personal ? esc(a.feud.Lname) : `«${esc(a.feud.gname)}»`}.</p>` : ''}
@@ -6360,8 +6450,12 @@ const TOG = [['landPriv', 'Частная земля разрешена', 'Ин�
 function syncCtls() {
   $('ctls').innerHTML = CTL.map(([k, l, p]) => `<div class="ctl"><label for="c-${k}">${l}<output id="o-${k}">${pct(S.params[k])}%</output></label><p>${p}</p><input type="range" id="c-${k}" min="0" max="1" step="0.05" value="${S.params[k]}"></div>`).join('')
     + TOG.map(([k, l, p]) => `<div class="ctl"><label class="chk" style="color:var(--ink)" for="c-${k}"><input type="checkbox" id="c-${k}" ${(S.params[k] ?? 1) >= 0.5 ? 'checked' : ''}>${l}</label><p>${p}</p></div>`).join('');
-  for (const [k] of CTL) $('c-' + k).addEventListener('input', e => { S.params[k] = +e.target.value; $('o-' + k).textContent = pct(S.params[k]) + '%'; });
-  for (const [k] of TOG) $('c-' + k).addEventListener('change', e => { S.params[k] = e.target.checked ? 1 : 0; });
+  function setParam(k, value) {
+    S.params[k] = value;
+    if (dayWatch) { mainRunner.reset(); routineWorld = null; }
+  }
+  for (const [k] of CTL) $('c-' + k).addEventListener('input', e => { setParam(k, +e.target.value); $('o-' + k).textContent = pct(S.params[k]) + '%'; });
+  for (const [k] of TOG) $('c-' + k).addEventListener('change', e => { setParam(k, e.target.checked ? 1 : 0); });
 }
 function syncPlay() { $('play').textContent = playing ? 'Пауза' : 'Пуск'; if (focusEv && $('go')) $('go').textContent = playing ? 'Закрыть' : 'Дальше'; }
 
@@ -7239,19 +7333,17 @@ function frame(now) {
     if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
     requestAnimationFrame(frame); return;
   }
-  if (playing) {
-    acc = Math.min(60, acc + dt * (dayWatch ? 1 / OBSERVED_DAY_MS : 12 * speed / 1000));
+  if (playing && dayWatch) {
+    if (!mainRunner.busy && advanceObservedClock(dt)) mainRunner.advance(1, dayAdvanced);
+  } else if (playing) {
+    acc = Math.min(60, acc + dt * 12 * speed / 1000);
     // Stop at the same monthly checkpoints as the synchronous simulation.
     const checkpoint = 30 - S.tick % 30;
     const days = Math.min(Math.floor(acc), checkpoint);
-    const batch = dayWatch ? 1 : Math.min(checkpoint, Math.max(1, speed / 2));
+    const batch = Math.min(checkpoint, Math.max(1, speed / 2));
     if (!mainRunner.busy && days >= batch) {
       acc -= days;
-      mainRunner.advance(days, completed => {
-        if (!completed || S.tick % 30) return;
-        checkStops(performance.now());
-        if (!playing) acc = 0;
-      });
+      mainRunner.advance(days, dayAdvanced);
     }
   }
   // At high speed leave time for controls and snapshots between canvas draws.
@@ -7264,6 +7356,12 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+function dayAdvanced(completed) {
+  if (!completed || S.tick % 30) return;
+  checkStops(performance.now());
+  if (!playing) acc = 0;
+}
+
 $('play').addEventListener('click', () => {
   playing = !playing;
   if (!playing && mainRunner.busy) mainRunner.reset();
@@ -7273,9 +7371,11 @@ $('play').addEventListener('click', () => {
 document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
   dayWatch = e.target.value === 'day';
   if (!dayWatch) speed = +e.target.value;
-  acc = dayWatch ? dawnFraction() : 0;
+  if (mainRunner.busy) mainRunner.reset();
+  acc = dayRemainder = 0;
+  routineWorld = null;
 }));
-$('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
+$('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick) + (S.minute ? ` · ${clockTime(S.minute)}` : ''); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
 $('back').addEventListener('click', () => {
   if (!forkSnap) return;
   const params = Object.assign({}, S.params);
@@ -7287,7 +7387,7 @@ $('back').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
-  SIM.shock(S, b.dataset.shock); mainRunner.reset(); seenEv = S.evId || 0; ui(true);
+  SIM.shock(S, b.dataset.shock); mainRunner.reset(); routineWorld = null; seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
 }));
 $('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
@@ -7355,7 +7455,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors
 let introOpen = false;
 function intro() {
   introOpen = true;
-  playing = false; acc = dayWatch ? dawnFraction() : 0; syncPlay();
+  playing = false; acc = dayRemainder = 0; syncPlay();
   const landing = firstLanding(S);
   if (landing) {
     vt = { x: landing.x1, y: landing.y1, z: 1.65 };
@@ -7373,6 +7473,12 @@ function start(data) {
   let restored = false;
   if (data && data.w) { try { S = SIM.restore(data.w); resetView(); restored = true; } catch (e) { world(2026); } }
   else world(2026);
+  if (restored && S.minute > 0) {
+    dayWatch = true;
+    $('spDay').checked = true;
+    playing = false;
+    syncPlay();
+  }
   if (data && data.fork) { forkSnap = data.fork; forkLabel = data.forkLabel || ''; $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; }
   window.claude?.hot?.snapshot?.(() => ({ w: SIM.serialize(S), fork: forkSnap, forkLabel }));
   if (!restored) intro();

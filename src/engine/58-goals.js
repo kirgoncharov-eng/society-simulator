@@ -202,8 +202,8 @@ function returnStep(S, a, x) {
   if (a.exiledFrom === g.id) a.exiledFrom = null;
   if (a.exiled) delete a.exiled[g.id]; if (a.quit) delete a.quit[g.id];
   const sp = a.spouse && S._a.get(a.spouse), old = a.group;
-  join(S, a, g, L.id); a.x = g.home.x + gauss(S) * 12; a.y = g.home.y + gauss(S) * 12;
-  if (sp && sp.group === old && sp.role !== 'leader' && rnd(S) < 0.7) { join(S, sp, g, L.id); sp.x = a.x; sp.y = a.y; }
+  join(S, a, g, L.id);
+  if (sp && sp.group === old && sp.role !== 'leader' && rnd(S) < 0.7) join(S, sp, g, L.id);
   const kinB = kinLeftIn(S, a, g);
   const why = sent([`${yrs(Math.max(1, Math.round((S.tick - x.t) / 360)))} назад ${a.name} ${was} из «${g.name}»${x.byName ? ` при вожде ${x.byName}` : ''}`, by && by.group === g.id ? '' : x.byName ? `${x.byName} ${by ? 'больше не правит' : 'уже нет в живых'}` : '', `${L.name} ${fem(L, 'принимает', 'принимает')} ${fem(a, 'его', 'её')} обратно`, kinB ? `в деревне ${fem(a, 'его', 'её')} ждёт ${kinB.name}` : '']);
   const ev = (x.how === 'exile' ? log : note)(S, 'exile', `${a.name} возвращается в «${g.name}»${x.how === 'exile' ? ', откуда был' + fem(a, '', 'а') + ' изгнан' + fem(a, '', 'а') : ''}`, a.x, a.y, g.hue, { why, who: [a.id, L.id], gs: [g.id], causes: x.ev ? [x.ev] : undefined });
