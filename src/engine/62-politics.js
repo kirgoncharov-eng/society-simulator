@@ -101,7 +101,9 @@ const shortName = g => g.name.split(' ').slice(1).join(' ') || g.name;
 function rootOf(S, g) { let r = g, k = 0; while (r.lord && k++ < 8) { const l = S._g.get(r.lord); if (!l || !l.home) break; r = l; } return r; }
 function protection(S) {
   for (const g of S.groups) {
-    if (!g.home || g.lord || g.members.length > 8 || (g.threat || 0) < 0.3 || S.groups.some(o => o.lord === g.id)) continue;
+    // a small village that was raided or went hungry seeks a strong neighbour's hand
+    const pressed = (g.threat || 0) >= 0.2 || S.tick - (g.raided || -1e9) < 360 * 3 || g.famY >= Math.floor(S.tick / 360) - 2;
+    if (!g.home || g.lord || g.members.length > 12 || !pressed || S.groups.some(o => o.lord === g.id)) continue;
     const L = S._a.get(g.leader); if (!L) continue;
     let best = null, bv = 0;
     for (const o of S.groups) {
@@ -113,9 +115,11 @@ function protection(S) {
       if (tr > 0.15 && v > bv) { bv = v; best = o; }
     }
     if (!best || rnd(S) > 0.35) continue;
-    g.lord = best.id; g.tribRate = 0.06;
+    g.lord = best.id; g.tribRate = 0.012;
     const LO = S._a.get(best.leader);
-    log(S, 'state', `«${g.name}» просит покровительства «${best.name}» и становится её вассалом`, g.home.x, g.home.y, best.hue, { why: sent([`маленькой деревне (${g.members.length} чел.) угрожают соседи: угроза ${P0(Math.min(1, g.threat))}`, `«${best.name}» сильнее вдвое и ей доверяют${S.routes[key(g.id, best.id)] ? ': они давно торгуют' : ''}${best.faith && best.faith === g.faith ? ', и вера у них одна' : ''}`, 'за защиту вассал платит половину обычной дани', LO ? `покровитель — ${LO.name}` : '']), gs: [g.id, best.id] });
+    const pe = log(S, 'state', `«${g.name}» просит покровительства «${best.name}» и становится её вассалом`, g.home.x, g.home.y, best.hue, { why: sent([`маленькой деревне (${g.members.length} чел.) угрожают соседи: угроза ${P0(Math.min(1, g.threat))}`, `«${best.name}» сильнее вдвое и ей доверяют${S.routes[key(g.id, best.id)] ? ': они давно торгуют' : ''}${best.faith && best.faith === g.faith ? ', и вера у них одна' : ''}`, 'за защиту вассал платит половину обычной дани', LO ? `покровитель — ${LO.name}` : '']), gs: [g.id, best.id] });
+    instMark(S, g, pe.id); instMark(S, best, pe.id);
+    for (const h of lineHeads(S, g)) bio(S, h, 'tribute', `«${g.name}» уходит под руку «${best.name}» и платит ей дань за защиту`, pe.id);
   }
 }
 function states(S) {
@@ -127,23 +131,28 @@ function states(S) {
   const confed = new Set();
   for (const al of S.alliances) {
     const A = S._g.get(al.a), B = S._g.get(al.b);
-    if (!A || !B || !A.home || !B.home || S.tick - al.since < 360 * 5) continue;
+    if (!A || !B || !A.home || !B.home || S.tick - al.since < 360 * 10) continue; // a confederation is a long alliance, not a passing one
     const ra = find(A.id), rb = find(B.id); if (ra !== rb) { uf.set(ra, rb); confed.add(rb); confed.add(ra); }
   }
   const sets = new Map();
   for (const g of vill) { const r = find(g.id); if (!sets.has(r)) sets.set(r, []); sets.get(r).push(g); }
   const old = S.states || [], next = [];
   S.sarch = S.sarch || {};
+  const taken = new Set(); // each old state continues in at most one new one
   for (const mem of sets.values()) {
     const pop = mem.reduce((s2, g) => s2 + g.members.length, 0), terr = mem.reduce((s2, g) => s2 + (g.terr || 0), 0);
     const roots = mem.filter(g => !g.lord || !mem.some(o => o.id === g.lord));
-    const cap = roots.sort((a, b) => b.members.length - a.members.length)[0] || mem[0];
+    // a state keeps its capital while that village stays in it and on top; only then does it pass to the largest
+    const oldCap = roots.find(g => old.some(o => o.cap === g.id && !taken.has(o.id)));
+    const cap = oldCap || roots.sort((a, b) => b.members.length - a.members.length)[0] || mem[0];
     const vass = mem.filter(g => g.lord).length;
     let type = null;
     if (mem.length >= 2) type = vass && cap.dynasty ? 'Королевство' : vass && mem.length - vass <= 1 ? 'Держава' : 'Конфедерация';
     else if (cap.members.length >= ((old.find(o => o.cap === cap.id && o.type === 'Город-государство')) ? 30 : 40) && (cap.terr || 0) >= 70) type = 'Город-государство';
     if (!type) continue;
-    const prev = old.find(o => o.cap === cap.id) || old.find(o => o.members.filter(id => mem.some(g => g.id === id)).length > o.members.length / 2);
+    const share = o => o.members.filter(id => mem.some(g => g.id === id)).length;
+    const prev = old.find(o => !taken.has(o.id) && o.cap === cap.id) || old.find(o => !taken.has(o.id) && share(o) > o.members.length / 2) || old.filter(o => !taken.has(o.id) && share(o) > 0).sort((a, b) => share(b) - share(a))[0];
+    if (prev) taken.add(prev.id);
     const faiths = new Set(mem.map(g => g.faith).filter(Boolean)), f1 = faiths.size === 1 && mem.every(g => g.faith) ? S.faiths[[...faiths][0]] : null;
     const L = S._a.get(cap.leader);
     const name = prev && prev.type === type && prev.cap === cap.id ? prev.name : type === 'Королевство' ? `Королевство ${cap.dynName || (L ? L.name : shortName(cap))}` : type === 'Держава' ? `Держава ${shortName(cap)}` : type === 'Город-государство' ? `Город ${shortName(cap)}` : f1 ? `Союз ${f1.name.replace('культ ', 'культа ')}` : `Союз ${shortName(cap)}`;
@@ -168,6 +177,8 @@ function states(S) {
   for (const g of S.groups) g.state = null;
   for (const st of next) for (const id of st.members) { const g = S._g.get(id); if (g) g.state = st.id; }
 }
+// the institutional base of a regime: what a law, a coup or a conquest changes; trade and inequality are its flavour
+const regimeBase = g => [g.dynasty ? 'h' : '', g.gov === 'assembly' ? 'a' : '', g.land === 'private' ? 'p' : '', g.priestRule ? 'r' : '', g.lord ? 'v' : '', g.code || ''].join('');
 function regime(S, g) {
   const n = g.members.length, mem = g.members.map(id => S._a.get(id)).filter(Boolean), L = S._a.get(g.leader);
   if (!g.home) return { type: 'Кочевая ватага', c: 0.3, b: 0.5, gi: 0, vass: 0 };

@@ -3,7 +3,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm27', date: '2026-11-21', note: 'власть в жизни: хлеб голодных, доля вождя, память о тирании, повторный уход дороже' };
+const MODEL = { v: 'm28', date: '2026-11-22', note: 'строй как итог истории: смена строя вместе с законом, стареющие династии, подчинение там, где уйти некуда, устойчивые государства' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -370,7 +370,7 @@ function succession(S, g, why, old) {
     if (h) {
       const W = h.W, child = h.how === 'child'; W.bioL = g.id;
       bio(S, W, 'heir', child ? `По праву рождения наследует власть ${old.sex === 'f' ? 'матери' : 'отца'} ${old.name} в «${g.name}»` : `Как старший в роду ${g.dynName || clanName(S, linOf(S, W), true)} наследует власть ${old.name} в «${g.name}»`);
-      g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = 0.7; g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
+      g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = clamp(0.8 - 0.1 * (g.dynGen - 1), 0.35, 0.8); // each generation inherits less of the founder's standing g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
       const weak = W.skill < 0.45;
       const sev = log(S, 'succession', `${old.name} ${VERB[why] || 'уходит'}. ${child ? 'По праву рождения' : 'По праву рода'} «${g.name}» наследует ${W.name}, ${g.dynGen}-е поколение династии ${g.dynName}`, W.x, W.y, g.hue, { why: sent(['в деревне власть наследуется, поэтому выборов нет', child ? `${W.name} — старший ${fem(W, 'сын', 'дочь')} ${old.name}` : `своих детей у ${old.name} в деревне нет, и власть переходит к старшему в роду`, `наследнику ${Math.floor(W.age)} лет`, weak ? `способности средние (навык ${P0(W.skill)}): сильные соперники могут не смириться` : `навык ${P0(W.skill)}`]), who: [W.id, old.id], gs: [g.id] });
       refLast(S, W, 'heir', sev.id); powerEvent(S, g, sev.id);
@@ -1582,12 +1582,15 @@ function battle(S, w, A, B, band) {
     if (LB) LB.rep = clamp((LB.rep || 0) - 0.08, -1, 1);
     for (const m of band) { m.status += 0.6; m.xp.guard = (m.xp.guard || 0) + 0.35; if (m.xp.guard >= 1 && !m.master) m.master = 'guard'; }
     for (const m of B.members.map(id => S._a.get(id))) if (m && m.id !== B.leader) { m.res = clamp(m.res + 0.12, 0, 1); if (LB) bump(m, LB, -0.1); }
-    conquer = !B.lord && B.members.length < A.members.length && ratio > 1.3 && LA && LA.ambition > 0.5 && rnd(S) < 0.6;
+    // Carneiro 1970: where the beaten have nowhere to go, defeat means submission rather than flight
+    const room = B.room === undefined ? 1 : B.room;
+    conquer = !B.lord && B.members.length < A.members.length && ratio > 1.2 && LA && rnd(S) < (0.25 + 0.6 * (1 - room)) * (0.6 + 0.6 * LA.ambition);
+    B.lostT = S.tick;
     text = `Битва у «${B.name}»: войско «${A.name}» ${rout ? 'наголову разбивает защитников' : 'берёт верх'}, уносит ${qty(food, 'food')}${tools >= 1 ? ` и ${qty(tools, 'tools')}` : ''}${burnt ? ', один дом сожжён' : ''}${annexed ? `, отрезает ${annexed} ${pl(annexed, 'клетку', 'клетки', 'клеток')} земли` : ''}`;
     why = sent([`силы ${pa.toFixed(1)} против ${pd.toFixed(1)}`, wallCover(B, A.home) ? 'частокол прикрывал этот подход' : '', toolCov(A) > toolCov(B) + 0.3 ? 'у нападавших больше орудий' : '', `погибли: у нападавших ${deadA.length}, у защитников ${deadB.length}${hurt.length ? `, ранены ${hurt.length}` : ''}`, rout ? 'перевес был таким, что защитники побежали' : 'дрались недолго: одна сторона дрогнула, и всё кончилось', w.why ? `повод: ${w.why.toLowerCase().replace(/\.$/, '')}` : '']);
   } else {
     if (LA) { LA.status = Math.max(0, LA.status - 2); A.legit = Math.max(0.2, A.legit - 0.25); LA.rep = clamp((LA.rep || 0) - 0.12, -1, 1); }
-    A.warsLost++; B.warsWon++; A.trauma++;
+    A.lostT = S.tick; A.warsLost++; B.warsWon++; A.trauma++;
     for (const m of A.members.map(id => S._a.get(id))) if (m && m.id !== A.leader) { m.res = clamp(m.res + 0.15, 0, 1); if (LA) bump(m, LA, -0.12); }
     for (const m of defenders) { m.status += 0.4; m.xp.guard = (m.xp.guard || 0) + 0.25; }
     text = `Битва у «${B.name}»: защитники ${rout ? 'обращают в бегство' : 'отбивают'} войско «${A.name}»`;
@@ -1595,6 +1598,7 @@ function battle(S, w, A, B, band) {
   }
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали шансов ${P0(w.oddsE)}, а на деле было ${P0(w.oddsR)}.`;
   const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
+  (win ? B : A).lostEv = cite(S, bev.id);
   for (const m of band) { if (deadA.includes(m)) continue; bio(S, m, win ? 'battleW' : 'battleL', `Ходит в поход на «${B.name}»: ${win ? 'победа' : 'поражение'}`); if (m.exiledFrom === B.id && !m.returned) { m.returned = S.tick; bio(S, m, 'returned', `Возвращается к «${B.name}», откуда ${m.sex === 'f' ? 'её' : 'его'} изгнали, — с чужим войском`); } if (win && m.feud && !m.feud.done && m.feud.g === B.id) revengeDone(S, m, `Ходит в поход на «${B.name}» и побеждает`); }
   for (const m of defenders) { if (deadB.includes(m)) continue; bio(S, m, win ? 'battleL' : 'battleW', `Защищает «${B.name}» от войска «${A.name}»: ${win ? 'поражение' : 'победа'}`); if (!win && m.feud && !m.feud.done && m.feud.g === A.id) revengeDone(S, m, `Отбивает войско «${A.name}» у стен родной деревни`); }
   // a death in battle has a face: the kin will remember who struck the blow
@@ -1606,17 +1610,20 @@ function battle(S, w, A, B, band) {
   if (killedL) for (const o of S.agents) if (o.feud && !o.feud.done && o.feud.L === killedL.id && band.concat(defenders).includes(o)) revengeDone(S, o, `В битве гибнет ${killedL.name}, тот, кто вёл врагов`);
   for (const m of deadA.concat(deadB)) removeAgent(S, m, 'war');
   if (conquer && !A.dead && !B.dead) {
-    B.lord = A.id; B.tribRate = 0.12; S.stats.conquests++;
+    B.lord = A.id; B.tribRate = 0.02; S.stats.conquests++; // about a fifth of the store a year, not the store itself
     if (A.faith && B.faith !== A.faith && rnd(S) < 0.4) B.faith = A.faith;
     const LA2 = S._a.get(A.leader), LB2 = S._a.get(B.leader);
-    log(S, 'conquest', `«${B.name}» становится данником «${A.name}»`, B.home.x, B.home.y, A.hue, { why: `Перевес нападавших в ${ratio.toFixed(1)} раза, и ${LA2 ? LA2.name : 'лидер'} решает не грабить, а подчинить. Теперь «${B.name}» каждый месяц отдаёт восьмую часть еды и десятую часть орудий. Держится это на страхе: как только данник окрепнет, он попробует восстать.`, who: [LA2 && LA2.id, LB2 && LB2.id].filter(Boolean), gs: [A.id, B.id] });
+    const cqe = log(S, 'conquest', `«${B.name}» становится данником «${A.name}»`, B.home.x, B.home.y, A.hue, { why: `Перевес нападавших в ${ratio.toFixed(1)} раза, и ${LA2 ? LA2.name : 'лидер'} решает не грабить, а подчинить. Теперь «${B.name}» каждый месяц отдаёт восьмую часть еды и десятую часть орудий. Держится это на страхе: как только данник окрепнет, он попробует восстать.`, who: [LA2 && LA2.id, LB2 && LB2.id].filter(Boolean), gs: [A.id, B.id] });
+    instMark(S, B, cqe.id); instMark(S, A, cqe.id);
+    for (const h of lineHeads(S, B)) bio(S, h, 'tribute', `«${B.name}» платит дань «${A.name}»: часть урожая семьи уходит победителям`, cqe.id);
   }
   w.phase = 'return';
 }
 function tribute(S, g) {
   const lord = S._g.get(g.lord);
   if (!lord || !lord.home) { g.lord = null; return; }
-  const rate = g.tribRate || 0.12, f = g.treasury * rate, t = (g.tools || 0) * rate * 0.8;
+  if (!g.home) return; // a daughter village still on its way pays once it has settled
+  const rate = Math.min(g.tribRate || 0.02, 0.02), f = g.treasury * rate, t = (g.tools || 0) * rate * 0.8;
   g.treasury -= f; g.tools -= t; lord.treasury += f; lord.tools += t;
   const LL = S._a.get(lord.leader), LG = S._a.get(g.leader);
   if (LL) LL.status += 0.3;
@@ -1624,10 +1631,15 @@ function tribute(S, g) {
   if (LG && LL) bump(LG, LL, -0.04);
   const mine = defence(S, g), theirs = lord.members.length ? defence(S, lord) : 0;
   const busy = S.wars.some(w => w.att === lord.id);
-  if (mine > theirs * 0.8 || (busy && rnd(S) < 0.3) || (LG && LG.ambition > 0.6 && rnd(S) < 0.02)) {
+  // the yoke holds while the overlord is strong; a new ruler there, a lost war or a ruler without standing is the moment
+  // to throw it off (Gavrilets, Anderson & Turchin 2010: polities fall apart at succession)
+  const weak = S.tick - (lord.since || 0) < 360 * 2 ? 'new' : S.tick - (lord.lostT || -1e9) < 360 * 2 ? 'lost' : lord.legit < 0.35 ? 'legit' : null;
+  if ((mine > theirs * 1.1 && rnd(S) < 0.1) || (weak && rnd(S) < 0.02) || (busy && rnd(S) < 0.06) || (LG && LG.ambition > 0.7 && rnd(S) < 0.004)) {
     g.lord = null; S.stats.revolts++;
     S.hostility[key(g.id, lord.id)] = 1.2;
-    log(S, 'revolt', `«${g.name}» сбрасывает власть «${lord.name}» и перестаёт платить дань`, g.home.x, g.home.y, g.hue, { why: sent([mine > theirs * 0.8 ? `данник окреп: его оборона ${mine.toFixed(1)} против ${theirs.toFixed(1)} у хозяина` : '', busy ? `«${lord.name}» увяз в другой войне` : '', LG && LG.ambition > 0.6 ? `${LG.name} амбициозен (${P0(LG.ambition)})` : '', 'годы дани копили обиду']), who: [LG && LG.id, LL && LL.id].filter(Boolean), gs: [g.id, lord.id] });
+    const wc = weak === 'new' && lord.powerEv && eventById(S, lord.powerEv) ? lord.powerEv : weak === 'lost' && lord.lostEv && eventById(S, lord.lostEv) ? lord.lostEv : null;
+    const rve = log(S, 'revolt', `«${g.name}» сбрасывает власть «${lord.name}» и перестаёт платить дань`, g.home.x, g.home.y, g.hue, { why: sent([mine > theirs * 1.1 ? `данник окреп: его оборона ${mine.toFixed(1)} против ${theirs.toFixed(1)} у хозяина` : '', weak === 'new' ? `в «${lord.name}» только что сменилась власть` : weak === 'lost' ? `«${lord.name}» недавно проиграл войну` : weak === 'legit' ? `власть в «${lord.name}» шатается` : '', busy ? `«${lord.name}» увяз в другой войне` : '', LG && LG.ambition > 0.7 ? `${LG.name} ${fem(LG, 'амбициозен', 'амбициозна')} (${P0(LG.ambition)})` : '', 'годы дани копили обиду']), who: [LG && LG.id, LL && LL.id].filter(Boolean), gs: [g.id, lord.id], causes: wc ? [wc] : undefined });
+    instMark(S, g, rve.id); instMark(S, lord, rve.id);
   }
 }
 
@@ -1952,11 +1964,12 @@ function bud(S, g, L) {
   g.budT = S.tick + 360 * 4; S.stats.colonies = (S.stats.colonies || 0) + 1;
   // a branch takes the parent's way of ruling with it (Kirch 1984): under a hereditary parent the founder's line rules the daughter village
   if (g.dynasty) { ng.dynasty = true; ng.dynLin = linOf(S, F); ng.dynName = clanName(S, ng.dynLin, true); ng.dynGen = 1; ng.gov = 'monarch'; ng.linId = ng.dynLin; ng.linN = 1; }
-  S.hostility[key(g.id, ng.id)] = 0; S.alliances.push({ a: g.id, b: ng.id, since: S.tick });
+  S.hostility[key(g.id, ng.id)] = 0;
+  if (g.dynasty && !g.lord) { ng.lord = g.id; ng.tribRate = 0.008; } else S.alliances.push({ a: g.id, b: ng.id, since: S.tick });
   bump(F, L, 0.1); bump(L, F, 0.1);
   bio(S, F, 'found', `Уводит ${go.length} ${pl(go.length, 'человека', 'человек', 'человек')} из «${g.name}» поднимать новую деревню «${ng.name}»`);
   for (const m of go) bio(S, m, 'move', `Уходит с ${F.name} из «${g.name}» на новые земли`);
-  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
+  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : '') + (ng.lord ? ` Младшая ветвь признаёт старшинство «${g.name}» и шлёт ей долю урожая.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
 }
 /* ---------- laws with authors (П2, see docs/POLITICS.md) ---------- */
 // Every change in how a village is run has an author, backers, opponents and a cause. The backers and opponents are
@@ -1985,7 +1998,9 @@ function lawCause(S, g, kind) {
   return g.powerEv && eventById(S, g.powerEv) ? [g.powerEv, 'power'] : [null, null];
 }
 // remember the event that brought a ruler to power: a law later may point to it
-function powerEvent(S, g, id) { if (g && id) g.powerEv = cite(S, id); }
+function powerEvent(S, g, id) { if (g && id) { g.powerEv = cite(S, id); instMark(S, g, id); } }
+// a change in how the village is run (a law, a coup, a conquest, a revolt): the regime may shift with it (П4)
+function instMark(S, g, id) { if (g && id) { g.instT = S.tick; g.instEv = cite(S, id); } }
 const adultsOf = (S, g) => g.members.map(id => S._a.get(id)).filter(m => m && m.age >= 18);
 const topBy = (arr, f, n) => arr.slice().sort((a, b) => f(b) - f(a)).slice(0, n);
 // the heads of the lines with two or more adults in the village
@@ -2004,13 +2019,15 @@ function enact(S, g, o) {
   if (o.authorLine) bio(S, A, 'law', o.authorLine, ev.id);
   for (const p of against) { bio(S, p, 'lawLost', o.lostLine(p), ev.id); bond(S, p, A, 'rival', o.grudge || `${fem(A, 'провёл', 'провела')} закон против меня`, 0.4, false, ev.id); }
   S.stats['law_' + o.kind] = (S.stats['law_' + o.kind] || 0) + 1;
+  instMark(S, g, ev.id);
   return ev;
 }
 // does the ruler live off his own people (their shares) or off others (tribute, his own war band)? Blanton & Fargher:
 // the first has to bargain and accepts a council; the second can do without one
 function livesOffOthers(S, g, L) {
   const ret = g.members.filter(id => { const m = S._a.get(id); return m && L && m.patron === L.id; }).length / Math.max(1, g.members.length);
-  return S.groups.some(o => o.lord === g.id) || ret > 0.2;
+  // tribute from the conquered or the protected counts; the token share of one's own daughter village does not (a ramage, not a prey)
+  return S.groups.some(o => o.lord === g.id && (o.tribRate || 0) >= 0.012) || ret > 0.2;
 }
 // who would call an assembly: a respected head of another line who values fairness; else the most respected such person
 function assemblyAuthor(S, g, L) {
@@ -2127,7 +2144,7 @@ function droughtYear(S) {
 }
 
 /* ---------- fates: life chronicle, memory, motives ---------- */
-const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, goal: 1, goalTurn: 1.5, goalEnd: 2, law: 2, lawLost: 1.5, tyranny: 2.5, tax: 1, feedAll: 2, fedByLeader: 1, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
+const BW = { theft: 1.5, quit: 1.5, affair: 3, jealousy: 3, dispute: 2, wergild: 3, enemy: 2, sworn: 2, love: 2, betrayed: 3, reconcile: 2, born: 1, marry: 1.5, child: 0.3, childDied: 0.6, spouseDied: 2, move: 1, found: 3, leader: 4, deposed: 4, coup: 4, schism: 3, exiled: 3, master: 2, client: 2, retainer: 2, bond: 3, freed: 2, battleW: 2, battleL: 2, wounded: 1, feud: 3, revenge: 5, murder: 5, elope: 5, plague: 2, orphan: 2, inherit: 1, returned: 4, goal: 1, goalTurn: 1.5, goalEnd: 2, law: 2, lawLost: 1.5, tyranny: 2.5, tax: 1, feedAll: 2, fedByLeader: 1, tribute: 1.5, apprentice: 1, death: 1, heir: 3, drowned: 2, famine: 1 };
 // Drama counts turns of fate, not events. Everyday lines (a child born, a move, a house of one's own) are part of the
 // chronicle but weigh nothing; the same turn again over the whole life weighs 1/(n+1)² of the first, so repeats add up to
 // at most 1.64 of one turn; a turn that undoes an
@@ -4109,8 +4126,9 @@ function groupMonth(S, g) {
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
       // an accepted rule of succession takes the heat out of open contests (Goody 1966; Gavrilets et al. 2010): under
       // hereditary rule a coup needs more backing and comes half as often, unless the challenger is of the ruling line
-      const custom = g.dynasty && linOf(S, ch) !== g.dynLin, bread = g.tyr && g.tyr.L === L.id && S.tick - g.tyr.t < 360 * 5;
-      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets + (custom ? 0.15 : 0) - (bread ? 0.1 : 0) && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) * (custom ? 0.5 : 1) * (bread ? 2 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
+      // the guard a custom gives wears off with the generations (asabiya, Ibn Khaldun; Turchin & Nefedov 2009)
+      const custom = g.dynasty && linOf(S, ch) !== g.dynLin, guard = custom ? clamp(1 - 0.25 * ((g.dynGen || 1) - 1), 0, 1) : 0, bread = g.tyr && g.tyr.L === L.id && S.tick - g.tyr.t < 360 * 5;
+      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets + 0.15 * guard - (bread ? 0.1 : 0) && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) * (1 - 0.5 * guard) * (bread ? 2 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
       if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
         const why = grievances(S, g, L, ch, sup, n) + ` Для переворота поддержки мало (${P0(frac)}), поэтому недовольные уходят сами.`;
         if (sup.length < 5 && g.home) {
@@ -4178,7 +4196,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   if (g.dynasty && g.dynLin && linOf(S, ch) === g.dynLin) why += ` Власть остаётся в роду ${g.dynName}: ${ch.name} — ${fem(ch, 'родич', 'родственница')} ${L.name}.`;
   // the rule outlives the dynasty (Goody 1966): the older the custom, the likelier the usurper's line simply takes it over
   else if (g.dynasty && rnd(S) < ((g.dynGen || 1) >= 2 ? 0.7 : 0.5)) { const old = g.dynName; g.dynLin = linOf(S, ch); g.dynName = clanName(S, g.dynLin, true); g.dynGen = 1; why += ` Династия ${old} свергнута, но обычай наследования остаётся: теперь власть будет переходить в роду ${g.dynName}.`; }
-  else if (g.dynasty) { why += ` Вместе с ${L.name} свергнута династия ${g.dynName}.`; g.dynasty = false; g.dynName = null; g.dynLin = null; g.gov = 'chief'; }
+  else if (g.dynasty) { why += ` Вместе с ${L.name} свергнута династия ${g.dynName}${(g.dynGen || 1) > 1 ? `, правившая ${g.dynGen} ${pl(g.dynGen, 'поколение', 'поколения', 'поколений')}` : ''}.`; g.dynasty = false; g.dynName = null; g.dynLin = null; g.gov = 'chief'; }
   if (g.gov === 'assembly') { why += ' Вече разогнано: теперь решает один человек.'; g.gov = 'chief'; }
   g.coupCount = (g.coupCount || 0) + 1;
   g.priestRule = false;
@@ -4331,7 +4349,9 @@ const shortName = g => g.name.split(' ').slice(1).join(' ') || g.name;
 function rootOf(S, g) { let r = g, k = 0; while (r.lord && k++ < 8) { const l = S._g.get(r.lord); if (!l || !l.home) break; r = l; } return r; }
 function protection(S) {
   for (const g of S.groups) {
-    if (!g.home || g.lord || g.members.length > 8 || (g.threat || 0) < 0.3 || S.groups.some(o => o.lord === g.id)) continue;
+    // a small village that was raided or went hungry seeks a strong neighbour's hand
+    const pressed = (g.threat || 0) >= 0.2 || S.tick - (g.raided || -1e9) < 360 * 3 || g.famY >= Math.floor(S.tick / 360) - 2;
+    if (!g.home || g.lord || g.members.length > 12 || !pressed || S.groups.some(o => o.lord === g.id)) continue;
     const L = S._a.get(g.leader); if (!L) continue;
     let best = null, bv = 0;
     for (const o of S.groups) {
@@ -4343,9 +4363,11 @@ function protection(S) {
       if (tr > 0.15 && v > bv) { bv = v; best = o; }
     }
     if (!best || rnd(S) > 0.35) continue;
-    g.lord = best.id; g.tribRate = 0.06;
+    g.lord = best.id; g.tribRate = 0.012;
     const LO = S._a.get(best.leader);
-    log(S, 'state', `«${g.name}» просит покровительства «${best.name}» и становится её вассалом`, g.home.x, g.home.y, best.hue, { why: sent([`маленькой деревне (${g.members.length} чел.) угрожают соседи: угроза ${P0(Math.min(1, g.threat))}`, `«${best.name}» сильнее вдвое и ей доверяют${S.routes[key(g.id, best.id)] ? ': они давно торгуют' : ''}${best.faith && best.faith === g.faith ? ', и вера у них одна' : ''}`, 'за защиту вассал платит половину обычной дани', LO ? `покровитель — ${LO.name}` : '']), gs: [g.id, best.id] });
+    const pe = log(S, 'state', `«${g.name}» просит покровительства «${best.name}» и становится её вассалом`, g.home.x, g.home.y, best.hue, { why: sent([`маленькой деревне (${g.members.length} чел.) угрожают соседи: угроза ${P0(Math.min(1, g.threat))}`, `«${best.name}» сильнее вдвое и ей доверяют${S.routes[key(g.id, best.id)] ? ': они давно торгуют' : ''}${best.faith && best.faith === g.faith ? ', и вера у них одна' : ''}`, 'за защиту вассал платит половину обычной дани', LO ? `покровитель — ${LO.name}` : '']), gs: [g.id, best.id] });
+    instMark(S, g, pe.id); instMark(S, best, pe.id);
+    for (const h of lineHeads(S, g)) bio(S, h, 'tribute', `«${g.name}» уходит под руку «${best.name}» и платит ей дань за защиту`, pe.id);
   }
 }
 function states(S) {
@@ -4357,23 +4379,28 @@ function states(S) {
   const confed = new Set();
   for (const al of S.alliances) {
     const A = S._g.get(al.a), B = S._g.get(al.b);
-    if (!A || !B || !A.home || !B.home || S.tick - al.since < 360 * 5) continue;
+    if (!A || !B || !A.home || !B.home || S.tick - al.since < 360 * 10) continue; // a confederation is a long alliance, not a passing one
     const ra = find(A.id), rb = find(B.id); if (ra !== rb) { uf.set(ra, rb); confed.add(rb); confed.add(ra); }
   }
   const sets = new Map();
   for (const g of vill) { const r = find(g.id); if (!sets.has(r)) sets.set(r, []); sets.get(r).push(g); }
   const old = S.states || [], next = [];
   S.sarch = S.sarch || {};
+  const taken = new Set(); // each old state continues in at most one new one
   for (const mem of sets.values()) {
     const pop = mem.reduce((s2, g) => s2 + g.members.length, 0), terr = mem.reduce((s2, g) => s2 + (g.terr || 0), 0);
     const roots = mem.filter(g => !g.lord || !mem.some(o => o.id === g.lord));
-    const cap = roots.sort((a, b) => b.members.length - a.members.length)[0] || mem[0];
+    // a state keeps its capital while that village stays in it and on top; only then does it pass to the largest
+    const oldCap = roots.find(g => old.some(o => o.cap === g.id && !taken.has(o.id)));
+    const cap = oldCap || roots.sort((a, b) => b.members.length - a.members.length)[0] || mem[0];
     const vass = mem.filter(g => g.lord).length;
     let type = null;
     if (mem.length >= 2) type = vass && cap.dynasty ? 'Королевство' : vass && mem.length - vass <= 1 ? 'Держава' : 'Конфедерация';
     else if (cap.members.length >= ((old.find(o => o.cap === cap.id && o.type === 'Город-государство')) ? 30 : 40) && (cap.terr || 0) >= 70) type = 'Город-государство';
     if (!type) continue;
-    const prev = old.find(o => o.cap === cap.id) || old.find(o => o.members.filter(id => mem.some(g => g.id === id)).length > o.members.length / 2);
+    const share = o => o.members.filter(id => mem.some(g => g.id === id)).length;
+    const prev = old.find(o => !taken.has(o.id) && o.cap === cap.id) || old.find(o => !taken.has(o.id) && share(o) > o.members.length / 2) || old.filter(o => !taken.has(o.id) && share(o) > 0).sort((a, b) => share(b) - share(a))[0];
+    if (prev) taken.add(prev.id);
     const faiths = new Set(mem.map(g => g.faith).filter(Boolean)), f1 = faiths.size === 1 && mem.every(g => g.faith) ? S.faiths[[...faiths][0]] : null;
     const L = S._a.get(cap.leader);
     const name = prev && prev.type === type && prev.cap === cap.id ? prev.name : type === 'Королевство' ? `Королевство ${cap.dynName || (L ? L.name : shortName(cap))}` : type === 'Держава' ? `Держава ${shortName(cap)}` : type === 'Город-государство' ? `Город ${shortName(cap)}` : f1 ? `Союз ${f1.name.replace('культ ', 'культа ')}` : `Союз ${shortName(cap)}`;
@@ -4398,6 +4425,8 @@ function states(S) {
   for (const g of S.groups) g.state = null;
   for (const st of next) for (const id of st.members) { const g = S._g.get(id); if (g) g.state = st.id; }
 }
+// the institutional base of a regime: what a law, a coup or a conquest changes; trade and inequality are its flavour
+const regimeBase = g => [g.dynasty ? 'h' : '', g.gov === 'assembly' ? 'a' : '', g.land === 'private' ? 'p' : '', g.priestRule ? 'r' : '', g.lord ? 'v' : '', g.code || ''].join('');
 function regime(S, g) {
   const n = g.members.length, mem = g.members.map(id => S._a.get(id)).filter(Boolean), L = S._a.get(g.leader);
   if (!g.home) return { type: 'Кочевая ватага', c: 0.3, b: 0.5, gi: 0, vass: 0 };
@@ -4446,11 +4475,15 @@ function yearly(S) {
     const r = regime(S, g);
     g.rhist = g.rhist || []; const lp = g.rhist[g.rhist.length - 1]; g.rhist.push(lp ? [+(lp[0] * 0.6 + r.c * 0.4).toFixed(3), +(lp[1] * 0.6 + r.b * 0.4).toFixed(3)] : [+r.c.toFixed(3), +r.b.toFixed(3)]); if (g.rhist.length > 30) g.rhist.shift();
     if (g.members.length < 6) { g.rcand = null; continue; }
-    if (!g.rtype) { g.rtype = r.type; continue; }
+    if (!g.rtype) { g.rtype = r.type; g.rT = S.tick; g.rBase = regimeBase(g); continue; }
     if (r.type === g.rtype) { g.rcand = null; continue; }
-    if (g.rcand !== r.type) { g.rcand = r.type; continue; }
-    const from = g.rtype; g.rtype = r.type; g.rcand = null;
-    log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why, gs: [g.id], who: [g.leader] });
+    // the regime changes with history (П4): at once after a law, a coup, a conquest or a revolt; otherwise only when the
+    // new order has held for ten years, so a few more trades in a good year do not relabel a village
+    const base = regimeBase(g), cause = base !== g.rBase && g.instT && g.instT > (g.rT || 0) && g.instEv && eventById(S, g.instEv) ? g.instEv : null;
+    if (!cause) { if (g.rcand !== r.type) { g.rcand = r.type; g.rcandT = S.tick; continue; } if (S.tick - g.rcandT < 360 * 10) continue; }
+    const from = g.rtype; g.rtype = r.type; g.rcand = null; g.rT = S.tick; g.rBase = base;
+    const rev = log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why + (cause ? '' : ' Перемена копилась десять лет.'), gs: [g.id], who: [g.leader], causes: cause ? [cause] : undefined, drift: !cause });
+    (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
   if (S.tick % 3600 === 0) era(S);
 }

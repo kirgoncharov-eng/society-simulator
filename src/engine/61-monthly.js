@@ -306,8 +306,9 @@ function groupMonth(S, g) {
       const frac = sup.length / Math.max(1, cur.length - 1), rets = cur.filter(m => m.patron === L.id).length / Math.max(1, cur.length);
       // an accepted rule of succession takes the heat out of open contests (Goody 1966; Gavrilets et al. 2010): under
       // hereditary rule a coup needs more backing and comes half as often, unless the challenger is of the ruling line
-      const custom = g.dynasty && linOf(S, ch) !== g.dynLin, bread = g.tyr && g.tyr.L === L.id && S.tick - g.tyr.t < 360 * 5;
-      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets + (custom ? 0.15 : 0) - (bread ? 0.1 : 0) && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) * (custom ? 0.5 : 1) * (bread ? 2 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
+      // the guard a custom gives wears off with the generations (asabiya, Ibn Khaldun; Turchin & Nefedov 2009)
+      const custom = g.dynasty && linOf(S, ch) !== g.dynLin, guard = custom ? clamp(1 - 0.25 * ((g.dynGen || 1) - 1), 0, 1) : 0, bread = g.tyr && g.tyr.L === L.id && S.tick - g.tyr.t < 360 * 5;
+      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets + 0.15 * guard - (bread ? 0.1 : 0) && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) * (1 - 0.5 * guard) * (bread ? 2 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
       if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
         const why = grievances(S, g, L, ch, sup, n) + ` Для переворота поддержки мало (${P0(frac)}), поэтому недовольные уходят сами.`;
         if (sup.length < 5 && g.home) {
@@ -375,7 +376,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   if (g.dynasty && g.dynLin && linOf(S, ch) === g.dynLin) why += ` Власть остаётся в роду ${g.dynName}: ${ch.name} — ${fem(ch, 'родич', 'родственница')} ${L.name}.`;
   // the rule outlives the dynasty (Goody 1966): the older the custom, the likelier the usurper's line simply takes it over
   else if (g.dynasty && rnd(S) < ((g.dynGen || 1) >= 2 ? 0.7 : 0.5)) { const old = g.dynName; g.dynLin = linOf(S, ch); g.dynName = clanName(S, g.dynLin, true); g.dynGen = 1; why += ` Династия ${old} свергнута, но обычай наследования остаётся: теперь власть будет переходить в роду ${g.dynName}.`; }
-  else if (g.dynasty) { why += ` Вместе с ${L.name} свергнута династия ${g.dynName}.`; g.dynasty = false; g.dynName = null; g.dynLin = null; g.gov = 'chief'; }
+  else if (g.dynasty) { why += ` Вместе с ${L.name} свергнута династия ${g.dynName}${(g.dynGen || 1) > 1 ? `, правившая ${g.dynGen} ${pl(g.dynGen, 'поколение', 'поколения', 'поколений')}` : ''}.`; g.dynasty = false; g.dynName = null; g.dynLin = null; g.gov = 'chief'; }
   if (g.gov === 'assembly') { why += ' Вече разогнано: теперь решает один человек.'; g.gov = 'chief'; }
   g.coupCount = (g.coupCount || 0) + 1;
   g.priestRule = false;

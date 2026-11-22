@@ -25,7 +25,9 @@ function lawCause(S, g, kind) {
   return g.powerEv && eventById(S, g.powerEv) ? [g.powerEv, 'power'] : [null, null];
 }
 // remember the event that brought a ruler to power: a law later may point to it
-function powerEvent(S, g, id) { if (g && id) g.powerEv = cite(S, id); }
+function powerEvent(S, g, id) { if (g && id) { g.powerEv = cite(S, id); instMark(S, g, id); } }
+// a change in how the village is run (a law, a coup, a conquest, a revolt): the regime may shift with it (П4)
+function instMark(S, g, id) { if (g && id) { g.instT = S.tick; g.instEv = cite(S, id); } }
 const adultsOf = (S, g) => g.members.map(id => S._a.get(id)).filter(m => m && m.age >= 18);
 const topBy = (arr, f, n) => arr.slice().sort((a, b) => f(b) - f(a)).slice(0, n);
 // the heads of the lines with two or more adults in the village
@@ -44,13 +46,15 @@ function enact(S, g, o) {
   if (o.authorLine) bio(S, A, 'law', o.authorLine, ev.id);
   for (const p of against) { bio(S, p, 'lawLost', o.lostLine(p), ev.id); bond(S, p, A, 'rival', o.grudge || `${fem(A, 'провёл', 'провела')} закон против меня`, 0.4, false, ev.id); }
   S.stats['law_' + o.kind] = (S.stats['law_' + o.kind] || 0) + 1;
+  instMark(S, g, ev.id);
   return ev;
 }
 // does the ruler live off his own people (their shares) or off others (tribute, his own war band)? Blanton & Fargher:
 // the first has to bargain and accepts a council; the second can do without one
 function livesOffOthers(S, g, L) {
   const ret = g.members.filter(id => { const m = S._a.get(id); return m && L && m.patron === L.id; }).length / Math.max(1, g.members.length);
-  return S.groups.some(o => o.lord === g.id) || ret > 0.2;
+  // tribute from the conquered or the protected counts; the token share of one's own daughter village does not (a ramage, not a prey)
+  return S.groups.some(o => o.lord === g.id && (o.tribRate || 0) >= 0.012) || ret > 0.2;
 }
 // who would call an assembly: a respected head of another line who values fairness; else the most respected such person
 function assemblyAuthor(S, g, L) {

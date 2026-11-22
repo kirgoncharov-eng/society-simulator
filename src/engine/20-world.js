@@ -161,7 +161,7 @@ function succession(S, g, why, old) {
     if (h) {
       const W = h.W, child = h.how === 'child'; W.bioL = g.id;
       bio(S, W, 'heir', child ? `По праву рождения наследует власть ${old.sex === 'f' ? 'матери' : 'отца'} ${old.name} в «${g.name}»` : `Как старший в роду ${g.dynName || clanName(S, linOf(S, W), true)} наследует власть ${old.name} в «${g.name}»`);
-      g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = 0.7; g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
+      g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = clamp(0.8 - 0.1 * (g.dynGen - 1), 0.35, 0.8); // each generation inherits less of the founder's standing g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
       const weak = W.skill < 0.45;
       const sev = log(S, 'succession', `${old.name} ${VERB[why] || 'уходит'}. ${child ? 'По праву рождения' : 'По праву рода'} «${g.name}» наследует ${W.name}, ${g.dynGen}-е поколение династии ${g.dynName}`, W.x, W.y, g.hue, { why: sent(['в деревне власть наследуется, поэтому выборов нет', child ? `${W.name} — старший ${fem(W, 'сын', 'дочь')} ${old.name}` : `своих детей у ${old.name} в деревне нет, и власть переходит к старшему в роду`, `наследнику ${Math.floor(W.age)} лет`, weak ? `способности средние (навык ${P0(W.skill)}): сильные соперники могут не смириться` : `навык ${P0(W.skill)}`]), who: [W.id, old.id], gs: [g.id] });
       refLast(S, W, 'heir', sev.id); powerEvent(S, g, sev.id);

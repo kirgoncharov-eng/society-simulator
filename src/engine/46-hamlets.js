@@ -117,9 +117,10 @@ function bud(S, g, L) {
   g.budT = S.tick + 360 * 4; S.stats.colonies = (S.stats.colonies || 0) + 1;
   // a branch takes the parent's way of ruling with it (Kirch 1984): under a hereditary parent the founder's line rules the daughter village
   if (g.dynasty) { ng.dynasty = true; ng.dynLin = linOf(S, F); ng.dynName = clanName(S, ng.dynLin, true); ng.dynGen = 1; ng.gov = 'monarch'; ng.linId = ng.dynLin; ng.linN = 1; }
-  S.hostility[key(g.id, ng.id)] = 0; S.alliances.push({ a: g.id, b: ng.id, since: S.tick });
+  S.hostility[key(g.id, ng.id)] = 0;
+  if (g.dynasty && !g.lord) { ng.lord = g.id; ng.tribRate = 0.008; } else S.alliances.push({ a: g.id, b: ng.id, since: S.tick });
   bump(F, L, 0.1); bump(L, F, 0.1);
   bio(S, F, 'found', `Уводит ${go.length} ${pl(go.length, 'человека', 'человек', 'человек')} из «${g.name}» поднимать новую деревню «${ng.name}»`);
   for (const m of go) bio(S, m, 'move', `Уходит с ${F.name} из «${g.name}» на новые земли`);
-  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
+  log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : '') + (ng.lord ? ` Младшая ветвь признаёт старшинство «${g.name}» и шлёт ей долю урожая.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
 }
