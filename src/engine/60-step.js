@@ -255,7 +255,7 @@ function interact(S, a, b) {
       const sc = m => m.ambition * 0.7 + m.skill * 0.3 + m.status * 0.05;
       const L = sc(a) >= sc(b) ? a : b, o = L === a ? b : a;
       const g = createGroup(S, L, [o]);
-      log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Лидером становится ${L.name}: у него больше амбиций.`, who: [L.id, o.id], gs: [g.id] }); if (!g.powerEv) powerEvent(S, g, S.events[0].id);
+      log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Вождём становится ${L.name}: ${fem(L, 'он', 'она')} больше рвётся к власти.`, who: [L.id, o.id], gs: [g.id] }); if (!g.powerEv) powerEvent(S, g, S.events[0].id);
     }
   } else if (!ga || !gb) {
     const s = ga ? b : a, m = ga ? a : b, g = S._groupsById[m.group], L = S._agentsById[g.leader];
@@ -335,7 +335,7 @@ function produce(S) {
       if (worked) {
         m.eff += e; m.energy -= effortCost; workers++;
         const before = m.xp[m.job] || 0; m.xp[m.job] = before + 0.0009;
-        if (before < 1 && m.xp[m.job] >= 1) { m.master = m.job; bio(S, m, 'master', `Становится мастером: ${TITLE[m.job]}${m.teacherName ? `, как ${m.sex === 'f' ? 'её' : 'его'} учитель ${m.teacherName}` : ''}`); if (!S.masters) S.masters = {}; if (!S.masters[m.job]) { S.masters[m.job] = 1; log(S, 'tech', `${m.name} становится первым в мире: ${TITLE[m.job]}`, m.x, m.y, g.hue, { why: `Три года одной и той же работы. Опыт поднимает выработку на 60%, поэтому лидер ставит мастера на его дело в первую очередь. Так рождается специализация.`, who: [m.id], gs: [g.id] }); } }
+        if (before < 1 && m.xp[m.job] >= 1) { m.master = m.job; bio(S, m, 'master', `Становится мастером: ${TITLE[m.job]}${m.teacherName ? `, как ${m.sex === 'f' ? 'её' : 'его'} учитель ${m.teacherName}` : ''}`); if (!S.masters) S.masters = {}; if (!S.masters[m.job]) { S.masters[m.job] = 1; log(S, 'tech', `${m.name} становится первым в мире: ${TITLE[m.job]}`, m.x, m.y, g.hue, { why: `Три года одной и той же работы. Опыт поднимает выработку на 60%, поэтому вождь ставит мастера на его дело в первую очередь. Так рождается специализация.`, who: [m.id], gs: [g.id] }); } }
       }
     }
     if (g.tools > 0) g.tools = Math.max(0, g.tools - workers * 0.0014);

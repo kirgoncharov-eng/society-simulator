@@ -39,7 +39,7 @@ function ui(force) {
   spark('sPop', h.pop); spark('sGroups', h.groups); spark('sEnt', h.entropy); spark('sGini', h.gini);
   const big = S.groups.reduce((m, g) => g.members.length > (m ? m.members.length : 0) ? g : m, null);
   const st = S.stats, maxD = S.groups.reduce((m, g) => Math.max(m, g.depth), 0);
-  $('tally').textContent = `В группах ${S.agents.length ? pct(inG / S.agents.length) : 0}% агентов. Крупнейшая: ${big ? `«${big.name}», ${big.members.length}` : 'нет'}. Поселений ${S.groups.filter(g => g.home).length}, домов ${S.groups.reduce((s, g) => s + g.houses.length, 0)}, полей ${S.groups.reduce((s, g) => s + g.fields.length, 0)}, мастерских ${S.groups.filter(g => g.workshop).length}, руин ${(S.ruins || []).length}. Мастеров ${S.agents.filter(a => a.master && a.master !== 'gather').length}. Государств сейчас ${(S.states || []).length} (возникало ${st.states || 0}). Походов ${st.wars || 0}, битв ${st.battles || 0}, завоеваний ${st.conquests || 0}, восстаний ${st.revolts || 0}, грабежей караванов ${st.raids || 0}; в боях погибло ${st.war || 0}; стража прогоняла чужаков ${st.border || 0} раз; монета в ${S.groups.filter(g => g.coin).length} дер., займов ${st.loans || 0}, в кабале сейчас ${S.agents.filter(a => a.bond).length}, списаний долгов ${st.jubilees || 0}, восстаний должников ${st.debtRevolts || 0}; данников сейчас ${S.groups.filter(g => g.lord).length}. Караванов в пути ${S.agents.filter(a => a.car).length}, торговых путей ${Object.keys(S.routes || {}).length}, сделок ${S.stats.trades || 0}. Иерархия до ${maxD || 1} ур. За всё время: переворотов ${st.coups}, расколов ${st.schisms}, стычек ${st.conflicts}, слияний ${st.merges}, реформ ${st.reforms}.`;
+  $('tally').textContent = `В деревнях и ватагах ${S.agents.length ? pct(inG / S.agents.length) : 0}% людей. Крупнейшая: ${big ? `«${big.name}», ${big.members.length}` : 'нет'}. Поселений ${S.groups.filter(g => g.home).length}, домов ${S.groups.reduce((s, g) => s + g.houses.length, 0)}, полей ${S.groups.reduce((s, g) => s + g.fields.length, 0)}, мастерских ${S.groups.filter(g => g.workshop).length}, руин ${(S.ruins || []).length}. Мастеров ${S.agents.filter(a => a.master && a.master !== 'gather').length}. Государств сейчас ${(S.states || []).length} (возникало ${st.states || 0}). Походов ${st.wars || 0}, битв ${st.battles || 0}, завоеваний ${st.conquests || 0}, восстаний ${st.revolts || 0}, грабежей караванов ${st.raids || 0}; в боях погибло ${st.war || 0}; стража прогоняла чужаков ${st.border || 0} раз; монета в ${S.groups.filter(g => g.coin).length} дер., займов ${st.loans || 0}, в кабале сейчас ${S.agents.filter(a => a.bond).length}, списаний долгов ${st.jubilees || 0}, восстаний должников ${st.debtRevolts || 0}; данников сейчас ${S.groups.filter(g => g.lord).length}. Караванов в пути ${S.agents.filter(a => a.car).length}, торговых путей ${Object.keys(S.routes || {}).length}, сделок ${S.stats.trades || 0}. Ступеней власти до ${maxD || 1}. За всё время: переворотов ${st.coups}, расколов ${st.schisms}, стычек ${st.conflicts}, слияний ${st.merges}, наведений порядка ${st.reforms}.`;
   if (force || S.events[0]?.id !== lastEvt) {
     lastEvt = S.events[0]?.id;
     const list = S.events.map((e, i) => [e, i]).filter(([e]) => logAll || isKey(e)).slice(0, 50);
@@ -49,20 +49,25 @@ function ui(force) {
   $('groups').innerHTML = gs.length ? gs.map(g => {
     const L = S._a.get(g.leader), age = Math.floor((S.tick - g.founded) / 360);
     return `<button class="grp" data-a="${g.leader}"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}${g.home && g.members.length >= 5 && RC.get(g.id) ? ` · <span style="font-weight:400;color:var(--slate)">${esc(RC.get(g.id).type.toLowerCase())}</span>` : ''}</strong><span class="n">${g.members.length}</span>
-    <small>лидер ${esc(L ? L.name : '?')}${g.gen > 1 ? `, ${g.gen}-й по счёту` : ', основатель'} · ${age ? yrsTxt(age) : 'меньше года'} · ${g.home ? `домов ${g.houses.length}, полей ${g.fields.length}${g.workshop ? ', мастерская' : ''}${g.granary ? ', амбар' : ''}${g.fortifications?.length ? `, участков частокола ${g.fortifications.length}` : ''}${g.terr ? `, земли ${g.terr} кл.` : ''}${g.site ? ` · стройка «${BUILD_LABEL[g.site.kind] || 'площадка'}», ${BUILD_PHASE_LABEL[g.site.phase] || 'в работе'}, ${Math.floor(100 * g.site.prog / g.site.need)}%` : ''}${g.gov === 'assembly' ? ', вече' : ''}${g.land === 'private' ? ', частные поля' : ''}${g.coin ? ', монета' : ''}${g.lord && S._g.get(g.lord) ? ` · данник «${esc(S._g.get(g.lord).name)}»` : ''}${(() => { const v = S.groups.filter(o => o.lord === g.id); return v.length ? ` · данники: ${esc(v.map(o => o.name).join(', '))}` : ''; })()} · еда ${Math.round(g.treasury)}, лес ${Math.round(g.wood)}, камень ${Math.round(g.stone || 0)}, орудия ${Math.round(g.tools || 0)}${g.stoneCell === null ? ' · холмов рядом нет' : ''}` : 'кочует'} · ${g.depth} ур. · энтропия ${g.entropy.toFixed(2)}</small>
-    <span class="meter"><span style="width:${Math.min(100, g.entropy / 2.5 * 100)}%"></span></span></button>`;
-  }).join('') : '<p class="empty">Групп пока нет: агенты ещё присматриваются друг к другу.</p>';
+    <small>${g.home ? 'вождь' : 'вожак'} ${esc(L ? L.name : '?')}${g.gen > 1 ? `, ${g.gen}-й по счёту` : ', основатель'} · ${age ? yrsTxt(age) : 'меньше года'} · ${g.home ? `домов ${g.houses.length}, полей ${g.fields.length}${g.workshop ? ', мастерская' : ''}${g.granary ? ', амбар' : ''}${g.fortifications?.length ? `, участков частокола ${g.fortifications.length}` : ''}${g.terr ? `, земли ${g.terr} кл.` : ''}${g.site ? ` · стройка «${BUILD_LABEL[g.site.kind] || 'площадка'}», ${BUILD_PHASE_LABEL[g.site.phase] || 'в работе'}, ${Math.floor(100 * g.site.prog / g.site.need)}%` : ''}${g.gov === 'assembly' ? ', вече' : ''}${g.land === 'private' ? ', частные поля' : ''}${g.coin ? ', монета' : ''}${g.lord && S._g.get(g.lord) ? ` · данник «${esc(S._g.get(g.lord).name)}»` : ''}${(() => { const v = S.groups.filter(o => o.lord === g.id); return v.length ? ` · данники: ${esc(v.map(o => o.name).join(', '))}` : ''; })()} · еда ${Math.round(g.treasury)}, лес ${Math.round(g.wood)}, камень ${Math.round(g.stone || 0)}, орудия ${Math.round(g.tools || 0)}${g.stoneCell === null ? ' · холмов рядом нет' : ''}` : 'кочует'} · ${SIM.stepsWord(g.depth)} · ${SIM.word('entropy', Math.min(1, g.entropy / 1.6), null, true)}</small>
+    <span class="meter" title="${esc(SIM.VILLAGE.entropy.name + ': ' + SIM.VILLAGE.entropy.about)}"><span style="width:${Math.min(100, g.entropy / 1.6 * 100)}%"></span></span></button>`;
+  }).join('') : '<p class="empty">Деревень и ватаг пока нет: люди ещё присматриваются друг к другу.</p>';
   drawRiver();
   drawMarket();
   drawSoc();
   portraits(force);
   card();
 }
+// a trait in words: «Властолюбие — честолюбив», a small bar, and on hover what it is and what it changes
+function traitRow(kind, v, a, village, neg) {
+  const def = (village ? SIM.VILLAGE : SIM.TRAITS)[kind], w = Math.min(100, Math.max(0, v) * 100);
+  return `<div class="trw" title="${esc(def.about + ' Влияет: ' + def.affects)}"><em>${def.name}</em><span>${esc(SIM.word(kind, v, a, village))}</span><span class="meter${neg ? ' neg' : ''}"><span style="width:${w}%"></span></span></div>`;
+}
 function row(label, v, neg) {
   const w = Math.min(100, Math.abs(v) * 100);
   return `<div class="tr"><em>${label}</em><span class="meter${neg || v < 0 ? ' neg' : ''}"><span style="width:${w}%"></span></span><b>${v < 0 ? '−' : ''}${pct(Math.abs(v))}</b></div>`;
 }
-const EMPTY = '<p class="empty">Нажмите на человека на карте, чтобы проследить за ним: роль, начальник, доверие к лидеру, груз и обиды.</p>';
+const EMPTY = '<p class="empty">Нажмите на человека на карте, чтобы проследить за ним: его характер, род, семья, к кому он привязан и чем недоволен.</p>';
 function famTxt(a, g, L) {
   const sp = a.spouse && S._a.get(a.spouse), mo = a.mother && S._a.get(a.mother), fa = a.father && S._a.get(a.father);
   const grown = S.agents.filter(o => o.mother === a.id || o.father === a.id), young = SIM.kidsOf(S, a);
@@ -85,7 +90,7 @@ function famTxt(a, g, L) {
   if (cl) soc.push(a.role === 'leader' ? `содержит дружину: ${cl} ${cl % 10 > 1 && cl % 10 < 5 && (cl % 100 < 12 || cl % 100 > 14) ? 'человека' : 'человек'} на жалованье` : `покровитель ${cl} ${pl1(cl, 'клиента', 'клиентов')}`);
   if (repT) soc.push(repT.toLowerCase());
   if (a.age > 55 && g) soc.push('старейшина: голос весит больше');
-  return `<p class="rel">${parts.join('. ')}.</p>${soc.length ? `<p class="rel">${soc.map((t, i) => i ? t : t[0].toUpperCase() + t.slice(1)).join('; ')}.</p>` : ''}`;
+  return `<p class="rel">${parts.map(t => t[0].toUpperCase() + t.slice(1)).join('. ')}.</p>${soc.length ? `<p class="rel">${soc.map((t, i) => i ? t : t[0].toUpperCase() + t.slice(1)).join('; ')}.</p>` : ''}`;
 }
 // where the person lives and with whom
 function houseTxt(a) {
@@ -110,15 +115,16 @@ function card() {
   const el = $('card');
   if (!sel) return;
   const a = S._a.get(sel);
-  if (!a) { el.innerHTML = `<p class="empty">Этого агента больше нет в мире. Выберите другого.</p>`; sel = null; return; }
+  if (!a) { el.innerHTML = `<p class="empty">Этого человека больше нет в живых или на острове. Выберите другого.</p>`; sel = null; return; }
   const g = a.group && S._g.get(a.group), boss = a.boss && S._a.get(a.boss), L = g && S._a.get(g.leader);
-  const role = !g ? 'одиночка' : a.role === 'leader' ? `лидер «${g.name}»` : a.role === 'lt' ? `управляющий в «${g.name}»` : `рядовой в «${g.name}»`;
+  const role = !g ? 'одиночка' : a.role === 'leader' ? `${g.home ? 'вождь' : 'вожак'} «${g.name}»` : a.role === 'lt' ? `${a.sex === 'f' ? 'старшая' : 'старший'} в «${g.name}», ${a.sex === 'f' ? 'помощница' : 'помощник'} вождя` : `${g.home ? (a.sex === 'f' ? 'общинница' : 'общинник') : 'в ватаге'} «${g.name}»`;
   const rel = Object.entries(a.trust).map(([id, v]) => [S._a.get(+id), v]).filter(([o]) => o);
   const fr = rel.filter(r => r[1] > .3).sort((x, y) => y[1] - x[1]).slice(0, 3).map(r => r[0].name);
   const en = rel.filter(r => r[1] < -.2).sort((x, y) => x[1] - y[1]).slice(0, 3).map(r => r[0].name);
   const life = (a.master ? ` · ${TITLE[a.master]}` : '') + (g && g.home ? ` · ${JOB[a.job] || 'без дела'} · ${a.shel ? 'живёт в доме' : 'без крыши'}` : g ? ' · кочует' : '');
-  el.innerHTML = `<h3>${esc(a.name)}</h3><p class="role">${role}${boss && boss !== L ? `, подчиняется ${esc(boss.name)}` : ''}${life} · ${Math.floor(a.age)} лет · ${a.born === 'child' ? 'родом из группы' : a.born === 'out' ? 'пришелец извне' : 'из первого поколения'}</p>
-  <div class="traits">${row('Навык', a.skill)}${row('Амбиции', a.ambition)}${row('Кооперация', a.coop)}${row('Уравнительность', a.norm)}${row('Энергия', a.energy)}${row('Статус', a.status / (a.status + 10))}${L && L !== a ? row('Доверие лидеру', a.trust[L.id] || 0) : ''}${g && a.role !== 'leader' ? row('Обида', a.res, true) : ''}</div>
+  el.innerHTML = `<h3>${esc(a.name)}</h3><p class="role">${role}${boss && boss !== L ? `, подчиняется ${esc(boss.name)}` : ''}${life} · ${Math.floor(a.age)} ${Math.floor(a.age) % 10 === 1 && Math.floor(a.age) % 100 !== 11 ? 'год' : Math.floor(a.age) % 10 > 1 && Math.floor(a.age) % 10 < 5 && (Math.floor(a.age) % 100 < 12 || Math.floor(a.age) % 100 > 14) ? 'года' : 'лет'} · ${a.born === 'child' ? (a.sex === 'f' ? 'родилась здесь' : 'родился здесь') : a.born === 'out' ? (a.sex === 'f' ? 'пришла извне' : 'пришёл извне') : 'из первых поселенцев'}</p>
+  <div class="traits">${traitRow('ambition', a.ambition, a)}${traitRow('coop', a.coop, a)}${traitRow('norm', a.norm, a)}${traitRow('skill', a.skill, a)}${traitRow('energy', a.energy, a)}${traitRow('status', SIM.statusLvl(a), a)}${traitRow('rep', SIM.repLvl(a), a)}${g && L && L !== a ? traitRow('res', a.res, a, false, true) : ''}</div>
+  ${g && L && L !== a ? (() => { const why = SIM.resWhy(S, a), t = a.trust[L.id] || 0; return `<p class="why1">К вождю ${esc(L.name)}: ${t > 0.3 ? 'доверяет' : t > 0 ? 'скорее доверяет' : t > -0.2 ? 'присматривается' : 'не доверяет'}${why.length ? `. Недоволен${a.sex === 'f' ? 'а' : ''}: ${why.map(w => esc(w[0]) + evLink(w[1])).join('; ')}` : ''}.</p>`; })() : ''}
   ${a.war ? (() => { const w = (S.wars || []).find(x => x.id === a.war), B = w && S._g.get(w.def); return `<p class="rel">${w && w.phase === 'march' ? `Идёт в поход на «${esc(B ? B.name : '?')}»` : 'Возвращается из похода'}.</p>`; })() : ''}
   ${g && g.home && g.wsrc ? `<p class="rel">Вода: ${g.wsrc.kind === 'well' ? 'свой колодец' : g.wsrc.kind === 'spring' ? 'родник' : 'река'}, ${Math.round(g.wd)} шагов${g.wNeed ? `, воду носят ${g.wNeed} ${g.wNeed % 10 === 1 && g.wNeed % 100 !== 11 ? 'человек' : g.wNeed % 10 > 1 && g.wNeed % 10 < 5 && (g.wNeed % 100 < 12 || g.wNeed % 100 > 14) ? 'человека' : 'человек'}` : ''}${g.dirty > 0.35 ? '; вода нечистая, люди чаще болеют' : ''}${g.thirst ? '; <b style="color:var(--red)">воды нет</b>' : ''}.</p>` : g && g.home && !g.wsrc ? '<p class="rel"><b style="color:var(--red)">В деревне нет воды.</b></p>' : ''}
   ${g && g.home && ((g.pots || 0) >= 1 || (g.cloth || 0) >= 1 || (g.goats || 0) || g.fboats) ? `<p class="rel">Хозяйство: ${[g.goats ? `${g.goats} коз` : '', g.fboats ? `${g.fboats} ${g.fboats === 1 ? 'рыбацкая лодка' : g.fboats < 5 ? 'рыбацкие лодки' : 'рыбацких лодок'}` : '', (g.pots || 0) >= 1 ? `горшков ${Math.round(g.pots)}` : '', (g.cloth || 0) >= 1 ? `тканей ${Math.round(g.cloth)}` : ''].filter(Boolean).join(', ')}${(g.cloth || 0) >= g.members.length * 0.5 ? '. Тёплая одежда: зимой болеют реже' : ''}${(g.pots || 0) >= g.members.length * 0.5 ? '. Есть посуда: запасы хранятся дольше, воду носить легче' : ''}.</p>` : ''}

@@ -110,6 +110,7 @@ export function runIsland(i, years) {
   // regimes at the end: how many kinds, and how many reached by a change that names its cause
   { const now = S.groups.filter(g => g.home && g.members.length >= 6 && g.rtype); hist.kinds = [...new Set(now.map(g => g.rtype))]; hist.kindsCaused = [...new Set(now.filter(g => (g.regimes || []).length && SIM.eventById(S, g.regimes[g.regimes.length - 1][2])?.causes?.length).map(g => g.rtype))]; }
   hist.states = Object.values(S.sarch || {}).map(s => [s.founded, s.end]);
+  for (const a of S.agents) if (a.age > 40) { life.old40 = (life.old40 || 0) + 1; if ((a.bio || []).some(b => b[1] === 'temper')) life.tempered = (life.tempered || 0) + 1; }
   for (const a of S.agents) if (a.age > 30) { life.old++; if ((a.bio || []).some(b => POL.has(b[1]) && b[3])) life.pol++; }
   life.kept = st.breadKept || 0; life.broken = st.breadBroken || 0;
   // drama of the top 20 lives (the Fates tab): variety of turns, finished arcs, repeats and the loops behind them
@@ -138,7 +139,7 @@ async function main() {
   const drama = { n: 0, kinds: 0, distinct: 0, repeats: 0, arcs: 0, loops: {}, worst: 0 };
   const power = { vy: 0, hered: 0, assembly: 0, above: 0, fights: 0, named: 0, byLine: 0 }; const heredBy = [];
   const laws = { n: 0, author: 0, against: 0, cause: 0, viaPower: 0, reforms: 0, kinds: {} };
-  const life = { vy: 0, dep: 0, old: 0, pol: 0, kept: 0, broken: 0 };
+  const life = { vy: 0, dep: 0, old: 0, pol: 0, kept: 0, broken: 0, old40: 0, tempered: 0 };
   const hist = { changes: 0, caused: 0, drift: 0, villageYears: 0, dynLen: [], dynGen: [], vassLen: [], kinds: [], kindsCaused: [], stLen: [], stBorn: 0, stFell: 0 };
   let B = 0, CD = 0, minPop = Infinity, customN = 0;
   let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
@@ -154,7 +155,7 @@ async function main() {
     }
     { const m = island.drama; drama.n++; drama.kinds += m.kinds; drama.distinct += m.distinct; drama.repeats += m.repeats; drama.arcs += m.arcs; drama.worst = Math.max(drama.worst, m.repeats); for (const k in m.loops) drama.loops[k] = (drama.loops[k] || 0) + m.loops[k]; }
     for (const k of ['n', 'author', 'against', 'cause', 'viaPower', 'reforms']) laws[k] += island.laws[k]; for (const k in island.laws.kinds) laws.kinds[k] = (laws.kinds[k] || 0) + island.laws.kinds[k];
-    for (const k in life) life[k] += island.life[k];
+    for (const k in life) life[k] += island.life[k] || 0;
     { const h = island.hist; for (const k of ['changes', 'caused', 'drift', 'villageYears']) hist[k] += h[k]; hist.dynLen.push(...h.dynLen); hist.dynGen.push(...h.dynGen); hist.vassLen.push(...h.vassLen); hist.kinds.push(h.kinds.length); hist.kindsCaused.push(h.kindsCaused.length);
       for (const [f, e] of h.states) { hist.stBorn++; if (e) { hist.stFell++; hist.stLen.push((e - f) / 360); } } }
     for (const k in power) power[k] += island.power[k]; heredBy.push(island.power.vy ? Math.round(100 * island.power.hered / island.power.vy) : 0);
@@ -194,7 +195,7 @@ async function main() {
     console.log(`drama of the top 20 lives per island: ${(d.kinds / n).toFixed(1)} kinds of turn per life, ${(d.distinct / n).toFixed(0)} across the 20; repeats ${Math.round(d.repeats / n * 100)}% (worst island ${Math.round(d.worst * 100)}%); with a finished arc ${Math.round(d.arcs / n * 100)}%; loops (a turn 3+ times in one life, lives): ${loops || 'none'}`); }
   console.log(`power (village-years from year 40, villages of 5+): hereditary ${percent(power.hered, power.vy)} (by island ${heredBy.join(' ')}%; held by a line ${percent(power.byLine, power.hered)}), assembly ${percent(power.assembly, power.vy)}, an overlord or vassals ${percent(power.above, power.vy)}; struggles for power naming the sides ${coverage(power.named, power.fights)}`);
   console.log(`laws: ${laws.n} (${Object.entries(laws.kinds).sort((p, q) => q[1] - p[1]).map(([k, v]) => `${k} ${v}`).join(', ')}); with an author ${percent(laws.author, laws.n)}, with an opponent ${percent(laws.against, laws.n)}, with a cause ${percent(laws.cause, laws.n)} (of them only the ruler's way to power ${percent(laws.viaPower, laws.cause)}); reforms in the chronicle ${(laws.reforms / Math.max(1, W)).toFixed(1)} per island`);
-  console.log(`power in daily life: adults over 30 with a political line and its cause (besides quitting and a war band) ${percent(life.pol, life.old)}; villages with dependants (clients, bondsmen) ${percent(life.dep, life.vy)} of village-years; hungry winters when the leader opened his store ${life.kept}, kept taking his share ${life.broken}`);
+  console.log(`power in daily life: adults over 30 with a political line and its cause (besides quitting and a war band) ${percent(life.pol, life.old)}; villages with dependants (clients, bondsmen) ${percent(life.dep, life.vy)} of village-years; hungry winters when the leader opened his store ${life.kept}, kept taking his share ${life.broken}; adults over 40 whose character changed with life ${percent(life.tempered, life.old40)}`);
   { const h = hist, m = a => a.length ? med(a).toFixed(0) : '-';
     console.log(`regime as history: changes ${h.changes} (with a cause ${h.caused}, drifting ten years ${h.drift}; drifting per village per 40 years ${(h.drift / Math.max(1, h.villageYears) * 40).toFixed(2)}); kinds of regime by island at the end ${h.kinds.join(' ')} (reached by a change with a cause ${h.kindsCaused.join(' ')}); dynasties ended ${h.dynLen.length}, median ${m(h.dynLen)} years, ${percent(h.dynGen.filter(x => x >= 3).length, h.dynGen.length)} after 3+ generations; subjection ended ${h.vassLen.length} times, median ${m(h.vassLen)} years; states born ${h.stBorn}, fell ${h.stFell}, median life ${m(h.stLen)} years`); }
   console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);

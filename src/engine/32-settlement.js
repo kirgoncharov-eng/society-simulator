@@ -83,7 +83,7 @@ function finishSite(S, g) {
   if (st.kind === 'house') {
     g.houses.push({ ...placedSite(st), built: S.tick, ...(st.earth ? { earth: true } : {}) });
     const k = g.houses.length;
-    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В группе ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Для последнего дома строители принесли ${st.materials?.wood ?? 6} заготовок дерева и отработали на площадке.`, gs: [g.id] });
+    if (k === 5 || k === 10 || k === 15) log(S, 'milestone', `Поселение «${g.name}» разрастается до ${k} домов`, g.home.x, g.home.y, g.hue, { why: `В деревне ${g.members.length} человек, под крышей могут зимовать ${k * 4}. Для последнего дома строители принесли ${st.materials?.wood ?? 6} заготовок дерева и отработали на площадке.`, gs: [g.id] });
   } else if (st.kind === 'workshop') {
     g.workshop = { ...placedSite(st), built: S.tick };
     const first = !S.firstWorkshop; S.firstWorkshop = true;
@@ -100,7 +100,7 @@ function finishSite(S, g) {
     g.shrine = { ...placedSite(st), built: S.tick };
     S.faiths = S.faiths || {};
     const partner = S.groups.find(o => o !== g && o.faith && o.home && (S.routes[key(o.id, g.id)] || (S.hostility[key(o.id, g.id)] || 0) < 0.2 && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300));
-    const why0 = sent([g.famY !== undefined ? 'голодные зимы' : '', g.warsLost ? 'проигранные битвы' : '', 'люди ищут смысл в бедах', 'святилище утешает: обиды копятся на треть медленнее, а лидер выглядит законнее', 'жрец кормится подношениями']);
+    const why0 = sent([g.famY !== undefined ? 'голодные зимы' : '', g.warsLost ? 'проигранные битвы' : '', 'люди ищут смысл в бедах', 'святилище утешает: обиды копятся на треть медленнее, а власть вождя кажется законнее', 'жрец кормится подношениями']);
     if (!g.faith && partner && rnd(S) < 0.6) {
       g.faith = partner.faith; const fn = S.faiths[g.faith];
       log(S, 'faith', `«${g.name}» ставит святилище и принимает ${fn.name} от соседей из «${partner.name}»`, st.x, st.y, fn.hue, { why: why0, gs: [g.id, partner.id] });

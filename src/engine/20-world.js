@@ -109,7 +109,7 @@ function dissolve(S, g, silent) {
   S.groups = S.groups.filter(x => x !== g); S._g.delete(g.id); S._groupsById[g.id] = undefined;
   S.alliances = S.alliances.filter(al => al.a !== g.id && al.b !== g.id);
   for (const k of Object.keys(S.hostility)) { const [p, q] = k.split('|'); if (+p === g.id || +q === g.id) delete S.hostility[k]; }
-  if (!silent && S.tick - g.founded > 360) log(S, 'collapse', `«${g.name}» распадается спустя ${yrs(Math.round((S.tick - g.founded) / 360))}`, g.cx, g.cy, g.hue, { why: 'В группе осталось меньше двух человек: остальные ушли, умерли или перебежали к соседям.', gs: [g.id] });
+  if (!silent && S.tick - g.founded > 360) log(S, 'collapse', `«${g.name}» распадается спустя ${yrs(Math.round((S.tick - g.founded) / 360))}`, g.cx, g.cy, g.hue, { why: 'В деревне осталось меньше двух человек: остальные ушли, умерли или перебежали к соседям.', gs: [g.id] });
 }
 
 function createGroup(S, L, others, parent) {
@@ -151,7 +151,7 @@ function setLeader(S, g, W) {
   restructure(S, g);
 }
 
-const VERB = { death: 'уходит из жизни', burnout: 'истощается и уходит', move: 'покидает группу', vanish: 'внезапно исчезает', war: 'погибает в бою' };
+const VERB = { death: 'уходит из жизни', burnout: 'истощается и уходит', move: 'покидает деревню', vanish: 'внезапно исчезает', war: 'погибает в бою' };
 function succession(S, g, why, old) {
   if (g.members.length < 2) { dissolve(S, g); return; }
   const mem = g.members.map(id => S._a.get(id));
@@ -193,11 +193,11 @@ function succession(S, g, why, old) {
     if (sup.length >= 4 && rnd(S) < Math.min(1, 0.2 + fissionP(S, g))) {
       const ng = createGroup(S, R, sup, g.id);
       S.hostility[key(g.id, ng.id)] = 0.7; S.stats.schisms++;
-      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} с амбициями ${P0(R.ambition)} не признаёт итог`, `за ${R.name} уходят ${sidesTxt(S, sup)}`, `за ${W.name} остаются ${sidesTxt(S, backers.get(W.id))}`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
+      log(S, 'crisis', `${lead}. Кризис преемственности в «${g.name}»: власть берёт ${W.name}, а ${R.name} уводит ${sup.length} ${one(sup.length) ? 'сторонника' : 'сторонников'} в «${ng.name}»`, W.x, W.y, g.hue, { why: sent([`${W.name} получает только ${P0(share)} голосов`, `${R.name} ${word('ambition', R.ambition, R)} и не признаёт итог`, `за ${R.name} уходят ${sidesTxt(S, sup)}`, `за ${W.name} остаются ${sidesTxt(S, backers.get(W.id))}`]), who: [W.id, R.id, ...sup.map(m => m.id)], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
       return;
     }
   }
-  const sev = log(S, 'succession', `${lead}. «${g.name}» возглавляет ${W.name}${g.gen > 2 ? `, ${g.gen}-й лидер со времён ${g.founder}` : ''}`, W.x, W.y, g.hue, { why: sent([`${W.name} набирает ${P0(share)} голосов`, backers.get(W.id).length ? `за ${fem(W, 'него', 'неё')} ${sidesTxt(S, backers.get(W.id))}` : '', R && backers.get(R.id).length ? `за ${R.name} — ${sidesTxt(S, backers.get(R.id))}` : '', share > 0.6 ? 'сильный мандат' : share < 0.4 ? 'мандат слабый, недовольство может вырасти' : '']), who: [W.id], gs: [g.id], sides: 1 });
+  const sev = log(S, 'succession', `${lead}. «${g.name}» возглавляет ${W.name}${g.gen > 2 ? `, ${g.gen}-й вождь со времён ${g.founder}` : ''}`, W.x, W.y, g.hue, { why: sent([`${W.name} набирает ${P0(share)} голосов`, backers.get(W.id).length ? `за ${fem(W, 'него', 'неё')} ${sidesTxt(S, backers.get(W.id))}` : '', R && backers.get(R.id).length ? `за ${R.name} — ${sidesTxt(S, backers.get(R.id))}` : '', share > 0.6 ? 'деревня за него почти единодушно' : share < 0.4 ? 'большинство голосовало за других, и недовольство может вырасти' : '']), who: [W.id], gs: [g.id], sides: 1 });
   powerEvent(S, g, sev.id);
   linSuccession(S, g, W, old, sev.id);
   if (R && R !== W) powerLost(S, R, g, W, sev.id);
@@ -223,8 +223,8 @@ function restructure(S, g) {
   g.depth = depth;
   if (depth > g.maxDepth) {
     g.maxDepth = depth;
-    if (depth === 3) log(S, 'milestone', `В «${g.name}» появляется средний менеджмент: ${g.members.length} человек уже не помещаются под одним лидером`, L.x, L.y, g.hue, { why: `Лидер ${L.name} напрямую управляет не больше чем ${span} людьми, поэтому самые статусные становятся начальниками. Каждый новый уровень добавляет группе энтропии.`, who: [L.id], gs: [g.id] });
-    if (depth === 4) log(S, 'milestone', `«${g.name}» отращивает четвёртый уровень управления`, L.x, L.y, g.hue, { why: `Группа выросла до ${g.members.length} человек. Информация теперь проходит четыре ступени и искажается на каждой.`, who: [L.id], gs: [g.id] });
+    if (depth === 3) log(S, 'milestone', `В «${g.name}» у вождя появляются помощники: ${g.members.length} человек одному уже не управить`, L.x, L.y, g.hue, { why: `Сам ${L.name} может присмотреть лишь за ${span} людьми, поэтому самые влиятельные становятся старшими над остальными. Чем больше ступеней власти, тем труднее деревне договориться.`, who: [L.id], gs: [g.id] });
+    if (depth === 4) log(S, 'milestone', `В «${g.name}» власть идёт уже через четыре ступени`, L.x, L.y, g.hue, { why: `Деревня выросла до ${g.members.length} человек. Слово вождя доходит до рядовых через троих старших и по пути искажается.`, who: [L.id], gs: [g.id] });
   }
 }
 

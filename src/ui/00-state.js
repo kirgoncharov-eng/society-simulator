@@ -10,10 +10,10 @@ let riverKey = '', riverHit = { dots: [], bands: [] };
 const C = {};
 const CTL = [
   ['scarcity', 'Дефицит ресурсов', 'Как медленно восстанавливаются источники'],
-  ['inflow', 'Приток новичков', 'Рождения в группах и пришельцы. Ноль — замкнутый мир'],
-  ['synergy', 'Синергия', 'Насколько группа продуктивнее одиночек'],
+  ['inflow', 'Приток новичков', 'Рождения в деревнях и пришельцы. Ноль — замкнутый мир'],
+  ['synergy', 'Сила артели', 'Насколько вместе работать выгоднее, чем поодиночке'],
   ['memory', 'Память', 'Как долго помнят доверие и обиды'],
-  ['ambition', 'Амбиции новичков', 'Средняя амбициозность новых агентов']
+  ['ambition', 'Властолюбие новичков', 'Насколько рвутся к власти новые люди']
 ];
 const TL = { tyranny: 'Хлеб голодных', tax: 'Доля вождя', arc: 'Судьба', boat: 'Лодка', emigr: 'Уплывают', drought: 'Засуха', thirst: 'Жажда', well: 'Колодец', revenge: 'Месть', elope: 'Побег', bridge: 'Мост', drown: 'Утонул', marriage: 'Брачный союз', plague: 'Мор', plagueEnd: 'Мор', abandon: 'Деревня брошена', state: 'Государство', money: 'Деньги', debt: 'Долги', land: 'Земля', gov: 'Правление', border: 'Граница', era: 'Итоги десятилетия', regime: 'Смена строя', faith: 'Вера', law: 'Закон', war: 'Поход', battle: 'Битва', conquest: 'Завоевание', ransom: 'Откуп', aid: 'Помощь', case: 'Суд', rumor: 'Слух', rite: 'Обряд', secret: 'Тайна', exile: 'Изгнание', quit: 'Уход', death: 'Смерть', revolt: 'Восстание', raid: 'Грабёж', trade: 'Торговля', route: 'Торговый путь', market: 'Рынок', tech: 'Новшество', settle: 'Поселение', famine: 'Голодная зима', coup: 'Переворот', schism: 'Раскол', crisis: 'Кризис преемственности', merge: 'Слияние', reform: 'Реформа', exodus: 'Исход', conflict: 'Стычка', alliance: 'Союз', break: 'Конец союза', found: 'Новая группа', colony: 'Дочерняя деревня', collapse: 'Распад', succession: 'Смена лидера', milestone: 'Рост иерархии', shock: 'Шок', genesis: 'Начало', fork: 'Развилка' };
 const MAJOR = new Set(['drought', 'thirst', 'revenge', 'plague', 'coup', 'schism', 'crisis', 'merge', 'reform', 'exodus', 'famine', 'battle', 'conquest', 'revolt', 'era', 'regime', 'state']);
@@ -68,6 +68,6 @@ function resetView() {
   acc = dayWatch ? dawnFraction() : 0;
   lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
   seenEv = S.evId || 0; lastEvt = null; riverKey = ''; syncCtls(); ui(true);
-  $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, распределение добычи, иерархия по охвату управления, энтропия от размера, уровней, обид и бюрократии.`;
+  $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, дележ урожая, роды, ступени власти и неурядица, которая растёт с размером деревни, числом старших, недовольством и волокитой.`;
 }
 

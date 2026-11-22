@@ -230,7 +230,7 @@ function groupMonth(S, g) {
   if (g.home && season === 0 && hungry >= 2 && g.famY !== yr) {
     g.famY = yr; g.trauma++; S.stats.famines = (S.stats.famines || 0) + 1;
     const cold = Math.max(0, n - g.houses.length * 4);
-    const famEv = log(S, 'famine', `Голодная зима в «${g.name}»: ${hungry} из ${n} голодают`, g.home.x, g.home.y, g.hue, { why: sent([`полей ${g.fields.length} на ${n} едоков`, `зимой поля не родят, а запас к зиме — ${Math.max(0, g.treasury + pool).toFixed(0)} при нужде около ${n * 3}`, cold ? `${cold} ${one(cold) ? 'зимует' : 'зимуют'} без крыши и теряют силы` : '', g.take > 0.18 ? `лидер забирает себе ${P0(g.take)}` : '', S.tick < S.drought ? 'идёт засуха' : '']), who: mem.filter(m => m.wealth < 0).map(m => m.id), gs: [g.id] });
+    const famEv = log(S, 'famine', `Голодная зима в «${g.name}»: ${hungry} из ${n} голодают`, g.home.x, g.home.y, g.hue, { why: sent([`полей ${g.fields.length} на ${n} едоков`, `зимой поля не родят, а запас к зиме — ${Math.max(0, g.treasury + pool).toFixed(0)} при нужде около ${n * 3}`, cold ? `${cold} ${one(cold) ? 'зимует' : 'зимуют'} без крыши и теряют силы` : '', g.take > 0.18 ? `вождь забирает себе ${P0(g.take)} общего урожая` : '', S.tick < S.drought ? 'идёт засуха' : '']), who: mem.filter(m => m.wealth < 0).map(m => m.id), gs: [g.id] });
     breadTest(S, g, L, mem, famEv.id);
   }
   if (L.wealth > 20) {
@@ -288,11 +288,11 @@ function groupMonth(S, g) {
   shareFelt(S, g, L);
   // reform
   if (g.entropy > 0.9 && g.cool <= S.tick && L.energy > 0.4 && n >= 6 && rnd(S) < 0.08 + 0.25 * L.ambition * L.skill) {
-    const why = sent([`энтропия дошла до ${g.entropy.toFixed(2)}`, `${g.depth} уровня управления`, `бюрократия копилась ${yrs(Math.max(1, Math.round((S.tick - g.founded) / 360)))}`, 'реформа срезает её, но злит тех, кто не доверяет лидеру']);
+    const why = sent([`в деревне ${word('entropy', Math.min(1, g.entropy / 1.6), null, true)}`, stepsWord(g.depth), `путаница в делах копилась ${yrs(Math.max(1, Math.round((S.tick - g.founded) / 360)))}`, 'вождь убирает лишних старших и сам берётся за дела, но те, кто ему не доверяет, уходят']);
     g.bureau *= 0.3; g.cool = S.tick + 720; L.energy -= 0.25; S.stats.reforms++; g.reforms++;
     let gone = 0;
     for (const m of mem) if ((m.trust[L.id] || 0) < 0 && rnd(S) < 0.4) { leave(S, m, 'move'); gone++; }
-    (gone >= Math.max(5, 0.2 * n) ? log : note)(S, 'reform', `${L.name} проводит реформу в «${g.name}»: бюрократия срезана${gone ? (one(gone) ? `, ${gone} несогласный уходит` : `, ${gone} несогласных уходят`) : ''}`, L.x, L.y, g.hue, { why, who: [L.id], gs: [g.id] });
+    (gone >= Math.max(5, 0.2 * n) ? log : note)(S, 'reform', `${L.name} наводит порядок в «${g.name}»: лишние старшие сняты${gone ? (one(gone) ? `, ${gone} несогласный уходит` : `, ${gone} несогласных уходят`) : ''}`, L.x, L.y, g.hue, { why, who: [L.id], gs: [g.id] });
     if (g.dead) return;
   }
   // coups and schisms
@@ -308,7 +308,7 @@ function groupMonth(S, g) {
       // hereditary rule a coup needs more backing and comes half as often, unless the challenger is of the ruling line
       // the guard a custom gives wears off with the generations (asabiya, Ibn Khaldun; Turchin & Nefedov 2009)
       const custom = g.dynasty && linOf(S, ch) !== g.dynLin, guard = custom ? clamp(1 - 0.25 * ((g.dynGen || 1) - 1), 0, 1) : 0, bread = g.tyr && g.tyr.L === L.id && S.tick - g.tyr.t < 360 * 5;
-      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets + 0.15 * guard - (bread ? 0.1 : 0) && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) * (1 - 0.5 * guard) * (bread ? 2 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` Его поддерживает ${P0(frac)} группы.`); return; }
+      if (frac > (g.gov === 'assembly' ? 0.6 : 0.5) + 0.45 * rets + 0.15 * guard - (bread ? 0.1 : 0) && n >= 4 && S.tick > (g.coupCool || 0) && rnd(S) < (0.14 * ch.ambition + 0.03) * (g.gov === 'assembly' ? 0.5 : 1) * (1 - 0.5 * guard) * (bread ? 2 : 1) / (1 + Math.min(2, (S.tick - (g.since || 0)) / 3600))) { coup(S, g, L, ch, sup, cur, grievances(S, g, L, ch, sup, n) + ` За ${fem(ch, 'него', 'неё')} ${P0(frac)} деревни.`); return; }
       if (frac > 0.2 && sup.length >= 3 && sup.reduce((s, m) => s + m.res, 0) / sup.length > 0.32 && n >= 8 && rnd(S) < (0.1 * ch.ambition + 0.02) * (0.3 + 0.7 * room) * fissionP(S, g)) {
         const why = grievances(S, g, L, ch, sup, n) + ` Для переворота поддержки мало (${P0(frac)}), поэтому недовольные уходят сами.`;
         if (sup.length < 5 && g.home) {
@@ -343,7 +343,7 @@ function groupMonth(S, g) {
       const sp = m.spouse && S._a.get(m.spouse); if (sp && sp.group === g.id && sp.id !== g.leader && rnd(S) < 0.75) { bio(S, sp, 'quit', `Уходит из «${g.name}» вслед за ${sp.sex === 'f' ? 'мужем' : 'женой'}`, qev); (sp.quit = sp.quit || {})[g.id] = S.tick; leave(S, sp, 'move'); exits++; if (g.dead) return; }
     } else if ((m.rep || 0) < -0.45 && L.coop > 0.35 && S.tick - (m.joined || 0) > 360 && bondW(L, m) < 0.2 && rnd(S) < 0.15) { const xev = note(S, 'exile', `${L.name} изгоняет ${m.name} из «${g.name}»: дурная слава`, m.x, m.y, g.hue, { who: [L.id, m.id], gs: [g.id] }).id; bond(S, m, L, 'enemy', `${fem(L, 'изгнал', 'изгнала')} меня из «${g.name}»`, 0.5, false, xev); bio(S, m, 'exiled', `${m.sex === 'f' ? 'Изгнана' : 'Изгнан'} из «${g.name}»: дурная слава`, xev); m.exiledFrom = g.id; (m.exiled = m.exiled || {})[g.id] = S.tick; returnGoal(S, m, g, L, xev, 'exile'); leave(S, m, 'move'); m.x += 40; S.stats.exiles = (S.stats.exiles || 0) + 1; if (g.dead) return; }
   }
-  if (exits >= 3) log(S, 'exodus', `Из «${g.name}» разом уходят ${exits} недовольных`, g.cx, g.cy, g.hue, { why: `У каждого обида выше 70% и доверие к лидеру ниже нуля. Но лидера среди них нет, поэтому они расходятся поодиночке. Доля ${L.name} в добыче: ${P0(g.take)}.`, who: gone, gs: [g.id] });
+  if (exits >= 3) log(S, 'exodus', `Из «${g.name}» разом уходят ${exits} недовольных`, g.cx, g.cy, g.hue, { why: `Все они кипят от обиды и не верят вождю ${L.name}, но вожака среди них нет, поэтому они расходятся поодиночке. ${L.name} забирает себе ${P0(g.take)} общего урожая.`, who: gone, gs: [g.id] });
   if (g.shrine) g.treasury *= 0.99;
   if (g.faith && g.legit < 0.9) g.legit += 0.01;
   const L2 = S._a.get(g.leader);
@@ -353,7 +353,7 @@ function groupMonth(S, g) {
   if (L2 && !g.dynasty && g.gov !== 'assembly' && g.home && S.tick - (g.since || 0) > 360 * 8 && g.legit > 0.55 && g.members.length >= 8 && (linStrong(S, g, linOf(S, L2)) || g.members.some(id => { const k = S._a.get(id); return k && (k.father === L2.id || k.mother === L2.id) && k.age >= 15; })) && rnd(S) < 0.05) {
     g.dynasty = true; g.dynLin = linOf(S, L2); g.dynName = clanName(S, g.dynLin, true); g.dynGen = 1; g.gov = 'monarch'; g.linId = g.dynLin;
     const rivals = rivalHeads(S, g, g.dynLin);
-    enact(S, g, { kind: 'hered', author: L2, backers: linMembers(S, g, g.dynLin), against: rivals, propose: 'объявляет', text: `«${g.name}» вводит наследование: после ${L2.name} власть будет передаваться в роду ${g.dynName}`, why: [`${L2.name} правит ${yrs(Math.round((S.tick - g.since) / 360))}, и деревня привыкла к ${fem(L2, 'нему', 'ней')}`, `легитимность ${P0(g.legit)}`, 'закон избавляет от кризисов преемственности, но наследник может оказаться слабым'],
+    enact(S, g, { kind: 'hered', author: L2, backers: linMembers(S, g, g.dynLin), against: rivals, propose: 'объявляет', text: `«${g.name}» вводит наследование: после ${L2.name} власть будет передаваться в роду ${g.dynName}`, why: [`${L2.name} правит ${yrs(Math.round((S.tick - g.since) / 360))}, и деревня привыкла к ${fem(L2, 'нему', 'ней')}`, word('legit', g.legit, null, true), 'закон избавляет от кризисов преемственности, но наследник может оказаться слабым'],
       authorLine: `Закрепляет власть в «${g.name}» за своим родом`, lostLine: p => `Род ${clanName(S, linOf(S, p), true)} теряет надежду на власть в «${g.name}»: она закреплена за ${g.dynName}`, grudge: `${fem(L2, 'закрепил', 'закрепила')} власть за своим родом` });
   }
   let imK;
@@ -362,7 +362,7 @@ function groupMonth(S, g) {
     const adults = adultsOf(S, g), egal = g.code === 'egal';
     const A = egal ? (L2.norm > 0.5 ? L2 : topBy(lineHeads(S, g).filter(h => h.norm > 0.5), h => h.status, 1)[0] || L2) : L2;
     enact(S, g, { kind: 'code', author: A, backers: topBy(adults.filter(m => egal ? m.norm > 0.55 : m.norm < 0.45), m => m.status, 10), against: egal ? topBy(adults, m => m.wealth, 2) : topBy(adults.filter(m => m.norm > 0.6), m => m.status, 2),
-      text: `«${g.name}» записывает свод правил: ${egal ? 'всем равные доли' : 'доли по статусу'}`, why: [`в группе ${g.members.length} человек и ${g.depth} уровня управления`, `энтропия ${g.entropy.toFixed(2)}: спорить о каждом решении стало слишком дорого`, 'писаное правило замедляет бюрократию', g.code === 'egal' ? 'кто хочет делить по заслугам, будет недоволен' : 'кто ждёт равенства, будет недоволен'],
+      text: `«${g.name}» записывает свод правил: ${egal ? 'всем равные доли' : 'доли по статусу'}`, why: [`в деревне ${g.members.length} человек, ${stepsWord(g.depth)}`, 'спорить о каждом дележе стало слишком тяжело', 'записанное правило избавляет от бесконечных споров', g.code === 'egal' ? 'кто хочет делить по заслугам, будет недоволен' : 'кто ждёт равенства, будет недоволен'],
       authorLine: `Записывает свод правил «${g.name}»: ${egal ? 'всем равные доли' : 'доли по статусу'}`, lostLine: p => egal ? `Свод правил «${g.name}» уравнивает доли: богатым это не по душе` : `Свод правил «${g.name}» делит по статусу: ${fem(p, 'ему', 'ей')} это несправедливо`, grudge: egal ? 'уравнял доли за мой счёт' : 'записал доли по статусу' });
   }
   if (S.tick % 90 === 0 || !g.target) pickTarget(S, g);
@@ -408,21 +408,21 @@ function coup(S, g, L, ch, sup, cur, why) {
 
 function grievances(S, g, L, ch, sup, n) {
   const r = [];
-  if (g.take > 0.18) r.push(`${L.name} забирает себе ${P0(g.take)} добычи`);
+  if (g.take > 0.18) r.push(`${L.name} забирает себе ${P0(g.take)} общего урожая — доля ${word('take', g.take, null, true)}`);
   const an = avg(sup, m => m.norm);
-  if (g.norm < 0.45 && an > 0.55) r.push('добычу делят по статусу, а недовольные ждут поровну');
-  else if (g.norm > 0.6 && an < 0.4) r.push('добычу делят поровну, а самые работящие считают это несправедливым');
+  if (g.norm < 0.45 && an > 0.55) r.push('урожай делят по положению, а недовольные считают, что делить надо поровну');
+  else if (g.norm > 0.6 && an < 0.4) r.push('урожай делят поровну, а самые работящие считают это несправедливым');
   const hungry = sup.filter(m => m.wealth < 0).length;
   if (hungry) r.push(`${hungry} из недовольных ${one(hungry) ? 'голодает' : 'голодают'}`);
   const cold = sup.filter(m => !m.shel).length;
-  if (g.home && cold) r.push(`${cold} из них живут без крыши, а дома достались статусным`);
-  if (g.entropy > 0.9) r.push(`группа разрослась до ${n} человек и ${g.depth} уровней, на согласования уходит много сил`);
-  if (g.legit < 0.45) r.push('у лидера слабый мандат');
-  r.push(`обида у недовольных в среднем ${P0(avg(sup, m => m.res))}`);
+  if (g.home && cold) r.push(`${cold} из них живут без крыши, а дома достались влиятельным`);
+  if (g.entropy > 0.9) r.push(`деревня разрослась до ${n} человек, ${stepsWord(g.depth)}, и договориться всё труднее`);
+  if (g.legit < 0.45) r.push(`власть ${L.name} ${g.legit < 0.25 ? 'шаткая' : 'едва терпят'}`);
+  { const rs = avg(sup, m => m.res); r.push(`недовольные ${rs > 0.75 ? 'кипят от обиды' : rs > 0.5 ? 'сильно недовольны' : 'ворчат'}`); }
   if ((ch.intr || 0) > 2) r.push(`${ch.name} давно нашёптывает недовольным`);
   if (g.land === 'private') { const landless = sup.filter(m => !g.fields.some(f => f.owner === m.id)).length; if (landless) r.push(`${landless} из недовольных — батраки на чужих полях`); }
-  if ((ch.trades || 0) >= 2) r.push(`${ch.name} разбогател на торговле (${ch.trades} ${pl(ch.trades, 'караван', 'каравана', 'караванов')})${ch.wealth > L.wealth ? ' и богаче самого лидера' : ''}`);
-  r.push(`амбиции ${ch.name}: ${P0(ch.ambition)}`);
+  if ((ch.trades || 0) >= 2) r.push(`${ch.name} разбогател на торговле (${ch.trades} ${pl(ch.trades, 'караван', 'каравана', 'караванов')})${ch.wealth > L.wealth ? ' и богаче самого вождя' : ''}`);
+  r.push(`${ch.name} ${word('ambition', ch.ambition, ch)}`);
   return sent(r);
 }
 

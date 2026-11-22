@@ -76,7 +76,7 @@ function caravans(S) {
         addStock(H, good, q); S.stats.raids++; A.raided = S.tick;
         S.hostility[key(H.id, A.id)] = Math.min(2, (S.hostility[key(H.id, A.id)] || 0) + 0.4);
         const killed = rnd(S) < 0.3, LH = S._a.get(H.leader);
-        log(S, 'raid', `Люди «${H.name}» грабят караван «${A.name}»${killed ? `, купец ${a.name} убит` : ''}`, a.x, a.y, H.hue, { why: sent([`караван шёл в ${cells(Math.hypot(a.x - H.home.x, a.y - H.home.y))} от «${H.name}»`, `вражда между деревнями ${P0(Math.min(1, S.hostility[key(H.id, A.id)] / 2))}`, `добыча: ${qty(q, good)}`, 'теперь «' + A.name + '» выставит стражу']), who: [a.id, LH && LH.id].filter(Boolean), gs: [H.id, A.id] });
+        log(S, 'raid', `Люди «${H.name}» грабят караван «${A.name}»${killed ? `, купец ${a.name} убит` : ''}`, a.x, a.y, H.hue, { why: sent([`караван шёл в ${cells(Math.hypot(a.x - H.home.x, a.y - H.home.y))} от «${H.name}»`, `между деревнями ${hostWord(S.hostility[key(H.id, A.id)] || 0)}`, `добыча: ${qty(q, good)}`, 'теперь «' + A.name + '» выставит стражу']), who: [a.id, LH && LH.id].filter(Boolean), gs: [H.id, A.id] });
         a.car = null;
         if (killed) removeAgent(S, a, 'war'); else a.energy = Math.max(0.05, a.energy - 0.3);
         break;
@@ -123,7 +123,7 @@ function caravans(S) {
       } else { r.n++; r.t = S.tick; r.x1 = A.home.x; r.y1 = A.home.y; r.x2 = B.home.x; r.y2 = B.home.y; }
       if (LA && a.trades >= 3 && a.wealth > LA.wealth && !a.richer) {
         a.richer = true;
-        log(S, 'trade', `Купец ${a.name} становится богаче своего лидера ${LA.name}`, a.x, a.y, A.hue, { why: `После ${a.trades} ${pl(a.trades, 'каравана', 'караванов', 'караванов')} у него ${a.wealth.toFixed(0)}, а у лидера ${LA.wealth.toFixed(0)}. Восьмая часть каждой сделки оседает у купца. Богатство даёт статус и сторонников: в иерархии появляется вторая сила.`, who: [a.id, LA.id], gs: [A.id] });
+        log(S, 'trade', `Купец ${a.name} становится богаче своего вождя ${LA.name}`, a.x, a.y, A.hue, { why: `После ${a.trades} ${pl(a.trades, 'каравана', 'караванов', 'караванов')} у него ${a.wealth.toFixed(0)}, а у вождя ${LA.wealth.toFixed(0)}. Восьмая часть каждой сделки оседает у купца. Богатство даёт вес и сторонников: рядом с вождём появляется вторая сила.`, who: [a.id, LA.id], gs: [A.id] });
       }
     } else if (Math.hypot(a.x - A.home.x, a.y - A.home.y) < 22) {
       addStock(A, c.y, c.qy); a.car = null;
