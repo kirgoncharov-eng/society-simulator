@@ -37,9 +37,11 @@ function eventTime(ev) {
 }
 
 function wallBetween(walls, a, b) {
-  const from = walls[cellAt(a.x, a.y)], to = walls[cellAt(b.x, b.y)];
+  const from = cellAt(a.x, a.y), to = cellAt(b.x, b.y);
   const cuts = segment => lineCrossing(a, b, segment.a, segment.b) !== null;
-  return from?.some(cuts) || (from !== to && to?.some(cuts));
+  if (walls[from]?.some(cuts) || (from !== to && walls[to]?.some(cuts))) return true;
+  const x = to % N - from % N, y = Math.floor(to / N) - Math.floor(from / N);
+  return !!(x && y && (walls[from + x]?.some(cuts) || walls[to - x]?.some(cuts)));
 }
 
 function cellCenter(c) {
@@ -56,7 +58,7 @@ function walkingRoute(S, a, x0, y0, x1, y1) {
   let route = null;
   if (cells && navigationCosts(S)[c0]) {
     const start = { x: x0, y: y0 }, end = { x: x1, y: y1 };
-    const points = c0 === c1 ? [start, end] : [start, ...cells.map(cellCenter), end];
+    const points = [start, ...cells.slice(1, -1).map(cellCenter), end];
     const walls = wallCells(S);
     let length = 0;
     const distances = [0];
@@ -96,10 +98,13 @@ function positionOnRoute(route, distance, position) {
 function followRoute(S, a, route, distance, reverse, wear, fordRisk, loaded) {
   const { points, distances, length } = route;
   const edge = reverse ? points.length - 1 : 0, direction = reverse ? -1 : 1;
+  if (!reverse) positionOnRoute(route, Math.min(distance, length), a);
   let previous = cellAt(points[edge].x, points[edge].y);
   for (let i = edge + direction; i >= 0 && i < points.length; i += direction) {
-    if (Math.abs(distances[i] - distances[edge]) > distance) break;
-    const p = points[i], cell = cellAt(p.x, p.y);
+    const partial = Math.abs(distances[i] - distances[edge]) > distance;
+    if (partial && reverse) break;
+    const p = partial ? a : points[i], cell = cellAt(p.x, p.y);
+    if (partial && previous === cell) break;
     if (previous === cell) continue;
     S.wear[cell] += wear;
     if (S.ter[cell] === 'w' && !S.bridge[cell] && (S.ter[previous] !== 'w' || S.bridge[previous])) {
@@ -113,8 +118,8 @@ function followRoute(S, a, route, distance, reverse, wear, fordRisk, loaded) {
       }
     }
     previous = cell;
+    if (partial) break;
   }
-  if (!reverse) positionOnRoute(route, Math.min(distance, length), a);
   return true;
 }
 
