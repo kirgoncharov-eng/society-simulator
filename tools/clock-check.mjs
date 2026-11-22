@@ -89,8 +89,12 @@ const march = firstLeg.plans.get(traveller.id);
 assert.ok(Math.abs(march.distance * (SIM.CELL_METRES / 20) - 24000) < 0.001);
 assert.ok(firstLeg.end._a.get(traveller.id).relocation, 'The long route should continue tomorrow');
 const secondLeg = SIM.prepareDay(firstLeg.end);
-assert.deepEqual(secondLeg.plans.get(traveller.id).origin, march.destination);
-assert.notDeepEqual(secondLeg.plans.get(traveller.id).destination, march.destination);
+const resumedMarch = secondLeg.plans.get(traveller.id);
+assert.deepEqual(resumedMarch.origin, march.destination);
+assert.notDeepEqual(resumedMarch.destination, march.destination);
+const cell = p => [Math.floor(p.x / 20), Math.floor(p.y / 20)];
+assert.notDeepEqual(cell(resumedMarch.route.points[1]), cell(resumedMarch.origin),
+  'Resuming a trip must not walk back to the center of the current cell');
 
 const shortTrip = copy(winter);
 shortTrip._a.get(far.id).relocation = true;
