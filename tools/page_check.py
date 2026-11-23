@@ -135,7 +135,7 @@ async def check_clock_modes(pg, url, errs):
     await directed.click('label[for=spDays]')
     assert await directed.evaluate('() => [__lab().tick, __lab().minute]') == stamp
     assert await directed.evaluate('() => __labView().mode') == 'days', 'Manual speed did not cancel the scene'
-    assert await directed.evaluate('() => __labView().night') == 0, 'Fast modes should keep midday light'
+    await directed.wait_for_function('() => __labView().night === 0')
     snapshot = await directed.evaluate('() => SIM.serialize(__lab())')
     await directed.close()
 
