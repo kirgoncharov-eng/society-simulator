@@ -84,7 +84,7 @@ function seaMonth(S) {
     const offshore = { x: bs.x + (bs.x - S.isle.x) / d * 160, y: bs.y + (bs.y - S.isle.y) / d * 160 };
     S.boats.push({ x0: bs.x, y0: bs.y, x1: offshore.x, y1: offshore.y, t: S.tick, out: true, durationMinutes: boatMinutes(bs, offshore) });
     S.stats.emigrated = (S.stats.emigrated || 0) + fam.length;
-    const departure = log(S, 'emigr', `Семья ${head.name} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
+    const departure = log(S, 'emigr', `Семья ${nameCase(head, 'genitive')} уплывает из «${g.name}» искать новую землю`, bs.x, bs.y, g.hue, { first: !S.firstEmigr, why: sent([g.thirst ? 'в деревне нет воды' : hungryF > 0.3 ? `в деревне голодают ${Math.round(hungryF * 100)}%` : 'остров тесен: вокруг деревни не осталось свободной земли', `на лодку ушло дерево, а с острова — ${fam.length} ${pl(fam.length, 'человек', 'человека', 'человек')}`, 'кто уплыл, тот не вернётся: о них больше никто не услышит']), who: fam.map(m => m.id), gs: [g.id] });
     S.firstEmigr = true;
     for (const m of fam) removeAgent(S, m, 'emigr', departure.id);
   }

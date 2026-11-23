@@ -323,7 +323,7 @@ function removeAgent(S, a, why, departure) {
     legend(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
     const w = Math.max(0, a.wealth), g = S._g.get(a.group);
-    if (kids.length) { for (const k of kids) { k.wealth += w * (sp ? 0.7 : 1) / kids.length; if (w / kids.length > 12) bio(S, k, 'inherit', `Наследует от ${a.sex === 'f' ? 'матери' : 'отца'} ${a.name} запас ${Math.round(w * (sp ? 0.7 : 1) / kids.length)}`); } if (sp) sp.wealth += w * 0.3; }
+    if (kids.length) { for (const k of kids) { k.wealth += w * (sp ? 0.7 : 1) / kids.length; if (w / kids.length > 12) bio(S, k, 'inherit', `Наследует от ${a.sex === 'f' ? 'матери' : 'отца'} ${nameCase(a, 'genitive')} запас ${Math.round(w * (sp ? 0.7 : 1) / kids.length)}`); } if (sp) sp.wealth += w * 0.3; }
     else if (sp) sp.wealth += w; else if (g) g.treasury += w * 0.5;
     if (sp) sp.spouse = null;
     const heir = kids.filter(k => k.group === a.group).sort((x, y) => y.age - x.age)[0];

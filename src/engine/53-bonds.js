@@ -22,12 +22,12 @@ function bond(S, a, b, k, why, s, named, ref) {
     bio(S, a, 'betrayed', `${b.name}, ${cur[0] === 'sworn' ? fem(b, 'побратим', 'посестра') : cur[0] === 'debt' ? 'кому был' + fem(a, '', 'а') + ' обязан' + fem(a, '', 'а') : fem(b, 'друг', 'подруга')}, становится врагом: ${why}`);
     S.stats.betrayals = (S.stats.betrayals || 0) + 1;
   }
-  if (cur && BOND_W[cur[0]] < 0 && BOND_W[k] > 0.3 && cur[2] > 0.3) bio(S, a, 'reconcile', `Мирится с ${b.name}: ${why}`);
+  if (cur && BOND_W[cur[0]] < 0 && BOND_W[k] > 0.3 && cur[2] > 0.3) bio(S, a, 'reconcile', `Мирится с ${nameCase(b, 'instrumental')}: ${why}`);
   B[b.id] = [k, S.tick, Math.min(1, s), why];
   if (named) B[b.id][4] = 1;
   if (ref) { B[b.id][4] = B[b.id][4] || 0; B[b.id][5] = cite(S, ref); }
   // enmities already have their own line in the chronicle (exile, coup, a kinsman killed); sworn brotherhood and love do not
-  if (!said && (k === 'sworn' || k === 'love')) bio(S, a, k, k === 'sworn' ? `Братается с ${b.name}: ${why}` : `Любит ${b.name}: ${why}`);
+  if (!said && (k === 'sworn' || k === 'love')) bio(S, a, k, k === 'sworn' ? `Братается с ${nameCase(b, 'instrumental')}: ${why}` : `Любит ${nameCase(b, 'accusative')}: ${why}`);
   bump(a, b, BOND_W[k] * 0.4);
   const ids = Object.keys(B);
   if (ids.length > BOND_MAX) { ids.sort((p, q) => B[p][2] - B[q][2]); delete B[ids[0]]; }

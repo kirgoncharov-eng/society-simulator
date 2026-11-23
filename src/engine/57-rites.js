@@ -24,7 +24,7 @@ function weddingFeast(S, f, m, wev) {
   gathering(S, 'wedding', h.x, h.y, 3, g.id);
   S.stats.weddings = (S.stats.weddings || 0) + 1;
   const L = S._a.get(g.leader), notable = L && (L === m || L === f || kin(L, m) || kin(L, f));
-  if (notable) log(S, 'rite', `Свадьба ${m.name} и ${f.name} в «${g.name}»: пир у дома ${m.name}`, h.x, h.y, g.hue, { rite: 'wedding', why: sent([L === m || L === f ? 'женится сам вождь' : `${kin(L, m) ? m.name : f.name} — родня вождя ${L.name}`, `на пир уходит ${qty(cost, 'food')}`, 'роды жениха и невесты теперь ближе друг к другу']), who: [m.id, f.id, L.id], gs: [g.id], causes: wev ? [wev] : undefined });
+  if (notable) log(S, 'rite', `Свадьба ${nameCase(m, 'genitive')} и ${nameCase(f, 'genitive')} в «${g.name}»: пир у дома ${nameCase(m, 'genitive')}`, h.x, h.y, g.hue, { rite: 'wedding', why: sent([L === m || L === f ? 'женится сам вождь' : `${kin(L, m) ? m.name : f.name} — родня вождя ${nameCase(L, 'genitive')}`, `на пир уходит ${qty(cost, 'food')}`, 'роды жениха и невесты теперь ближе друг к другу']), who: [m.id, f.id, L.id], gs: [g.id], causes: wev ? [wev] : undefined });
 }
 // a funeral: kin walk to the burial ground; the grave stays; the leader's funeral is the whole village's
 function funeral(S, a, why) {
@@ -38,7 +38,7 @@ function funeral(S, a, why) {
   S.stats.funerals = (S.stats.funerals || 0) + 1;
   const isL = g.leader === a.id;
   const ex = { who: [a.id, ...mourners.map(o => o.id)].slice(0, 8), gs: [g.id], rite: 'funeral' };
-  const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${a.name} на кладбище` : `Похороны ${a.name} в «${g.name}»`;
+  const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')} на кладбище` : `Похороны ${nameCase(a, 'genitive')} в «${g.name}»`;
   const ev = isL ? log(S, 'rite', text, cem.x, cem.y, g.hue, Object.assign({ why: sent([`${a.name} ${fem(a, 'правил', 'правила')} «${g.name}» ${yrs(Math.max(1, Math.round((S.tick - (g.since || g.founded)) / 360)))}`, mourners.length ? `за гробом идут ${mourners.map(o => o.name).slice(0, 4).join(', ')}` : '', `на кладбище «${g.name}» уже ${cem.graves} ${pl(cem.graves, 'могила', 'могилы', 'могил')}`]) }, ex)) : note(S, 'rite', text, cem.x, cem.y, g.hue, ex);
   return ev.id;
 }

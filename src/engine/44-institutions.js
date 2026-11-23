@@ -36,7 +36,7 @@ function institutions(S, g, L) {
   if (g.gov === 'assembly' && P.assembly >= 0.5 && L.ambition > 0.55 && (g.room !== undefined && g.room < 0.35 || g.warsLost > (g.wl0 || 0)) && mem.filter(m => m.patron === L.id).length >= 2 && rnd(S) < 0.015 * (livesOffOthers(S, g, L) ? 1.5 : 0.7)) {
     g.gov = g.dynasty ? 'monarch' : 'chief'; g.wl0 = g.warsLost;
     const by = g.asmBy && S._a.get(g.asmBy), keep = topBy(lineHeads(S, g).filter(h => h !== L && h.norm > 0.5), h => h.status, 2);
-    enact(S, g, { type: 'gov', kind: 'dissolve', author: L, backers: mem.filter(m => m.patron === L.id), against: [by && by.group === g.id ? by : null, ...keep], text: `${L.name} разгоняет вече «${g.name}» и правит один`, why: [`у ${L.name} своя дружина: ${mem.filter(m => m.patron === L.id).length} ${pl(mem.filter(m => m.patron === L.id).length, 'человек', 'человека', 'человек')} на жалованье`, g.room < 0.35 ? 'вокруг тесно: недовольным некуда уйти' : 'деревня проиграла войну, и люди хотят сильной руки', 'вече не может помешать тому, у кого есть оружие'],
+    enact(S, g, { type: 'gov', kind: 'dissolve', author: L, backers: mem.filter(m => m.patron === L.id), against: [by && by.group === g.id ? by : null, ...keep], text: `${L.name} разгоняет вече «${g.name}» и правит один`, why: [`у ${nameCase(L, 'genitive')} своя дружина: ${mem.filter(m => m.patron === L.id).length} ${pl(mem.filter(m => m.patron === L.id).length, 'человек', 'человека', 'человек')} на жалованье`, g.room < 0.35 ? 'вокруг тесно: недовольным некуда уйти' : 'деревня проиграла войну, и люди хотят сильной руки', 'вече не может помешать тому, у кого есть оружие'],
       propose: 'решает', authorLine: `Разгоняет вече «${g.name}» и правит один`, lostLine: p => `Не может отстоять вече «${g.name}»: ${L.name} правит один`, grudge: `${fem(L, 'разогнал', 'разогнала')} вече` });
   }
   if (g.gov === 'assembly' && P.assembly < 0.5) {
@@ -81,7 +81,7 @@ function money(S, g, L) {
     m.debt = (m.debt || 0) + 6; ln.loans = (ln.loans || 0) + 1; S.stats.loans = (S.stats.loans || 0) + 1;
     if (allowed && !S.firstLoan) {
       S.firstLoan = true;
-      log(S, 'debt', `Первый заём под проценты: ${m.name} берёт в долг у ${ln.name}`, m.x, m.y, g.hue, { first: true, why: sent([`${m.name} голодает, а у ${ln.name} скопилось ${Math.round(ln.wealth + 6)} в монете`, `долг растёт на ${P0(m.rate)} в год`, 'если не вернуть, должник попадёт в кабалу и будет отдавать всё, что заработает']), who: [m.id, ln.id], gs: [g.id] });
+      log(S, 'debt', `Первый заём под проценты: ${m.name} берёт в долг у ${nameCase(ln, 'genitive')}`, m.x, m.y, g.hue, { first: true, why: sent([`${m.name} голодает, а у ${nameCase(ln, 'genitive')} скопилось ${Math.round(ln.wealth + 6)} в монете`, `долг растёт на ${P0(m.rate)} в год`, 'если не вернуть, должник попадёт в кабалу и будет отдавать всё, что заработает']), who: [m.id, ln.id], gs: [g.id] });
     }
   }
   for (const m of mem) if (m !== L && rnd(S) < 0.025) m.wealth -= 4 + rnd(S) * 4;
@@ -94,10 +94,10 @@ function money(S, g, L) {
     if (m.wealth > keep + 1) { const pay = Math.min(m.wealth - keep, m.debt); m.wealth -= pay; cr.wealth += pay; m.debt -= pay; }
     if (m.debt < 0.5) { m.debt = 0; m.cred = null; m.bond = false; continue; }
     if (!m.bond && m.rate > 0 && (m.debt > 14 || (S.tick - m.dt > 540 && m.debt > 6))) {
-      m.bond = true; S.stats.bonds = (S.stats.bonds || 0) + 1; bio(S, m, 'bond', `Попадает в кабалу к ${cr.name}: долг ${Math.round(m.debt)}`); bond(S, m, cr, 'enemy', `держит в кабале за долг ${Math.round(m.debt)}`, 0.6);
+      m.bond = true; S.stats.bonds = (S.stats.bonds || 0) + 1; bio(S, m, 'bond', `Попадает в кабалу к ${nameCase(cr, 'dative')}: долг ${Math.round(m.debt)}`); bond(S, m, cr, 'enemy', `держит в кабале за долг ${Math.round(m.debt)}`, 0.6);
       if ((g.bondLog || 0) < S.tick) {
         g.bondLog = S.tick + 360 * 3;
-        log(S, 'debt', `${m.name} попадает в кабалу к ${cr.name}`, m.x, m.y, g.hue, { why: sent([`долг вырос до ${Math.round(m.debt)} под ${P0(m.rate)} годовых и уже не гасится`, `теперь почти всё, что зарабатывает ${m.name}, уходит ${cr.name}`, `у ${cr.name} уже ${cr.loans || 1} ${pl(cr.loans || 1, 'заём', 'займа', 'займов')}`]), who: [m.id, cr.id], gs: [g.id] });
+        log(S, 'debt', `${m.name} попадает в кабалу к ${nameCase(cr, 'dative')}`, m.x, m.y, g.hue, { why: sent([`долг вырос до ${Math.round(m.debt)} под ${P0(m.rate)} годовых и уже не гасится`, `теперь почти всё, что зарабатывает ${m.name}, уходит ${nameCase(cr, 'dative')}`, `у ${nameCase(cr, 'genitive')} уже ${cr.loans || 1} ${pl(cr.loans || 1, 'заём', 'займа', 'займов')}`]), who: [m.id, cr.id], gs: [g.id] });
       }
     }
     if (m.bond) { m.res = clamp(m.res + 0.04, 0, 1); bump(m, cr, -0.04); m.status *= 0.97; cr.status += 0.05; }
