@@ -11,6 +11,7 @@ function focus(e, pause) {
   focusEv = e;
   if (pause) {
     playing = false;
+    clockCredit = 0;
     if (mainRunner.busy) mainRunner.reset();
     syncPlay();
   }

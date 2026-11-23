@@ -34,7 +34,10 @@ function dayAdvanced(completed) {
 
 $('play').addEventListener('click', () => {
   playing = !playing;
-  if (!playing && mainRunner.busy) mainRunner.reset();
+  if (!playing) {
+    clockCredit = 0;
+    if (mainRunner.busy) mainRunner.reset();
+  }
   if (playing && focusEv) closeFocus();
   syncPlay();
 });
