@@ -3869,13 +3869,15 @@ function dayBudget(S, g, a, light, homes) {
     const need = clamp((ratio - 1.2) / 1.5 + (perMouth < 1 ? 0.4 : 0), 0, 1);
     extra = 2 * need - (need < 0.2 && perMouth > 6 ? 1 : 0);
   }
-  const work = clamp(day - road - kids + extra, 0, day - road);
-  return { day, road, kids, extra, work, f: work / WORK_REF };
+  // the drudgery of work (Chayanov): the worn out rest; below half their strength people work less, not themselves to death
+  const tired = a.energy < 0.5 ? a.energy / 0.5 : 1;
+  const work = clamp((day - road - kids + extra) * tired, 0, day - road);
+  return { day, road, kids, extra, tired, work, f: work / WORK_REF };
 }
 // the day in words, for the person card: «Сегодня светло 9 ч: дорога 1 ч 20 мин, ребёнок 2 ч 30 мин; на работу 5 ч 10 мин»
 function dayWords(a) {
   const b = a._day; if (!b) return '';
-  const parts = [b.road >= 1 / 60 ? `дорога ${hm(b.road)}` : '', b.kids ? `${b.kids >= 2 ? 'младенец' : 'малый ребёнок'} ${hm(b.kids)}` : '', b.extra > 0.2 ? `ради семьи сверх обычного ${hm(b.extra)}` : b.extra < -0.2 ? `сыты и рано заканчивают: на ${hm(-b.extra)} меньше` : ''].filter(Boolean);
+  const parts = [b.road >= 1 / 60 ? `дорога ${hm(b.road)}` : '', b.kids ? `${b.kids >= 2 ? 'младенец' : 'малый ребёнок'} ${hm(b.kids)}` : '', b.extra > 0.2 ? `ради семьи сверх обычного ${hm(b.extra)}` : b.extra < -0.2 ? `сыты и рано заканчивают: на ${hm(-b.extra)} меньше` : '', b.tired < 0.95 ? 'выбился из сил и отдыхает' : ''].filter(Boolean);
   return `Сегодня светло ${hm(b.day)}${parts.length ? `: ${parts.join(', ')}` : ''}; на работу ${hm(b.work)}${b.f < 0.6 ? ' — меньше, чем у соседей' : b.f > 1.25 ? ' — долгий день' : ''}.`;
 }
 /* ---------- rites: a wedding feast, a funeral to the burial ground, the harvest festival ---------- */
