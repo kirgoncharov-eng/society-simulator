@@ -51,8 +51,12 @@ function householdsMonth(S) {
       h.deathEv = null; h.deathOwner = null;
       if (next) {
         h.owner = next.id; h.oname = next.name; h.spouseOf = null;
-        if (dead) bio(S, next, 'inheritHouse', next === widow ? `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме` : `Наследует дом ${oname}`, ref);
-        if (dead && next !== widow && heirs.includes(next)) inheritDispute(S, g, h, next, oname, ref);
+        if (dead && next === widow) bio(S, next, 'inheritHouse', `${fem(next, 'Вдовец', 'Вдова')} остаётся в доме`, ref);
+        else if (dead && heirs.includes(next)) {
+          const owner = { name: oname, sex: oname === 'хозяина' ? null : next.mother === prevOwner ? 'f' : 'm' };
+          bio(S, next, 'inheritHouse', `Наследует дом ${nameCase(owner, 'genitive')}`, ref);
+          inheritDispute(S, g, h, next, owner, ref);
+        } else if (dead) bio(S, next, 'inheritHouse', 'Наследует освободившийся дом', ref);
         if (claimed) { next.house = h.id; next.lodger = false; }
       } else { h.owner = null; h.oname = null; h.emptyT = S.tick; }
       houseSettled(S, g, h, prevOwner, next, claimed, ref);
@@ -75,8 +79,8 @@ function householdsMonth(S) {
         const sp = H.spouse && S._a.get(H.spouse); h.spouseOf = sp ? sp.id : null;
         for (const m of ms) { m.house = h.id; m.lodger = false; }
         const wed = H.marryEv && eventById(S, H.marryEv) ? H.marryEv : undefined;
-        bio(S, H, 'house', `Получает свой дом в «${g.name}»${sp ? ` и живёт там с ${fem(sp, 'мужем', 'женой')} ${sp.name}` : ''}`, sp ? wed : undefined);
-        if (sp) bio(S, sp, 'house', `Переезжает с ${fem(H, 'мужем', 'женой')} ${H.name} в свой дом в «${g.name}»`, wed);
+        bio(S, H, 'house', `Получает свой дом в «${g.name}»${sp ? ` и живёт там с ${fem(sp, 'мужем', 'женой')} ${nameCase(sp, 'instrumental')}` : ''}`, sp ? wed : undefined);
+        if (sp) bio(S, sp, 'house', `Переезжает с ${fem(H, 'мужем', 'женой')} ${nameCase(H, 'instrumental')} в свой дом в «${g.name}»`, wed);
         continue;
       }
       // no free house: lodge with the husband's parents, else the wife's, else any kin, else wherever there is room

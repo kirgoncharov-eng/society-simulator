@@ -123,7 +123,7 @@ function caravans(S) {
       } else { r.n++; r.t = S.tick; r.x1 = A.home.x; r.y1 = A.home.y; r.x2 = B.home.x; r.y2 = B.home.y; }
       if (LA && a.trades >= 3 && a.wealth > LA.wealth && !a.richer) {
         a.richer = true;
-        log(S, 'trade', `Купец ${a.name} становится богаче своего вождя ${LA.name}`, a.x, a.y, A.hue, { why: `После ${a.trades} ${pl(a.trades, 'каравана', 'караванов', 'караванов')} у него ${a.wealth.toFixed(0)}, а у вождя ${LA.wealth.toFixed(0)}. Восьмая часть каждой сделки оседает у купца. Богатство даёт вес и сторонников: рядом с вождём появляется вторая сила.`, who: [a.id, LA.id], gs: [A.id] });
+        log(S, 'trade', `Купец ${a.name} становится богаче своего вождя ${nameCase(LA, 'genitive')}`, a.x, a.y, A.hue, { why: `После ${a.trades} ${pl(a.trades, 'каравана', 'караванов', 'караванов')} у него ${a.wealth.toFixed(0)}, а у вождя ${LA.wealth.toFixed(0)}. Восьмая часть каждой сделки оседает у купца. Богатство даёт вес и сторонников: рядом с вождём появляется вторая сила.`, who: [a.id, LA.id], gs: [A.id] });
       }
     } else if (a._travel?.arrived) {
       addStock(A, c.y, c.qy); a.car = null;

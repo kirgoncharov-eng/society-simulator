@@ -53,7 +53,7 @@ function judge(S, g, kind) {
   return null;
 }
 /* heirs quarrel over the house: called from households when the eldest child inherits */
-function inheritDispute(S, g, house, heir, ownerName, deathEv) {
+function inheritDispute(S, g, house, heir, owner, deathEv) {
   const sibs = g.members.map(id => S._a.get(id)).filter(m => m && m !== heir && m.age >= 16 && ((heir.mother && m.mother === heir.mother) || (heir.father && m.father === heir.father)));
   if (!sibs.length) return;
   const c = sibs.map(m => [m, m.ambition + (bondW(m, heir) < 0 ? 0.3 : 0) + (m.spouse ? 0.15 : 0)]).sort((p, q) => q[1] - p[1])[0];
@@ -62,21 +62,22 @@ function inheritDispute(S, g, house, heir, ownerName, deathEv) {
   const outcome = custom && rnd(S) < 0.85 ? custom : judge(S, g, 'inherit');
   const byCustom = custom === outcome;
   const who = g.gov === 'assembly' ? `вече «${g.name}»` : L && L !== heir && L !== sib ? `вождь ${L.name}` : 'старейшины';
+  const ownerName = nameCase(owner, 'genitive');
   let text, why;
   if (outcome === 'eldest') {
-    text = `Спор за дом ${ownerName} в «${g.name}»: ${who} ${byCustom ? 'по обычаю ' : ''}отдаёт дом старшему, ${heir.name}`;
+    text = `Спор за дом ${ownerName} в «${g.name}»: ${who} ${byCustom ? 'по обычаю ' : ''}отдаёт дом ${fem(heir, 'старшему', 'старшей')}, ${nameCase(heir, 'dative')}`;
     why = sent([`${sib.name} считает, что ${fem(sib, 'имеет', 'имеет')} на дом не меньше прав`, byCustom ? 'так решают здесь давно' : 'судья держится старшинства', `${sib.name} уходит ни с чем и затаивает обиду`]);
     sib.res = clamp(sib.res + 0.3, 0, 1);
   } else {
     const part = Math.max(3, heir.wealth * 0.3); heir.wealth -= part; sib.wealth += part;
-    text = `Спор за дом ${ownerName} в «${g.name}»: ${who} ${byCustom ? 'по обычаю ' : ''}велит ${heir.name} поделиться с ${sib.name}`;
+    text = `Спор за дом ${ownerName} в «${g.name}»: ${who} ${byCustom ? 'по обычаю ' : ''}велит ${nameCase(heir, 'dative')} поделиться с ${nameCase(sib, 'instrumental')}`;
     why = sent([`дом остаётся старшему, но ${sib.name} получает долю зерна: ${qty(part, 'food')}`, byCustom ? 'так решают здесь давно' : 'судья не хочет ссоры в деревне', 'обида меньше, но и старший недоволен']);
   }
   const ev = log(S, 'case', text, house.x, house.y, g.hue, { why, who: [heir.id, sib.id].concat(L ? [L.id] : []), gs: [g.id], causes: deathEv ? [deathEv] : undefined });
-  if (outcome === 'eldest') { bond(S, sib, heir, 'rival', `${fem(heir, 'забрал', 'забрала')} дом ${ownerName} себе`, 0.6, false, ev.id); houseGoal(S, sib, heir, g, house, ownerName, ev.id); }
+  if (outcome === 'eldest') { bond(S, sib, heir, 'rival', `${fem(heir, 'забрал', 'забрала')} дом ${ownerName} себе`, 0.6, false, ev.id); houseGoal(S, sib, heir, g, house, owner, ev.id); }
   else bond(S, heir, sib, 'rival', `${fem(sib, 'отсудил', 'отсудила')} долю отцовского добра`, 0.3, false, ev.id);
-  bio(S, sib, 'dispute', outcome === 'eldest' ? `Спорит с ${heir.name} за дом ${ownerName} и проигрывает` : `Спорит с ${heir.name} за дом ${ownerName} и получает долю`, ev.id);
-  bio(S, heir, 'dispute', outcome === 'eldest' ? `Отстаивает дом ${ownerName} в споре с ${sib.name}` : `Отдаёт ${sib.name} долю за дом ${ownerName}`, ev.id);
+  bio(S, sib, 'dispute', outcome === 'eldest' ? `Спорит с ${nameCase(heir, 'instrumental')} за дом ${ownerName} и проигрывает` : `Спорит с ${nameCase(heir, 'instrumental')} за дом ${ownerName} и получает долю`, ev.id);
+  bio(S, heir, 'dispute', outcome === 'eldest' ? `Отстаивает дом ${ownerName} в споре с ${nameCase(sib, 'instrumental')}` : `Отдаёт ${nameCase(sib, 'dative')} долю за дом ${ownerName}`, ev.id);
   ruling(S, g, 'inherit', outcome, ev.id);
 }
 /* the moment of revenge inside a village: elders and the leader may talk the killer's kin into paying blood money.
@@ -99,13 +100,13 @@ function bloodOrWergild(S, g, avenger, killer) {
   avenger.wealth += price - due;
   const f = avenger.feud, src = f.ev;
   f.done = S.tick; f.settled = true; f.out = 'settled';
-  const text = `${killer.name} платит виру за ${f.v}: ${avenger.name} принимает выкуп и не мстит`;
-  const why = sent([`${avenger.name} ${yrs(Math.max(1, Math.round((S.tick - f.t) / 360)))} ${fem(avenger, 'ждал', 'ждала')} мести за ${f.rel} ${f.v}`, custom ? `в «${g.name}» обычай: за кровь платят` : `старейшины и ${L ? (L.sex === 'f' ? 'вождь ' : 'вождь ') + L.name : 'община'} уговаривают взять выкуп`, `родня ${killer.name} собирает ${qty(price - due - common, 'food')}`, common >= 1 ? `община добавляет из амбара ${qty(common, 'food')}` : '', 'цепочка мести обрывается, но обида остаётся']);
+  const text = `${killer.name} платит виру за ${feudVictim(f)}: ${avenger.name} принимает выкуп и не мстит`;
+  const why = sent([`${avenger.name} ${yrs(Math.max(1, Math.round((S.tick - f.t) / 360)))} ${fem(avenger, 'ждал', 'ждала')} мести за ${feudKin(f)}`, custom ? `в «${g.name}» обычай: за кровь платят` : `старейшины и ${L ? (L.sex === 'f' ? 'вождь ' : 'вождь ') + L.name : 'община'} уговаривают взять выкуп`, `родня ${nameCase(killer, 'genitive')} собирает ${qty(price - due - common, 'food')}`, common >= 1 ? `община добавляет из амбара ${qty(common, 'food')}` : '', 'цепочка мести обрывается, но обида остаётся']);
   const ev = log(S, 'case', text, avenger.x, avenger.y, g.hue, { why, who: [avenger.id, killer.id].concat(L ? [L.id] : []), gs: [g.id], causes: src ? [src] : undefined });
   f.endEv = cite(S, ev.id);
-  bio(S, avenger, 'wergild', `Принимает виру за ${f.rel} ${f.v} от ${killer.name}`, ev.id);
-  bio(S, killer, 'wergild', `Платит виру родне ${f.v}, чтобы оборвать месть`, ev.id);
-  bond(S, avenger, killer, 'rival', `${fem(killer, 'заплатил', 'заплатила')} виру за ${f.rel} ${f.v}`, 0.4, false, ev.id);
+  bio(S, avenger, 'wergild', `Принимает виру за ${feudKin(f)} от ${nameCase(killer, 'genitive')}`, ev.id);
+  bio(S, killer, 'wergild', `Платит виру родне ${feudVictim(f, 'genitive')}, чтобы оборвать месть`, ev.id);
+  bond(S, avenger, killer, 'rival', `${fem(killer, 'заплатил', 'заплатила')} виру за ${feudKin(f)}`, 0.4, false, ev.id);
   ruling(S, g, 'blood', 'wergild', ev.id);
   return true;
 }

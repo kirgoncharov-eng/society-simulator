@@ -68,12 +68,12 @@ function marry(S, f, m) {
   const wev = note(S, 'marriage', `Свадьба: ${f.name} и ${m.name}`, f.x, f.y, (S._g.get(m.group) || {}).hue || 0, { who: [f.id, m.id], gs: [f.group, m.group].filter(Boolean) }).id; f.marryEv = m.marryEv = cite(S, wev);
   weddingFeast(S, f, m, wev);
   matchWedding(S, f, m, wev);
-  bio(S, f, 'marry', `Выходит замуж за ${m.name}${m.group && m.group !== f.group ? ` из «${groupName(S, m.group)}»` : ''}`, wev); bio(S, m, 'marry', `Женится на ${f.name}${f.group && f.group !== m.group ? ` из «${groupName(S, f.group)}»` : ''}`, wev);
+  bio(S, f, 'marry', `Выходит замуж за ${nameCase(m, 'accusative')}${m.group && m.group !== f.group ? ` из «${groupName(S, m.group)}»` : ''}`, wev); bio(S, m, 'marry', `Женится на ${nameCase(f, 'accusative')}${f.group && f.group !== m.group ? ` из «${groupName(S, f.group)}»` : ''}`, wev);
   S.stats.marriages = (S.stats.marriages || 0) + 1;
   // the one who hoped for her: a spurned suitor turns rival to the groom
   let sp = null, sv = 0.35;
   for (const o of S.agents) if (o !== m && o.sex === 'm' && !o.spouse && o.age >= 17 && o.group === f.group && (o.trust[f.id] || 0) > sv && !kin(o, f)) { sv = o.trust[f.id]; sp = o; }
-  if (sp) { bond(S, sp, f, 'love', `любит без ответа: ${f.name} выходит за другого`, 0.5, false, wev); bond(S, sp, m, 'rival', `${fem(m, 'женился', 'вышла')} на ${f.name}`, 0.6, false, wev); }
+  if (sp) { bond(S, sp, f, 'love', `любит без ответа: ${f.name} выходит за другого`, 0.5, false, wev); bond(S, sp, m, 'rival', `${fem(m, 'женился', 'вышла')} на ${nameCase(f, 'accusative')}`, 0.6, false, wev); }
   const gf = S._g.get(f.group), gm = S._g.get(m.group);
   if (gf === gm) return;
   // wife moves to husband's side, unless she leads
@@ -91,7 +91,7 @@ function marry(S, f, m) {
     const al = allied(S, gf.id, gm.id);
     if (!al && (S.hostility[k] || 0) < 0.5) S.alliances.push({ a: gf.id, b: gm.id, since: S.tick, kin: true });
     const firstM = !S.firstMarriage; S.firstMarriage = true;
-    log(S, 'marriage', `${firstM ? 'Первый в мире брачный союз' : 'Брачный союз'}: ${f.name} из «${gf.name}» выходит за ${m.name} из «${gm.name}»`, (gf.cx + gm.cx) / 2, (gf.cy + gm.cy) / 2, gm.hue, { why: sent([`${royal(f) && f.role !== 'leader' && (f.mother === (LF && LF.id) || f.father === (LF && LF.id)) ? `${f.name} — дочь вождя ${LF.name}` : royal(m) && m.role !== 'leader' ? `${m.name} — сын вождя ${LM ? LM.name : ''}` : 'жених или невеста из правящей семьи'}`, 'родство между правящими домами гасит вражду: вожди теперь доверяют друг другу больше', al ? 'союз деревень скреплён кровью' : 'деревни заключают союз', `всего браков между ними: ${S.kinTies[k]}`]), who: [f.id, m.id], gs: [gf.id, gm.id], first: firstM, causes: [wev] });
+    log(S, 'marriage', `${firstM ? 'Первый в мире брачный союз' : 'Брачный союз'}: ${f.name} из «${gf.name}» выходит за ${nameCase(m, 'accusative')} из «${gm.name}»`, (gf.cx + gm.cx) / 2, (gf.cy + gm.cy) / 2, gm.hue, { why: sent([`${royal(f) && f.role !== 'leader' && (f.mother === (LF && LF.id) || f.father === (LF && LF.id)) ? `${f.name} — дочь вождя ${nameCase(LF, 'genitive')}` : royal(m) && m.role !== 'leader' ? `${m.name} — сын вождя ${LM ? nameCase(LM, 'genitive') : ''}` : 'жених или невеста из правящей семьи'}`, 'родство между правящими домами гасит вражду: вожди теперь доверяют друг другу больше', al ? 'союз деревень скреплён кровью' : 'деревни заключают союз', `всего браков между ними: ${S.kinTies[k]}`]), who: [f.id, m.id], gs: [gf.id, gm.id], first: firstM, causes: [wev] });
   }
 }
 function growUp(S, k, mo, fa, g) {
@@ -99,7 +99,7 @@ function growUp(S, k, mo, fa, g) {
   const a = spawn(S, 'child', { parent: p, mother: mo, father: fa, lin: k.lin, g, x: k.x, y: k.y });
   a.sex = k.sex; a.bornT = k.t;
   const par = [S._a.get(k.mo0 || k.mo), S._a.get(k.fa)].filter(Boolean);
-  a.bio = [[k.t, 'born', `Рождается${g ? ` в «${g.name}»` : ' в пути'}${mo || fa ? `, ${a.sex === 'f' ? 'дочь' : 'сын'} ${[mo, fa].filter(Boolean).map(x => x.name).join(' и ')}` : ''}`]]; a.drama = 1;
+  a.bio = [[k.t, 'born', `Рождается${g ? ` в «${g.name}»` : ' в пути'}${mo || fa ? `, ${a.sex === 'f' ? 'дочь' : 'сын'} ${[mo, fa].filter(Boolean).map(x => nameCase(x, 'genitive')).join(' и ')}` : ''}`]]; a.drama = 1;
   if (!mo && !fa) bio(S, a, 'orphan', 'Растёт сиротой: родителей уже нет в живых');
   if (k.plagueOrphan) bio(S, a, 'orphan', 'Родители умерли в мор');
   for (const o of S.agents) if (o !== a && ((a.mother && o.mother === a.mother) || (a.father && o.father === a.father))) { a.trust[o.id] = 0.4; o.trust[a.id] = 0.4; }

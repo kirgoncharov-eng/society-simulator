@@ -65,25 +65,25 @@ function react(S, ev, l, teller) {
     if (!partner || !lover) { ev.closed = true; return; }
     const pf = clamp(0.25 + 0.35 * l.coop + Math.max(0, bondW(l, partner)) - 0.2 * l.ambition, 0.05, 0.8), pl2 = 0.35, r = rnd(S);
     let what, kill = false;
-    if (r < pf) { what = `${fem(l, 'прощает', 'прощает')} ${partner.name}`; bump(l, partner, -0.15); S.stats.affairForgiven = (S.stats.affairForgiven || 0) + 1; }
+    if (r < pf) { what = `${fem(l, 'прощает', 'прощает')} ${nameCase(partner, 'accusative')}`; bump(l, partner, -0.15); S.stats.affairForgiven = (S.stats.affairForgiven || 0) + 1; }
     else if (r < pf + pl2 * (1 - pf)) {
       what = `уходит от ${fem(partner, 'мужа', 'жены')}`; l.spouse = null; if (partner.spouse === l.id) partner.spouse = null; l.house = null; l.lodger = false;
       S.stats.affairLeft = (S.stats.affairLeft || 0) + 1;
     } else {
       kill = l.ambition > 0.55 && rnd(S) < 0.15;
-      what = kill ? `в драке убивает ${lover.name}` : `избивает ${lover.name}`;
+      what = kill ? `в драке убивает ${nameCase(lover, 'accusative')}` : `избивает ${nameCase(lover, 'accusative')}`;
       if (!kill) lover.energy = Math.max(0.1, lover.energy - 0.35);
       S.stats[kill ? 'affairKilled' : 'affairFight'] = (S.stats[kill ? 'affairKilled' : 'affairFight'] || 0) + 1;
     }
-    const e = log(S, 'rumor', `${l.name} узнаёт от ${teller.name} об измене ${fem(partner, 'мужа', 'жены')} с ${lover.name} и ${what}`, l.x, l.y, g ? g.hue : 0, {
+    const e = log(S, 'rumor', `${l.name} узнаёт от ${nameCase(teller, 'genitive')} об измене ${fem(partner, 'мужа', 'жены')} с ${nameCase(lover, 'instrumental')} и ${what}`, l.x, l.y, g ? g.hue : 0, {
       why: sent([`${partner.name} и ${lover.name} ${yrs(Math.max(1, Math.round((S.tick - ev.t) / 360)))} ${fem(partner, 'встречались', 'встречались')} тайком`, `${teller.name} ${bondW(teller, partner) < 0 || bondW(teller, lover) < 0 ? 'не любит виноватых и рассказывает охотно' : 'не может смолчать'}`, kill ? 'ревность кончается кровью: у убитого найдутся мстители' : '']),
       who: [l.id, teller.id, partner.id, lover.id], gs: g ? [g.id] : [], causes: [ev.id] });
-    bio(S, l, 'jealousy', `Узнаёт от ${teller.name} об измене ${partner.name} с ${lover.name} и ${what}`, e.id);
-    bio(S, partner, 'jealousy', `Тайная связь с ${lover.name} раскрыта: ${l.name} ${what}`, e.id);
+    bio(S, l, 'jealousy', `Узнаёт от ${nameCase(teller, 'genitive')} об измене ${nameCase(partner, 'genitive')} с ${nameCase(lover, 'instrumental')} и ${what}`, e.id);
+    bio(S, partner, 'jealousy', `Тайная связь с ${nameCase(lover, 'instrumental')} раскрыта: ${l.name} ${what}`, e.id);
     bond(S, l, lover, 'enemy', `${fem(lover, 'увёл', 'увела')} ${fem(partner, 'мужа', 'жену')}`, 0.7, false, e.id);
     if (kill) {
-      for (const o of kinOf(S, lover)) if (!o.feud || o.feud.done) { o.feud = { g: l.group || 0, gname: g ? g.name : '', L: l.id, Lname: l.name, t: S.tick, v: lover.name, rel: o.mother === lover.id || o.father === lover.id ? (lover.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: l.id, ev: cite(S, e.id) }; bio(S, o, 'feud', `${l.name} убивает ${lover.name} из ревности. ${o.name} клянётся отомстить`, e.id); }
-      bio(S, l, 'murder', `Из ревности убивает ${lover.name}`, e.id);
+      for (const o of kinOf(S, lover)) if (!o.feud || o.feud.done) { o.feud = { g: l.group || 0, gname: g ? g.name : '', L: l.id, Lname: l.name, t: S.tick, v: lover.name, rel: o.mother === lover.id || o.father === lover.id ? (lover.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: l.id, ev: cite(S, e.id) }; bio(S, o, 'feud', `${l.name} убивает ${nameCase(lover, 'accusative')} из ревности. ${o.name} клянётся отомстить`, e.id); }
+      bio(S, l, 'murder', `Из ревности убивает ${nameCase(lover, 'accusative')}`, e.id);
       S.stats.murders = (S.stats.murders || 0) + 1;
       removeAgent(S, lover, 'killed');
     }
@@ -96,7 +96,7 @@ function react(S, ev, l, teller) {
     else (th.exiled = th.exiled || {})[vg.id] = S.tick;
     if (th.group) { const k = key(th.group, vg.id); S.hostility[k] = Math.min(2, (S.hostility[k] || 0) + 0.08); }
     th.rep = clamp((th.rep || 0) - 0.15, -1, 1);
-    const e = log(S, 'case', `Кража раскрыта: ${teller === l ? `${l.name} ${fem(l, 'сам', 'сама')} видит` : `${l.name} узнаёт от ${teller.name}`}, что амбар «${vg.name}» обокрал ${th.name}, и ${ban ? `запрещает ${fem(th, 'ему', 'ей')} показываться в деревне` : `требует вернуть вдвое (${qty(fine, 'food')})`}`, vg.home.x, vg.home.y, vg.hue, {
+    const e = log(S, 'case', `Кража раскрыта: ${teller === l ? `${l.name} ${fem(l, 'сам', 'сама')} видит` : `${l.name} узнаёт от ${nameCase(teller, 'genitive')}`}, что амбар «${vg.name}» ${fem(th, 'обокрал', 'обокрала')} ${th.name}, и ${ban ? `запрещает ${fem(th, 'ему', 'ей')} показываться в деревне` : `требует вернуть вдвое (${qty(fine, 'food')})`}`, vg.home.x, vg.home.y, vg.hue, {
       why: sent([`${th.name} ${fem(th, 'крал', 'крала')} от голода ${yrs(Math.max(1, Math.round((S.tick - ev.t) / 360)))} назад`, custom ? 'так здесь заведено' : `${l.name} ${ban ? 'строг' + fem(l, '', 'а') : 'предпочитает вернуть своё'}`]),
       who: [l.id, teller.id, th.id], gs: [vg.id], causes: [ev.id] });
     bio(S, th, 'theft', ban ? `Кража раскрыта: «${vg.name}» закрывает перед ${fem(th, 'ним', 'ней')} ворота` : `Кража раскрыта: приходится вернуть вдвое`, e.id);
@@ -121,7 +121,7 @@ function affairsMonth(S) {
     if ((S.secrets || []).some(id => { const e = S.evArch && S.evArch[id]; return e && e.secret === 'affair' && e.guilty.includes(a.id); })) continue;
     const ev = openSecret(S, 'affair', `${a.name} и ${o.name} тайно сходятся в «${g.name}»`, a.x, a.y, g.hue, [a, o], [a, o], { betrayed });
     bond(S, a, o, 'love', 'тайная связь', 0.7, false, ev.id); bond(S, o, a, 'love', 'тайная связь', 0.7, false, ev.id);
-    bio(S, a, 'affair', `Тайно сходится с ${o.name}`, ev.id); bio(S, o, 'affair', `Тайно сходится с ${a.name}`, ev.id);
+    bio(S, a, 'affair', `Тайно сходится с ${nameCase(o, 'instrumental')}`, ev.id); bio(S, o, 'affair', `Тайно сходится с ${nameCase(a, 'instrumental')}`, ev.id);
     // someone may have seen them: a neighbour now carries the secret
     if (rnd(S) < 0.4) { const w = g.members.map(id => S._a.get(id)).filter(m => m && m !== a && m !== o && !betrayed.includes(m.id)); if (w.length) learn(S, ev, w[Math.floor(rnd(S) * w.length)], a); }
   }

@@ -81,12 +81,12 @@ function breadTest(S, g, L, mem, famEv) {
     L.rep = clamp((L.rep || 0) + 0.1, -1, 1); g.legit = clamp(g.legit + 0.1, 0, 1); L.status += 1;
     const ev = log(S, 'aid', `Голодная зима в «${g.name}»: вождь ${L.name} открывает свой амбар`, g.home.x, g.home.y, g.hue, { why: sent([`голодают ${hungry.length} ${pl(hungry.length, 'человек', 'человека', 'человек')}`, `${L.name} ${fem(L, 'раздаёт', 'раздаёт')} ${qty(give, 'food')} из своего запаса`, 'щедрость в голод — то, за что вождя и терпят']), who: [L.id, ...hungry.slice(0, 4).map(m => m.id)], gs: [g.id], causes: famEv ? [famEv] : undefined });
     bio(S, L, 'feedAll', `В голод открывает свой амбар для «${g.name}»`, ev.id);
-    for (const m of topBy(hungry, m => m.status, 3)) bio(S, m, 'fedByLeader', `В голод получает зерно из амбара вождя ${L.name}`, ev.id);
+    for (const m of topBy(hungry, m => m.status, 3)) bio(S, m, 'fedByLeader', `В голод получает зерно из амбара вождя ${nameCase(L, 'genitive')}`, ev.id);
     S.stats.breadKept = (S.stats.breadKept || 0) + 1;
     return;
   }
   if (g.take < 0.15 || L.wealth < Math.max(6, avgW * 3)) return;
-  const ev = log(S, 'tyranny', `Голодная зима в «${g.name}», а вождь ${L.name} не уменьшает свою долю: ${P0(g.take)} общего хлеба`, g.home.x, g.home.y, g.hue, { why: sent([`голодают ${hungry.length} ${pl(hungry.length, 'человек', 'человека', 'человек')}`, `у ${L.name} запас ${Math.round(L.wealth)} — в ${Math.round(L.wealth / Math.max(0.5, avgW))} ${pl(Math.round(L.wealth / Math.max(0.5, avgW)), 'раз', 'раза', 'раз')} больше, чем у обычной семьи`, 'вождь, который берёт хлеб у голодных, нарушает право на пропитание; такое не прощают']), who: [L.id, ...hungry.slice(0, 4).map(m => m.id)], gs: [g.id], causes: famEv ? [famEv] : undefined });
+  const ev = log(S, 'tyranny', `Голодная зима в «${g.name}», а вождь ${L.name} не уменьшает свою долю: ${P0(g.take)} общего хлеба`, g.home.x, g.home.y, g.hue, { why: sent([`голодают ${hungry.length} ${pl(hungry.length, 'человек', 'человека', 'человек')}`, `у ${nameCase(L, 'genitive')} запас ${Math.round(L.wealth)} — в ${Math.round(L.wealth / Math.max(0.5, avgW))} ${pl(Math.round(L.wealth / Math.max(0.5, avgW)), 'раз', 'раза', 'раз')} больше, чем у обычной семьи`, 'вождь, который берёт хлеб у голодных, нарушает право на пропитание; такое не прощают']), who: [L.id, ...hungry.slice(0, 4).map(m => m.id)], gs: [g.id], causes: famEv ? [famEv] : undefined });
   g.tyr = { t: S.tick, ev: cite(S, ev.id), L: L.id, lin: linOf(S, L), name: L.name };
   L.rep = clamp((L.rep || 0) - 0.15, -1, 1); g.legit = clamp(g.legit - 0.15, 0.1, 1);
   for (const m of hungry) { m.res = clamp(m.res + 0.25, 0, 1); m.trust[L.id] = clamp((m.trust[L.id] || 0) - 0.15, -1, 1); }
@@ -104,7 +104,7 @@ function shareFelt(S, g, L) {
   if (!heads.length) return;
   const ev = (g.members.length >= 15 ? log : note)(S, 'tax', `Вождь ${L.name} забирает уже ${P0(g.take)} общего урожая «${g.name}»`, g.home.x, g.home.y, g.hue, { why: sent([`с каждой семьи — треть и больше`, `главы родов недовольны: ${heads.slice(0, 3).map(h => h.name).join(', ')}`]), who: [L.id, ...heads.slice(0, 3).map(h => h.id)], gs: [g.id], causes: g.powerEv && eventById(S, g.powerEv) ? [g.powerEv] : undefined });
   // only the chronicle: the grievance itself already grows every month from the unfair share (no double count)
-  for (const h of heads.slice(0, 5)) bio(S, h, 'tax', `Отдаёт вождю ${L.name} ${P0(g.take)} урожая своей семьи`, ev.id);
+  for (const h of heads.slice(0, 5)) bio(S, h, 'tax', `Отдаёт вождю ${nameCase(L, 'dative')} ${P0(g.take)} урожая своей семьи`, ev.id);
 }
 // a tyrant's line is remembered: its candidates lose votes for thirty years
 const tyrantLine = (S, g, c) => g.tyr && S.tick - g.tyr.t < 360 * 30 && linOf(S, c) === g.tyr.lin;

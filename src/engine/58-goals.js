@@ -62,13 +62,13 @@ const isLeaderKin = (S, m) => { if (!m) return null; if (m.role === 'leader') re
 // lost an election and did not accept it
 function powerLost(S, R, g, W, ev) {
   if (!R || R.ambition < 0.5 || R.age < 20 || R.age > 52) return;
-  goalOpen(S, R, 'power', `Проигрывает ${W.name} выборы вождя «${g.name}», но не оставляет надежды на власть`, ev, { g: g.id }, true);
+  goalOpen(S, R, 'power', `Проигрывает ${nameCase(W, 'dative')} выборы вождя «${g.name}», но не оставляет надежды на власть`, ev, { g: g.id }, true);
 }
 // a rival who openly aims at the leader's place
 function powerAim(S, ch, L, g) {
   if (goalOf(ch, 'power') || ch.age > 55 || (ch.goals || []).some(y => y.k === 'power' && y.end && S.tick - y.end < 360 * 6)) return;
-  const ev = note(S, 'arc', `${ch.name} ${fem(ch, 'метит', 'метит')} на место вождя «${g.name}» ${L.name}`, ch.x, ch.y, g.hue, { who: [ch.id, L.id], gs: [g.id] }).id;
-  goalOpen(S, ch, 'power', `Метит на место вождя «${g.name}» ${L.name}`, ev, { g: g.id }, true);
+  const ev = note(S, 'arc', `${ch.name} ${fem(ch, 'метит', 'метит')} на место вождя «${g.name}» ${nameCase(L, 'genitive')}`, ch.x, ch.y, g.hue, { who: [ch.id, L.id], gs: [g.id] }).id;
+  goalOpen(S, ch, 'power', `Метит на место вождя «${g.name}» ${nameCase(L, 'genitive')}`, ev, { g: g.id }, true);
   refBond(S, ch, L, ev); refBond(S, L, ch, ev);
 }
 // a deposed leader who stays wants the seat back
@@ -77,7 +77,7 @@ function powerDeposed(S, L, g, ev) { if (L.ambition > 0.45 && L.age < 56) goalOp
 function returnGoal(S, a, g, L, ev, how) { goalOpen(S, a, 'return', `Хочет вернуться в «${g.name}»`, ev, { g: g.id, gname: g.name, by: L ? L.id : null, byName: L ? L.name : '', how }); }
 function kinLeftIn(S, a, g) { return g.members.map(id => S._a.get(id)).find(o => o && o !== a && o.id !== a.spouse && kin(o, a)) || null; }
 // lost the family house in a dispute
-function houseGoal(S, sib, heir, g, h, oname, ev) { goalOpen(S, sib, 'house', `Затаивает обиду: хочет вернуть себе дом ${oname}`, ev, { h: h.id, g: g.id, heir: heir.id, heirName: heir.name, oname }); }
+function houseGoal(S, sib, heir, g, h, owner, ev) { goalOpen(S, sib, 'house', `Затаивает обиду: хочет вернуть себе дом ${nameCase(owner, 'genitive')}`, ev, { h: h.id, g: g.id, heir: heir.id, heirName: heir.name, oname: owner.name }); }
 
 /* --- endings called from where they happen --- */
 // a wedding settles a parent's plan for the daughter, one way or the other; eloping always breaks it
@@ -85,9 +85,9 @@ function matchWedding(S, f, m, wev, eloped) {
   for (const pid of [f.father, f.mother]) {
     const p = pid && S._a.get(pid), x = p && goalOf(p, 'match', y => y.d === f.id); if (!x) continue;
     const L = isLeaderKin(S, m);
-    if (eloped) goalEnd(S, p, x, 'failed', `Дочь ${f.name} бежит с ${m.name} против воли родни: о сыне вождя можно забыть`, wev);
-    else if (L) goalEnd(S, p, x, 'done', `Выдаёт дочь ${f.name} за ${m.name}${L === m ? `, вождя` : `, ${fem(m, 'сына', 'дочь')} вождя ${L.name}`}`, wev);
-    else { goalEnd(S, p, x, 'failed', `Дочь ${f.name} выходит за ${m.name}, а не за сына вождя`, wev); bump(p, m, -0.05); }
+    if (eloped) goalEnd(S, p, x, 'failed', `Дочь ${f.name} бежит с ${nameCase(m, 'instrumental')} против воли родни: о сыне вождя можно забыть`, wev);
+    else if (L) goalEnd(S, p, x, 'done', `Выдаёт дочь ${nameCase(f, 'accusative')} за ${nameCase(m, 'accusative')}${L === m ? `, вождя` : `, ${fem(m, 'сына', 'дочь')} вождя ${nameCase(L, 'genitive')}`}`, wev);
+    else { goalEnd(S, p, x, 'failed', `Дочь ${f.name} выходит за ${nameCase(m, 'accusative')}, а не за сына вождя`, wev); bump(p, m, -0.05); }
   }
 }
 // in the marriage choice: a daughter whose parent wants a leader's son for her; returns the extra pull toward m
@@ -103,9 +103,12 @@ function houseClaimant(S, g, h) {
 function houseSettled(S, g, h, prevOwner, next, claimed, deathEv) {
   const x = next && goalOf(next, 'house', y => y.h === h.id);
   if (x) {
-    const heirDead = !S._a.has(x.heir);
-    const ev = claimed ? log(S, 'case', `${next.name} забирает назад дом ${x.oname} в «${g.name}»${heirDead ? ` после смерти ${x.heirName}` : ''}`, h.x, h.y, g.hue, { why: sent([`${yrs(Math.max(1, Math.round((S.tick - x.t) / 360)))} назад дом по суду ${fem(S._a.get(x.heir) || { sex: 'm' }, 'достался', 'достался')} ${x.heirName}`, `${next.name} так и не ${fem(next, 'смирился', 'смирилась')}`, 'семья умершего остаётся без своего крова']), who: [next.id], gs: [g.id], causes: [x.ev, deathEv].filter(Boolean) }).id : deathEv;
-    goalEnd(S, next, x, 'done', `Возвращает себе дом ${x.oname}`, ev);
+    const liveHeir = S._a.get(x.heir);
+    const heirDead = !liveHeir;
+    const heir = liveHeir || S.legends.find(person => person.id === x.heir);
+    const pastHeir = heir ? `дом по суду достался ${nameCase(heir, 'dative')}` : `дом по суду достался другому (${x.heirName})`;
+    const ev = claimed ? log(S, 'case', `${next.name} забирает назад спорный дом в «${g.name}»${heirDead ? ` после смерти прежнего владельца` : ''}`, h.x, h.y, g.hue, { why: sent([`${yrs(Math.max(1, Math.round((S.tick - x.t) / 360)))} назад ${pastHeir}`, `${next.name} так и не ${fem(next, 'смирился', 'смирилась')}`, 'семья умершего остаётся без своего крова']), who: [next.id], gs: [g.id], causes: [x.ev, deathEv].filter(Boolean) }).id : deathEv;
+    goalEnd(S, next, x, 'done', `Возвращает себе спорный дом`, ev);
     // the claimant's own house goes free: the dead heir's family moves there
     if (claimed) for (const o of livingHouses(g)) if (o !== h && o.owner === next.id) { o.owner = null; o.oname = null; o.emptyT = S.tick; }
     if (claimed) for (const id of g.members) { const o = S._a.get(id); if (o && o !== next && (o.mother === x.heir || o.father === x.heir || o.spouse === x.heir || o.id === x.heir)) bond(S, o, next, 'enemy', `${fem(next, 'отнял', 'отняла')} наш дом`, 0.6, false, ev); }
@@ -114,7 +117,7 @@ function houseSettled(S, g, h, prevOwner, next, claimed, deathEv) {
   // the heir's line keeps it: whoever hoped to win it back sees it pass on
   for (const id of g.members) {
     const a = S._a.get(id), y = a && goalOf(a, 'house', z => z.h === h.id);
-    if (y && prevOwner === y.heir) goalEnd(S, a, y, 'failed', next ? `Дом ${y.oname} после ${y.heirName} переходит к ${next.name}, и вернуть его уже не выйдет` : `Дом ${y.oname} пустеет, и бороться больше не за что`, deathEv);
+    if (y && prevOwner === y.heir) goalEnd(S, a, y, 'failed', next ? `Спорный дом переходит к ${nameCase(next, 'dative')}, и вернуть его уже не выйдет` : `Спорный дом пустеет, и бороться больше не за что`, deathEv);
   }
 }
 
@@ -129,18 +132,18 @@ function goalsMonth(S) {
     if (f && f.t !== a.feudGoalT) {
       const old = goalOf(a, 'revenge'); if (old) goalEnd(S, a, old, 'abandoned', 'Новая обида заслоняет старую месть');
       a.feudGoalT = f.t;
-      if (!f.done) goalOpen(S, a, 'revenge', `Клянётся отомстить за ${f.rel} ${f.v}`, f.ev, { ft: f.t });
+      if (!f.done) goalOpen(S, a, 'revenge', `Клянётся отомстить за ${feudKin(f)}`, f.ev, { ft: f.t });
     }
     const rv = goalOf(a, 'revenge');
     if (rv) {
       if (f && f.t === rv.ft && f.done) {
-        if (f.out === 'done') goalEnd(S, a, rv, 'done', `Месть за ${f.rel} ${f.v} свершилась`, f.endEv, true);
-        else if (f.settled) goalEnd(S, a, rv, 'settled', `Берёт виру за ${f.rel} ${f.v} вместо крови`, f.endEv, true);
+        if (f.out === 'done') goalEnd(S, a, rv, 'done', `Месть за ${feudKin(f)} свершилась`, f.endEv, true);
+        else if (f.settled) goalEnd(S, a, rv, 'settled', `Берёт виру за ${feudKin(f)} вместо крови`, f.endEv, true);
         else if (f.out === 'faded') goalEnd(S, a, rv, 'failed', `Обидчики из «${f.gname}» сошли со сцены`, null, true);
         else goalEnd(S, a, rv, 'failed', `${f.Lname || 'Обидчик'} умирает раньше, чем ${a.name} ${fem(a, 'успевает', 'успевает')} отомстить`);
       } else if (f && !f.done && (S.tick - f.t > 360 * 25 || a.age > 68)) {
         f.done = S.tick; f.out = 'abandoned';
-        goalEnd(S, a, rv, 'abandoned', `${yrs(Math.round((S.tick - f.t) / 360))} ждёт мести за ${f.rel} ${f.v} и наконец отпускает обиду`);
+        goalEnd(S, a, rv, 'abandoned', `${yrs(Math.round((S.tick - f.t) / 360))} ждёт мести за ${feudKin(f)} и наконец отпускает обиду`);
       }
     }
     // power: reached by a coup, a succession, a founding or a split; lost to exile; given up with age
@@ -165,8 +168,8 @@ function goalsMonth(S) {
           const target = sons.filter(s => s.group === a.group || Math.hypot(s.x - a.x, s.y - a.y) < 320)[0];
           const L = target && isLeaderKin(S, target); // the list is from the start of the month: the parent may have lost power since
           if (target && L) {
-            const ev = note(S, 'arc', `${a.name} задумывает выдать дочь ${d.name} за ${target === L ? `вождя ${L.name}` : `${target.name}, сына вождя ${L.name}`}`, a.x, a.y, g.hue, { who: [a.id, d.id, target.id], gs: [g.id] }).id;
-            goalOpen(S, a, 'match', `Задумывает выдать дочь ${d.name} за сына вождя`, ev, { d: d.id, dName: d.name }, true);
+            const ev = note(S, 'arc', `${a.name} задумывает выдать дочь ${nameCase(d, 'accusative')} за ${target === L ? `вождя ${nameCase(L, 'accusative')}` : `${nameCase(target, 'accusative')}, сына вождя ${nameCase(L, 'genitive')}`}`, a.x, a.y, g.hue, { who: [a.id, d.id, target.id], gs: [g.id] }).id;
+            goalOpen(S, a, 'match', `Задумывает выдать дочь ${nameCase(d, 'accusative')} за сына вождя`, ev, { d: d.id, dName: d.name }, true);
           }
         }
       }
@@ -175,7 +178,7 @@ function goalsMonth(S) {
     if (mt) { const d = S._a.get(mt.d); if (!d) goalEnd(S, a, mt, 'failed', `Дочь ${mt.dName} умирает незамужней`); else if (d.age > 28) goalEnd(S, a, mt, 'abandoned', `Дочь ${d.name} так и остаётся без мужа`); }
     // the family house: given up when one moves away for good or grows old
     const hs = goalOf(a, 'house');
-    if (hs) { const hg = S._g.get(hs.g), h = hg && houseOf(hg, hs.h); if (!h || h.ruined) goalEnd(S, a, hs, 'failed', `Дом ${hs.oname} разрушен, и спорить больше не о чем`); else if (a.group !== hs.g && !hs.away) hs.away = S.tick; else if (a.group === hs.g) hs.away = 0; if (!hs.end && ((hs.away && S.tick - hs.away > 360 * 4) || a.age > 66)) goalEnd(S, a, hs, 'abandoned', a.group !== hs.g ? `Обживается на новом месте и забывает о доме ${hs.oname}` : `Стареет и перестаёт спорить за дом ${hs.oname}`); }
+    if (hs) { const hg = S._g.get(hs.g), h = hg && houseOf(hg, hs.h); if (!h || h.ruined) goalEnd(S, a, hs, 'failed', `Спорный дом разрушен, и спорить больше не о чем`); else if (a.group !== hs.g && !hs.away) hs.away = S.tick; else if (a.group === hs.g) hs.away = 0; if (!hs.end && ((hs.away && S.tick - hs.away > 360 * 4) || a.age > 66)) goalEnd(S, a, hs, 'abandoned', a.group !== hs.g ? `Обживается на новом месте и забывает о спорном доме` : `Стареет и перестаёт спорить за дом`); }
   }
 }
 // one month on the road home: wait while the one who cast you out rules; then ask the new leader to take you back
@@ -193,7 +196,7 @@ function returnStep(S, a, x) {
   const yes = bondW(L, a) > -0.2 && (L.trust[a.id] || 0) > -0.3 && rnd(S) < 0.35 + 0.4 * L.coop + (kinLeftIn(S, a, g) ? 0.15 : 0) - (x.how === 'exile' ? 0.15 : 0);
   if (!yes) {
     x.no = (x.no || 0) + 1;
-    const e = note(S, 'exile', `${L.name} не пускает ${a.name} обратно в «${g.name}»`, a.x, a.y, g.hue, { who: [a.id, L.id], gs: [g.id], causes: x.ev ? [x.ev] : undefined }).id;
+    const e = note(S, 'exile', `${L.name} не пускает ${nameCase(a, 'accusative')} обратно в «${g.name}»`, a.x, a.y, g.hue, { who: [a.id, L.id], gs: [g.id], causes: x.ev ? [x.ev] : undefined }).id;
     if (x.no >= 2) { goalEnd(S, a, x, 'failed', `${L.name} второй раз не пускает в «${g.name}»: дороги назад нет`, e); bond(S, a, L, 'rival', `не пустил${fem(L, '', 'а')} меня обратно в «${g.name}»`, 0.4, false, e); }
     else goalTurn(S, a, x, `Просится назад в «${g.name}», но ${L.name} ${fem(L, 'отказывает', 'отказывает')}`, e);
     return;
@@ -205,7 +208,7 @@ function returnStep(S, a, x) {
   join(S, a, g, L.id);
   if (sp && sp.group === old && sp.role !== 'leader' && rnd(S) < 0.7) join(S, sp, g, L.id);
   const kinB = kinLeftIn(S, a, g);
-  const why = sent([`${yrs(Math.max(1, Math.round((S.tick - x.t) / 360)))} назад ${a.name} ${was} из «${g.name}»${x.byName ? ` при вожде ${x.byName}` : ''}`, by && by.group === g.id ? '' : x.byName ? `${x.byName} ${by ? 'больше не правит' : 'уже нет в живых'}` : '', `${L.name} ${fem(L, 'принимает', 'принимает')} ${fem(a, 'его', 'её')} обратно`, kinB ? `в деревне ${fem(a, 'его', 'её')} ждёт ${kinB.name}` : '']);
+  const why = sent([`${yrs(Math.max(1, Math.round((S.tick - x.t) / 360)))} назад ${a.name} ${was} из «${g.name}»${by ? ` при вожде ${nameCase(by, 'prepositional')}` : x.byName ? ` (вождь тогда — ${x.byName})` : ''}`, by && by.group === g.id ? '' : x.byName ? `${x.byName} ${by ? 'больше не правит' : 'уже нет в живых'}` : '', `${L.name} ${fem(L, 'принимает', 'принимает')} ${fem(a, 'его', 'её')} обратно`, kinB ? `в деревне ${fem(a, 'его', 'её')} ждёт ${kinB.name}` : '']);
   const ev = (x.how === 'exile' ? log : note)(S, 'exile', `${a.name} возвращается в «${g.name}»${x.how === 'exile' ? ', откуда был' + fem(a, '', 'а') + ' изгнан' + fem(a, '', 'а') : ''}`, a.x, a.y, g.hue, { why, who: [a.id, L.id], gs: [g.id], causes: x.ev ? [x.ev] : undefined });
   S.stats.homecomings = (S.stats.homecomings || 0) + 1;
   bio(S, a, 'returned', `Возвращается в «${g.name}»: ${L.name} ${fem(L, 'принимает', 'принимает')} обратно`, ev.id);

@@ -105,16 +105,23 @@ function feudFor(S, victim, killers, how, killer, ev) {
     if (o.feud && S.tick - o.feud.t < 360 * 30) continue;
     o.feud = { ev: cite(S, ev), g: killers.id, gname: killers.name, L: killers.leader, Lname: (S._a.get(killers.leader) || {}).name || '', t: S.tick, v: victim.name, rel };
     const NOM = { 'отца': 'отец', 'мать': 'мать', 'жену': 'жена', 'мужа': 'муж', 'брата': 'брат', 'сестру': 'сестра' };
-    bio(S, o, 'feud', `${how} гибнет ${NOM[rel]} ${victim.name}${killer ? ` от руки ${killer.name}` : ''}. ${o.name} клянётся отомстить «${killers.name}»`, ev);
-    if (killer) bond(S, o, killer, 'enemy', `${fem(killer, 'убил', 'убила')} ${rel} ${victim.name} в бою`, 0.8, false, ev);
+    bio(S, o, 'feud', `${how} гибнет ${NOM[rel]} ${victim.name}${killer ? ` от руки ${nameCase(killer, 'genitive')}` : ''}. ${o.name} клянётся отомстить «${killers.name}»`, ev);
+    if (killer) bond(S, o, killer, 'enemy', `${fem(killer, 'убил', 'убила')} ${rel} ${nameCase(victim, 'accusative')} в бою`, 0.8, false, ev);
   }
+}
+function feudVictim(f, padezh = 'accusative') {
+  const sex = { мать: 'f', жену: 'f', сестру: 'f', отца: 'm', мужа: 'm', брата: 'm' }[f.rel];
+  return sex ? nameCase({ name: f.v, sex }, padezh) : `погибшего человека (${f.v})`;
+}
+function feudKin(f) {
+  return f.rel === 'родича' ? `родича (${f.v})` : `${f.rel} ${feudVictim(f)}`;
 }
 function revengeDone(S, a, how) {
   if (!a.feud || a.feud.done) return;
   a.feud.done = S.tick; a.feud.out = 'done';
   bio(S, a, 'revenge', how, a.feud.ev && eventById(S, a.feud.ev) ? a.feud.ev : undefined);
   const first = !S.firstRevenge; S.firstRevenge = true;
-  const ev = log(S, 'revenge', `${a.name} мстит за ${a.feud.rel} ${a.feud.v}: ${how.charAt(0).toLowerCase() + how.slice(1)}`, a.x, a.y, (S._g.get(a.group) || {}).hue || 0, { first, why: `${yrs(Math.max(1, Math.round((S.tick - a.feud.t) / 360)))} назад «${a.feud.gname}» убили ${a.feud.rel === 'мать' ? 'мать' : a.feud.rel === 'жену' ? 'жену' : a.feud.rel === 'сестру' ? 'сестру' : a.feud.rel === 'мужа' ? 'мужа' : a.feud.rel === 'брата' ? 'брата' : 'отца'} ${a.name}. С тех пор ${a.sex === 'f' ? 'она' : 'он'} ждал${a.sex === 'f' ? 'а' : ''} своего часа.`, who: [a.id], causes: a.feud.ev && eventById(S, a.feud.ev) ? [a.feud.ev] : undefined });
+  const ev = log(S, 'revenge', `${a.name} мстит за ${feudKin(a.feud)}: ${how.charAt(0).toLowerCase() + how.slice(1)}`, a.x, a.y, (S._g.get(a.group) || {}).hue || 0, { first, why: `${yrs(Math.max(1, Math.round((S.tick - a.feud.t) / 360)))} назад «${a.feud.gname}» убили ${a.feud.rel} ${nameCase(a, 'genitive')}. С тех пор ${a.sex === 'f' ? 'она' : 'он'} ждал${a.sex === 'f' ? 'а' : ''} своего часа.`, who: [a.id], causes: a.feud.ev && eventById(S, a.feud.ev) ? [a.feud.ev] : undefined });
   a.feud.endEv = cite(S, ev.id);
   return ev;
 }
@@ -135,12 +142,12 @@ function fatesMonth(S) {
         // the elders may still turn blood into blood money
         if (bloodOrWergild(S, g, m, KL)) break;
         const wasL = KL === L;
-        bio(S, KL, 'death', `${KL.sex === 'f' ? 'Убита' : 'Убит'}: ${m.name} мстит за ${m.feud.v}`);
-        const rev = revengeDone(S, m, `Убивает ${KL.name}${wasL ? `, вождя «${g.name}»` : ''}`), revId = rev && rev.id;
-        bio(S, m, 'murder', `Своими руками убивает ${KL.name}`);
+        bio(S, KL, 'death', `${KL.sex === 'f' ? 'Убита' : 'Убит'}: ${m.name} мстит за ${feudVictim(m.feud)}`);
+        const rev = revengeDone(S, m, `Убивает ${nameCase(KL, 'accusative')}${wasL ? `, вождя «${g.name}»` : ''}`), revId = rev && rev.id;
+        bio(S, m, 'murder', `Своими руками убивает ${nameCase(KL, 'accusative')}`);
         S.stats.murders = (S.stats.murders || 0) + 1;
-        for (const o of kinOf(S, KL)) bond(S, o, m, 'enemy', `${fem(m, 'убил', 'убила')} ${KL.name}`, 0.9, false, revId);
-        for (const o of kinOf(S, KL)) if (!o.feud || o.feud.done) { o.feud = { g: g.id, gname: g.name, L: m.id, Lname: m.name, t: S.tick, v: KL.name, rel: o.mother === KL.id || o.father === KL.id ? (KL.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: m.id, ev: cite(S, revId) }; bio(S, o, 'feud', `${m.name} убивает ${KL.name}. ${o.name} клянётся отомстить`, revId); }
+        for (const o of kinOf(S, KL)) bond(S, o, m, 'enemy', `${fem(m, 'убил', 'убила')} ${nameCase(KL, 'accusative')}`, 0.9, false, revId);
+        for (const o of kinOf(S, KL)) if (!o.feud || o.feud.done) { o.feud = { g: g.id, gname: g.name, L: m.id, Lname: m.name, t: S.tick, v: KL.name, rel: o.mother === KL.id || o.father === KL.id ? (KL.sex === 'f' ? 'мать' : 'отца') : 'родича', personal: m.id, ev: cite(S, revId) }; bio(S, o, 'feud', `${m.name} убивает ${nameCase(KL, 'accusative')}. ${o.name} клянётся отомстить`, revId); }
         removeAgent(S, KL, 'killed');
         if (g.dead) break;
         bloodShed(S, g, revId);
@@ -156,7 +163,7 @@ function fatesMonth(S) {
     if (a.age > 25 || !a.group || a.master || a.teacher) continue;
     const g = S._g.get(a.group); if (!g) continue;
     const t = g.members.map(id => S._a.get(id)).find(m => m && m.master && m.master === a.job && m !== a);
-    if (t) { a.teacher = t.id; a.teacherName = t.name; bump(a, t, 0.25); bump(t, a, 0.15); bond(S, a, t, 'mentor', 'учит ремеслу', 0.6); bond(S, t, a, 'pupil', 'учится ремеслу', 0.5); bio(S, a, 'apprentice', `Учится ремеслу у ${t.name}`); }
+    if (t) { a.teacher = t.id; a.teacherName = t.name; bump(a, t, 0.25); bump(t, a, 0.15); bond(S, a, t, 'mentor', 'учит ремеслу', 0.6); bond(S, t, a, 'pupil', 'учится ремеслу', 0.5); bio(S, a, 'apprentice', `Учится ремеслу у ${nameCase(t, 'genitive')}`); }
   }
 }
 function elope(S, f, m) {
@@ -171,7 +178,7 @@ function elope(S, f, m) {
   ng.x0 = (f.x + m.x) / 2;
   for (const g of [gf, gm]) if (g && !g.dead) S.hostility[key(g.id, ng.id)] = 0.5;
   const txt = `Бегут вместе: «${gf ? gf.name : '?'}» и «${gm ? gm.name : '?'}» враждуют, свадьбы им не дали`;
-  bio(S, f, 'elope', `${txt}. С ${m.name} ${f.sex === 'f' ? 'она' : 'он'} основывает свою семью`, eev); bio(S, m, 'elope', `${txt}. С ${f.name} основывает свою семью`, eev);
+  bio(S, f, 'elope', `${txt}. С ${nameCase(m, 'instrumental')} ${f.sex === 'f' ? 'она' : 'он'} основывает свою семью`, eev); bio(S, m, 'elope', `${txt}. С ${nameCase(f, 'instrumental')} основывает свою семью`, eev);
   S.stats.elopes = (S.stats.elopes || 0) + 1;
   log(S, 'elope', `${f.name} из «${gf ? gf.name : '?'}» и ${m.name} из «${gm ? gm.name : '?'}» бегут вместе и уходят жить своим домом`, (f.x + m.x) / 2, (f.y + m.y) / 2, ng.hue, { first: !S.firstElope, why: sent([`между деревнями ${hostWord(S.hostility[key(gf ? gf.id : 0, gm ? gm.id : 0)] || 0)}`, 'вожди не отдают своих людей за врагов', `${f.name} и ${m.name} доверяют друг другу больше, чем своим деревням`]), who: [f.id, m.id], gs: [ng.id] });
   S.firstElope = true;
