@@ -121,14 +121,17 @@ async def check_clock_modes(pg, url, errs):
         return page
 
     directed = await open_at(fixture['state'], 'centuries')
+    await directed.click('[data-p=ctl]')
     await directed.locator(f"#groups [data-g='{fixture['village']}']").click()
     await directed.click('#cfollow')
     await directed.click('#play')
-    await directed.wait_for_function("""() => __lab().tick === 1 &&
-        __labView().mode === 'scene' && __lab().minute >= 1050 && __lab().minute < 1053""")
-    await directed.click('#play')
+    await directed.wait_for_function("""() => {
+        if (__lab().tick !== 1 || __labView().mode !== 'scene' || __lab().minute !== 1050) return false;
+        document.getElementById('play').click();
+        return true;
+    }""")
     stamp = await directed.evaluate('() => [__lab().tick, __lab().minute]')
-    assert stamp[0] == 1 and 1050 <= stamp[1] < 1055, 'The director skipped the half-hour threshold'
+    assert stamp == [1, 1050], 'The director skipped the half-hour threshold'
     await directed.click('label[for=spDays]')
     assert await directed.evaluate('() => [__lab().tick, __lab().minute]') == stamp
     assert await directed.evaluate('() => __labView().mode') == 'days', 'Manual speed did not cancel the scene'
