@@ -317,7 +317,11 @@ function render3D(now) {
   const W0 = S;
   rebuildStatic(W0, now);
   if (V3.fogKey !== C.plate) { V3.fogKey = C.plate; V3.scene.background = hexOf(C.plate).clone(); V3.scene.fog = new THREE.Fog(V3.scene.background.clone(), 1500, 3800); V3.hemi.intensity = C.dark ? 0.5 : 0.55; V3.sun.intensity = C.dark ? 0.5 : 0.6; }
-  const n = Math.min(700, W0.agents.length); V3.ids = [];
+  const sunHour = dayWatch ? S.minute / 60 : 12;
+  const sunAngle = (sunHour - 12) * Math.PI / 12;
+  V3.sun.position.set(Math.sin(sunAngle) * 900, Math.max(0.1, Math.cos(sunAngle)) * 900, 300);
+  V3.sun.intensity = (C.dark ? 0.5 : 0.6) * (1 - dailyNight * 0.9);
+  const n = effectiveMode === 'centuries' ? 0 : Math.min(700, W0.agents.length); V3.ids = [];
   let c = 0, f = 0, cw = 0, cs = 0, cf = 0, bk = 0;
   for (let i = 0; i < n; i++) {
     const a = W0.agents[i], d = D.get(a.id), g = a.group && W0._g.get(a.group), y = gh(d.x, d.y), s = a.role === 'leader' ? 1.45 : 1;
@@ -366,7 +370,8 @@ function render3D(now) {
   }
   { let si2 = 0, wi = 0; for (const sp of W0.springs || []) if (!sp.dry && si2 < 20) setInst(V3.springM, si2++, sp.x, gh(sp.x, sp.y) + 0.6, sp.y, sp.big ? 1.25 : 1); for (const g of W0.groups) if (g.well && wi < 80) { const y0 = gh(g.well.x, g.well.y); setInst(V3.wellM, wi, g.well.x, y0 + 2, g.well.y); setInst(V3.wellW, wi, g.well.x, g.well.dry ? -60 : y0 + 2.1, g.well.y); wi++; } V3.springM.count = si2; V3.wellM.count = wi; V3.wellW.count = wi; for (const m of [V3.springM, V3.wellM, V3.wellW]) m.instanceMatrix.needsUpdate = true; }
   for (const [m, k] of [[V3.bucket, bk], [V3.cargoW, cw], [V3.cargoS, cs], [V3.cargoF, cf], [V3.smoke, sm], [V3.deer, dr], [V3.deerH, dr]]) { m.count = Math.min(k, m.instanceMatrix.count); m.instanceMatrix.needsUpdate = true; }
-  if (follow && sel && S._a.get(sel)) { const a = D.get(sel); V3.fly = { x: a.x, z: a.y }; }
+  const tracked = followedPlace();
+  if (tracked && !directedCamera()) V3.fly = { x: tracked.x, z: tracked.y };
   if (V3.fly) {
     const { x, z, distance, overview } = V3.fly, tg = V3.ctl.target, pos = V3.cam.position;
     const dx = x - tg.x, dz = z - tg.z, dy = -tg.y, f = reduce ? 1 : 0.10;
@@ -383,7 +388,7 @@ function render3D(now) {
     const error = overview ? Math.hypot(x + range * 0.07 - pos.x, range * 0.73 - pos.y, z + range * 0.68 - pos.z) : Math.abs(range - current);
     if (Math.hypot(dx, dy, dz) < 2 && error < 3) { V3.fly = null; syncCameraZoom(); }
   }
-  for (const w of W0.wars || []) {
+  for (const w of effectiveMode === 'centuries' ? [] : W0.wars || []) {
     if (f >= 20) break;
     const band = (w.fighters || []).map(id => D.get(id)).filter(Boolean), A = W0._g.get(w.att); if (!band.length || !A) continue;
     let fx = 0, fz = 0; for (const p of band) { fx += p.x; fz += p.y; } fx /= band.length; fz /= band.length;
@@ -400,6 +405,8 @@ function labels3D(W0) {
   if (!V3.sc || performance.now() - V3.scAt > 2000) { V3.sc = stateCenters(W0); V3.scAt = performance.now(); }
   const landing = firstLanding(W0);
   if (landing) put(landing.x1, Math.max(0, gh(landing.x1, landing.y1)) + 22, landing.y1, LANDING_LABEL, 'l3landing');
+  for (const item of F) put(item.x, gh(item.x, item.y) + 32, item.y,
+    `<i style="color:${typeColor(item.type, 1, item.hue)}">●</i>`, 'l3');
   for (const c of V3.sc) put(c.x, gh(c.x, c.y) + 30, c.y, esc(c.st.name), 'l3s');
   for (const g of W0.groups.filter(g => g.home && (g.members.length >= 4 || g.sick > 0)).sort((a, b) => (b.sick > 0) - (a.sick > 0) || b.members.length - a.members.length).slice(0, 9)) {
     const r = RC.get(g.id); put(g.home.x, gh(g.home.x, g.home.y) + 26, g.home.y, `${esc(g.name)}${g.sick > 0 ? '<small class="sick">мор</small>' : r && g.members.length >= 5 ? `<small>${esc(SHORT[r.type] || '')}</small>` : ''}`, 'l3');

@@ -200,7 +200,7 @@ function drawRiver() {
     rctx.fillStyle = C.ink; rctx.fillText(nm, x, y);
   }
   // event dots
-  for (const e of S.events) {
+  for (const e of visibleEvents()) {
     if (!isMajor(e) && e.type !== 'shock') continue;
     const i = Math.round((e.t - t0) / 30); if (i < 0 || i >= n) continue;
     let y = null; for (const gid of e.gs || []) { y = mid(gid, i) ?? mid(gid, Math.max(0, i - 1)) ?? mid(gid, Math.min(n - 1, i + 1)); if (y !== null) break; }

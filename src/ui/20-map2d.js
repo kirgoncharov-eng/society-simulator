@@ -278,8 +278,10 @@ function fieldGlyph(f, col, edge, winter, px) {
 
 function draw(now) {
   const W = cv.width, H = cv.height, s = Math.min(W, H) / 1000, dpr = W / Math.max(1, plate.clientWidth);
+  const detailed = effectiveMode !== 'centuries', people = detailed ? S.agents : [];
   const t = reduce ? 0 : now, L = reduce ? 1 : 0.12;
-  if (follow && sel && S._a.get(sel)) { const fa = D.get(sel); vt.x = fa.x; vt.y = fa.y; vt.z = Math.max(vt.z, 2.2); }
+  const tracked = followedPlace();
+  if (tracked && !directedCamera()) { vt.x = tracked.x; vt.y = tracked.y; vt.z = Math.max(vt.z, 2.2); }
   view.z += (vt.z - view.z) * L; view.x += (vt.x - view.x) * L; view.y += (vt.y - view.y) * L;
   const half = 500 / view.z; view.x = Math.max(half, Math.min(1000 - half, view.x)); view.y = Math.max(half, Math.min(1000 - half, view.y));
   const k = s * view.z, ox = W / 2 - view.x * k, oy = H / 2 - view.y * k; T = { k, ox, oy };
@@ -293,7 +295,12 @@ function draw(now) {
   ctx.setTransform(k, 0, 0, k, ox, oy);
   if (S.ter) ctx.drawImage(terr, 0, 0, 1000, 1000);
   const season = Math.floor((S.tick % 360) / 90), winter = season === 0;
-  if (winter) { ctx.fillStyle = C.dark ? 'rgba(190,215,240,.07)' : 'rgba(255,255,255,.38)'; ctx.fillRect(0, 0, 1000, 1000); }
+  if (winter) {
+    const day = S.tick % 360 + S.minute / SIM.DAY_MINUTES;
+    const cover = Math.max(0, Math.min(1, day / 8, (90 - day) / 8));
+    ctx.fillStyle = C.dark ? `rgba(190,215,240,${0.07 * cover})` : `rgba(255,255,255,${0.38 * cover})`;
+    ctx.fillRect(0, 0, 1000, 1000);
+  }
   const ok2 = `${res}|${C.dark}|${Math.floor(S.tick / 30)}|${S.seed}|${S.groups.length}|${(S.states || []).map(s2 => s2.id + s2.members.length).join(',')}`;
   if (ok2 !== ownKey) { paintOwn(S, ownCv, res); ownKey = ok2; }
   if (S.own) ctx.drawImage(ownCv, 0, 0, 1000, 1000);
@@ -400,7 +407,7 @@ function draw(now) {
   }
   ctx.lineWidth = px(1);
   for (const g of S.groups) if (g.sick > 0 && g.home) { const pr = 0.5 + 0.5 * Math.sin(now / 400); ctx.beginPath(); ctx.arc(g.home.x, g.home.y, 50 + pr * 8, 0, 7); ctx.fillStyle = C.dark ? `rgba(150,175,120,${0.16 + pr * 0.08})` : `rgba(60,80,40,${0.14 + pr * 0.08})`; ctx.fill(); ctx.font = `600 ${px(12)}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = C.dark ? '#c8d8b0' : '#3c5028'; ctx.fillText('мор', g.home.x, g.home.y - 62); }
-  for (const a of S.agents) {
+  for (const a of people) {
     if (!a.group || !a.boss) continue;
     const b = D.get(a.boss), d = D.get(a.id), g = S._g.get(a.group); if (!b || !d || !g) continue;
     ctx.strokeStyle = hueC(g.hue, fgs && !fgs.has(g.id) ? .1 : g.home ? .16 : .45); ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.stroke();
@@ -420,7 +427,7 @@ function draw(now) {
     ctx.strokeStyle = col; ctx.lineWidth = px(1.6); ctx.setLineDash([px(3), px(3)]); ctx.beginPath(); ctx.arc(r.x, r.y, r.kind === 'feast' ? 26 : 12, 0, 7); ctx.stroke(); ctx.setLineDash([]);
   }
   // small children play by their parents' house
-  for (const k of dailyNight > 0.85 ? [] : S.kids || []) {
+  for (const k of !detailed || dailyNight > 0.85 ? [] : S.kids || []) {
     const c = S._a.get(k.mo) || S._a.get(k.fa), g = c && c.group && S._g.get(c.group);
     const h = g && g.home && c.house && g.houses.find(x => x.id === c.house); if (!h) continue;
     const s = (k.t * 7 + (k.mo || 0)) % 17, ox = (s % 9) - 4, oy = 7 + (s % 4);
@@ -428,12 +435,12 @@ function draw(now) {
     ctx.beginPath(); ctx.arc(h.x + ox, h.y + oy, px(base * .55), 0, 7); ctx.fill();
   }
   ctx.globalAlpha = 1;
-  const selA = sel && S._a.get(sel);
+  const selA = detailed && sel && S._a.get(sel);
   if (selA) {
     const d = D.get(selA.id), rel = Object.entries(selA.trust).filter(([id]) => D.has(+id)).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).slice(0, 8);
     for (const [id, v] of rel) { const o = D.get(+id); ctx.strokeStyle = v > 0 ? rgba(C.slate, .35 + v * .5) : rgba(C.red, .35 - v * .5); ctx.lineWidth = px(1 + Math.abs(v) * 2); ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(o.x, o.y); ctx.stroke(); }
   }
-  for (const a of S.agents) {
+  for (const a of people) {
     const d = D.get(a.id), g = a.group && S._g.get(a.group), r = px(base * (1 + 1.3 * a.status / (a.status + 10)));
     ctx.globalAlpha = who && !who.has(a.id) ? .3 : 1;
     ctx.fillStyle = g ? hueC(g.hue, 1, (a.energy - .5) * 16) : rgba(C.muted, .85);
@@ -446,13 +453,13 @@ function draw(now) {
     if (who && who.has(a.id)) { const p = reduce ? .5 : (Math.sin(now / 260) + 1) / 2; ctx.strokeStyle = typeColor(focusEv.type, .9); ctx.lineWidth = px(2); ctx.beginPath(); ctx.arc(d.x, d.y, r + px(5 + 4 * p), 0, 7); ctx.stroke(); }
   }
   ctx.globalAlpha = 1;
-  for (const a of S.agents) {
+  for (const a of people) {
     if (!a.war && a.job !== 'guard') continue;
     const d = D.get(a.id); if (!d) continue;
     ctx.strokeStyle = a.war ? C.red : C.ink; ctx.lineWidth = px(1.4);
     ctx.beginPath(); ctx.moveTo(d.x + 3, d.y + 4); ctx.lineTo(d.x + 7, d.y - 7); ctx.stroke();
   }
-  for (const w of S.wars || []) {
+  for (const w of detailed ? S.wars || [] : []) {
     const band = (w.fighters || []).map(id => D.get(id)).filter(Boolean), A = S._g.get(w.att); if (!band.length || !A) continue;
     let fx = 0, fy = 0; for (const p of band) { fx += p.x; fy += p.y; } fx /= band.length; fy /= band.length;
     ctx.strokeStyle = C.ink; ctx.lineWidth = px(1.5); ctx.beginPath(); ctx.moveTo(fx, fy - 4); ctx.lineTo(fx, fy - 26); ctx.stroke();
@@ -460,7 +467,7 @@ function draw(now) {
     ctx.strokeStyle = C.red; ctx.lineWidth = px(1); ctx.stroke();
   }
   const GC = { food: C.dark ? '#d6b04e' : '#c79a2e', wood: C.dark ? '#b07a45' : '#8a5a2b', stone: C.dark ? '#a8adb5' : '#7d8590', tools: C.slate };
-  for (const a of S.agents) {
+  for (const a of people) {
     if (!a.car) continue;
     const d = D.get(a.id), g = S._g.get(a.group); if (!d || !g) continue;
     const cx = d.x + 7, cy = d.y + 2;
@@ -469,9 +476,6 @@ function draw(now) {
     ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(cx - 3.5, cy + 3.5, 1.8, 0, 7); ctx.arc(cx + 3.5, cy + 3.5, 1.8, 0, 7); ctx.fill();
   }
   if (selA) { const d = D.get(selA.id); ctx.strokeStyle = C.ink; ctx.lineWidth = px(2); ctx.beginPath(); ctx.arc(d.x, d.y, px(base * 4), 0, 7); ctx.stroke(); }
-  for (const f of S.flashes) if (f.id > lastFlash) { lastFlash = f.id; if (f.x !== undefined) F.push({ ...f, born: now }); }
-  if (F.length > 40) F = F.slice(-40);
-  F = F.filter(f => now - f.born < 1400);
   for (const f of F) {
     const p = (now - f.born) / 1400;
     ctx.strokeStyle = typeColor(f.type, 1 - p, f.hue); ctx.lineWidth = px(2);
