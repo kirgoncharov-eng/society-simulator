@@ -263,7 +263,7 @@ function groupMonth(S, g) {
     if (best) {
       const all = g.members.map(id => S._a.get(id)).filter(Boolean), nm = g.name;
       log(S, 'abandon', `Жители «${nm}» бросают ${dry0 ? 'деревню без воды' : 'голодную деревню'} и уходят в «${best.name}»`, g.home.x, g.home.y, g.hue, { why: sent(dry0 ? [`в «${nm}» ${g.thirst} ${pl(g.thirst, 'месяц', 'месяца', 'месяцев')} нет воды поблизости`, 'носить воду издалека больше нет сил', `у «${best.name}» вода есть, туда и уходят`] : [`в «${nm}» осталось ${all.length} ${pl(all.length, 'человек', 'человека', 'человек')}, запасов нет`, 'маленькой деревне не прокормиться: некому одновременно пахать, строить и рубить лес', `«${best.name}» рядом, ${best.members.length} ${pl(best.members.length, 'человек', 'человека', 'человек')} и есть еда`]), gs: [g.id, best.id] });
-      for (const m of all) { join(S, m, best, best.leader); m.x = best.home.x + gauss(S) * 15; m.y = best.home.y + gauss(S) * 15; }
+      for (const m of all) join(S, m, best, best.leader);
       if (!g.dead) dissolve(S, g, true);
       return;
     }
@@ -316,7 +316,7 @@ function groupMonth(S, g) {
           for (const o of S.groups) { if (o === g || !o.home || o.dead) continue; const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y), h0 = S.hostility[key(o.id, g.id)] || 0; if (d > 420) continue; const v = o.pay * 3 + o.treasury / Math.max(1, o.members.length) - d / 50 + h0 * 4; if (v > dv) { dv = v; dest = o; } }
           if (dest && g.home && reach(S, g.home.x, g.home.y, dest.home.x, dest.home.y)) {
             const who = [ch, ...sup];
-            for (const m of who) { join(S, m, dest, dest.leader); m.x = dest.home.x + gauss(S) * 15; m.y = dest.home.y + gauss(S) * 15; }
+            for (const m of who) join(S, m, dest, dest.leader);
             bump(ch, L, -0.4); S.stats.emigr = (S.stats.emigr || 0) + 1;
             log(S, 'exodus', `${ch.name} и ${sup.length} ${pl(sup.length, 'недовольный', 'недовольных', 'недовольных')} уходят из «${g.name}» в «${dest.name}»`, g.home.x, g.home.y, g.hue, { why: why + ` Своей деревни им не поднять: их слишком мало, поэтому они просятся к соседям.`, who: who.map(m => m.id), gs: [g.id, dest.id] });
             return;

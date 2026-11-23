@@ -42,6 +42,9 @@ async def check_world_controls(pg, url, errs):
     }""")
     assert await pg.evaluate("() => __lab().tick") == paused_tick, 'Late worker reply advanced a paused world'
 
+    await pg.click('label[for=spDay]')
+    await pg.evaluate("() => { __lab().minute = 14 * 60 + 37; }")
+    await pg.wait_for_function("() => document.getElementById('dayClock').textContent.startsWith('14:37')")
     saved = await pg.evaluate("() => SIM.serialize(__lab())")
     await pg.click('#fork')
     await pg.evaluate("() => __labAdvance(7)")
@@ -74,8 +77,18 @@ async def check_world_controls(pg, url, errs):
     """)
     await restored.goto(url)
     assert await restored.evaluate("() => window.labTestStartup") == saved, 'Saved world did not survive startup'
+    await restored.wait_for_function("() => document.getElementById('dayClock').textContent.startsWith('14:37')")
+    await restored.click('label[for=sp64]')
+    assert await restored.evaluate('() => __lab().minute') == 877, 'Switching speed moved the saved clock'
+    await restored.evaluate("""async () => {
+        const expected = SIM.restore(window.labTestStartup);
+        SIM.step(expected);
+        await __labAdvance(1);
+        if (SIM.serialize(__lab()) !== SIM.serialize(expected))
+            throw Error('Midday startup changed the world at the next midnight');
+    }""")
     await restored.close()
-    print('Pause, one day, fork, and saved world startup passed')
+    print('Pause, one day, fork, and 14:37 save and speed switch passed')
 
 async def main():
     os.makedirs(os.path.join(ROOT, 'tmp'), exist_ok=True)

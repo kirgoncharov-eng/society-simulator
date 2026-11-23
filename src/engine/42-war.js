@@ -94,9 +94,9 @@ function wars(S) {
     const band = w.fighters.map(id => S._a.get(id)).filter(m => m && m.war === w.id);
     if (!band.length) { endWar(S, w); continue; }
     if (w.phase === 'march') {
-      const near = band.filter(m => Math.hypot(m.x - B.home.x, m.y - B.home.y) < 30).length;
+      const near = band.filter(m => m._travel?.arrived).length;
       if (near >= Math.ceil(band.length * 0.6)) battle(S, w, A, B, band);
-    } else if (band.every(m => Math.hypot(m.x - A.home.x, m.y - A.home.y) < 40)) endWar(S, w);
+    } else if (band.every(m => m._travel?.arrived)) endWar(S, w);
   }
 }
 function battle(S, w, A, B, band) {

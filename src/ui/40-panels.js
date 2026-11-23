@@ -111,6 +111,14 @@ function bondsTxt(a) {
   if (!bs.length) return '';
   return `<p class="rel"><b>Связи</b><br>${bs.map(([o, b]) => `${esc(o.name)} — ${esc(SIM.bondLabel(a, o, b[0]))}: ${esc(b[3])}, г. ${yr(b[1])}${evLink(b[5])}`).join('<br>')}</p>`;
 }
+function dailyPlanText(a) {
+  const plan = dayWatch && routineWorld === S && dailyRoutes.get(a.id);
+  if (!plan) return '';
+  const label = { relocation: 'переселяется', caravan: 'едет с караваном', escape: 'уходит от родных мест', rite: 'идёт на обряд', delivery: 'несёт груз на склад' };
+  const task = plan.blocked ? 'ждёт прохода' : label[plan.kind] || JOB[plan.kind];
+  return task ? `<p class="rel">Сегодня ${task}.${plan.commuteMinutes ? ` Дорога туда и обратно — ${plan.commuteMinutes} мин.` : ''}</p>` : '';
+}
+
 function card() {
   const el = $('card');
   if (!sel) return;
@@ -130,6 +138,7 @@ function card() {
   ${g && g.home && ((g.pots || 0) >= 1 || (g.cloth || 0) >= 1 || (g.goats || 0) || g.fboats) ? `<p class="rel">Хозяйство: ${[g.goats ? `${g.goats} коз` : '', g.fboats ? `${g.fboats} ${g.fboats === 1 ? 'рыбацкая лодка' : g.fboats < 5 ? 'рыбацкие лодки' : 'рыбацких лодок'}` : '', (g.pots || 0) >= 1 ? `горшков ${Math.round(g.pots)}` : '', (g.cloth || 0) >= 1 ? `тканей ${Math.round(g.cloth)}` : ''].filter(Boolean).join(', ')}${(g.cloth || 0) >= g.members.length * 0.5 ? '. Тёплая одежда: зимой болеют реже' : ''}${(g.pots || 0) >= g.members.length * 0.5 ? '. Есть посуда: запасы хранятся дольше, воду носить легче' : ''}.</p>` : ''}
   ${famTxt(a, g, L)}
   ${houseTxt(a)}
+  ${dailyPlanText(a)}
   ${bondsTxt(a)}
   ${a.goals && a.goals.length ? `<div class="rel"><b>Цели и дуги</b>${arcsHtml(a.goals, true)}</div>` : ''}
   ${a.feud && !a.feud.done ? `<p class="rel"><b>Ждёт мести</b> за ${esc(a.feud.rel)} ${esc(a.feud.v)}: ${a.feud.personal ? esc(a.feud.Lname) : `«${esc(a.feud.gname)}»`}.</p>` : ''}
@@ -146,8 +155,12 @@ const TOG = [['landPriv', 'Частная земля разрешена', 'Ин�
 function syncCtls() {
   $('ctls').innerHTML = CTL.map(([k, l, p]) => `<div class="ctl"><label for="c-${k}">${l}<output id="o-${k}">${pct(S.params[k])}%</output></label><p>${p}</p><input type="range" id="c-${k}" min="0" max="1" step="0.05" value="${S.params[k]}"></div>`).join('')
     + TOG.map(([k, l, p]) => `<div class="ctl"><label class="chk" style="color:var(--ink)" for="c-${k}"><input type="checkbox" id="c-${k}" ${(S.params[k] ?? 1) >= 0.5 ? 'checked' : ''}>${l}</label><p>${p}</p></div>`).join('');
-  for (const [k] of CTL) $('c-' + k).addEventListener('input', e => { S.params[k] = +e.target.value; $('o-' + k).textContent = pct(S.params[k]) + '%'; });
-  for (const [k] of TOG) $('c-' + k).addEventListener('change', e => { S.params[k] = e.target.checked ? 1 : 0; });
+  function setParam(k, value) {
+    S.params[k] = value;
+    if (dayWatch) { mainRunner.reset(); routineWorld = null; }
+  }
+  for (const [k] of CTL) $('c-' + k).addEventListener('input', e => { setParam(k, +e.target.value); $('o-' + k).textContent = pct(S.params[k]) + '%'; });
+  for (const [k] of TOG) $('c-' + k).addEventListener('change', e => { setParam(k, e.target.checked ? 1 : 0); });
 }
 function syncPlay() { $('play').textContent = playing ? 'Пауза' : 'Пуск'; if (focusEv && $('go')) $('go').textContent = playing ? 'Закрыть' : 'Дальше'; }
 

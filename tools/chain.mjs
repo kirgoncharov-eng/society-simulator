@@ -41,8 +41,9 @@ export function runIsland(i, years) {
   for (let y = 1; y <= years; y++) {
     for (let d = 0; d < 360; d++) {
       SIM.step(S);
-      const e = S.events[0];
-      if (e && e.type === 'aid' && e.causes && /находит приют/.test(e.text) && !watch.some(w => w.shelter === e.id)) {
+      for (const e of S.events) {
+        if (e.t !== S.tick) break;
+        if (e.type !== 'aid' || !e.causes || !/находит приют/.test(e.text)) continue;
         const person = S._a.get(e.who[0]), line = person && person.bio.find(b => b[3] === e.causes[0] && /помог зерном/.test(b[2]));
         const src = SIM.eventById(S, e.causes[0]);
         assert.ok(src && /зерн/.test(src.text), `seed ${seed}: shelter ${e.id} cites a non-grain event`);
