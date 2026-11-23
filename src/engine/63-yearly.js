@@ -113,5 +113,5 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
