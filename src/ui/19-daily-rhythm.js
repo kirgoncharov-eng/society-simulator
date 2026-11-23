@@ -150,10 +150,11 @@ function hasDailyView() { return routineWorld === S && routineTick === S.tick &&
 
 function advanceViewClock(dt) {
   syncMode();
-  if (!playing || mainRunner.busy) return;
+  if (!playing) return;
   const time = clockNow();
   clockCredit = Math.min(30 * SIM.DAY_MINUTES, clockCredit + dt * SIM.DAY_MINUTES / MODE_DAY_MS[effectiveMode]);
-  let target = directionTime(time + Math.floor(clockCredit));
+  if (mainRunner.busy) return;
+  const target = directionTime(time + Math.floor(clockCredit));
   if (target <= time) return;
   const targetDay = Math.floor(target / SIM.DAY_MINUTES);
   if (targetDay === S.tick) {
