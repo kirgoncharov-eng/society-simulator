@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm31', date: '2026-11-23', note: 'бюджет времени семьи: работа = световой день − дорога − малые дети ± нужда семьи' };
+const MODEL = { v: 'm32', date: '2026-11-23', note: 'час у событий, деревни решают в свой день месяца, беременность девять месяцев, год траура вдовы' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -51,6 +51,7 @@ function index(S) {
 function log(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1; S.evc = S.evc || {}; S.evc[type] = (S.evc[type] || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
+  evClock(S, ev);
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
@@ -65,6 +66,7 @@ function log(S, type, text, x, y, hue, ex) {
 function note(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
+  evClock(S, ev);
   (S.evArch || (S.evArch = {}))[ev.id] = ev;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
   return ev;

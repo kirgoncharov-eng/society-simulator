@@ -34,12 +34,22 @@ function noDangling(S, where) {
   for (const e of S.events) for (const c of e.causes || []) check(c, `causes of event ${e.id}`);
   return n;
 }
+// a hungry island for the check: every winter the smallest village loses its store, so neighbours send grain and the
+// memory of that help has a chance to decide where someone finds shelter (the world itself has grown well fed since Ч1)
+const STRESS = process.env.SOCIETY_CHAIN_STRESS === '1';
+function hungryWinter(S) {
+  const g = S.groups.filter(x => x.home && !x.dead && x.members.length >= 5).sort((a, b) => a.members.length - b.members.length)[0];
+  if (!g) return;
+  g.treasury = 0;
+  for (const id of g.members) { const a = S._a.get(id); if (a) a.wealth = Math.min(a.wealth, -0.5); }
+}
 export function runIsland(i, years) {
   const seed = 5000 + i * 7919;
   let S = SIM.newWorld(seed, {});
   const watch = []; // shelter stories: { person, cause, line }
   for (let y = 1; y <= years; y++) {
     for (let d = 0; d < 360; d++) {
+      if (STRESS && S.tick % 360 === 2) hungryWinter(S);
       SIM.step(S);
       for (const e of S.events) {
         if (e.t !== S.tick) break;
@@ -98,6 +108,7 @@ async function main() {
     r.afterLoad += example.afterLoad;
   }
   if ((!r.stories || !r.afterLoad) && W < 12) { console.log(`\nno shelter story left the feed on ${W} islands: checking 12`); r = await run(12); }
+  if (!r.stories || !r.afterLoad) { console.log(`\nthe world is well fed and no village starved: checking ${W} islands with a hungry winter each year`); process.env.SOCIETY_CHAIN_STRESS = '1'; r = await run(W); }
   assert.ok(r.stories > 0, 'no shelter story found: the chain was not exercised');
   assert.ok(r.afterLoad > 0, 'no grain event was opened after leaving the feed and after save/load');
   console.log('chain: all good');

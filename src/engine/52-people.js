@@ -12,7 +12,8 @@ function families(S) {
   S.kids = S.kids || [];
   const pop = popOf(S), crowd = pop > 650 ? 0.25 : pop > 520 ? 0.6 : 1;
   // marriages
-  const singles = S.agents.filter(a => !a.spouse && a.age >= 17 && a.age < 52);
+  // a widow or widower keeps a year of mourning before marrying again (Ч4)
+  const singles = S.agents.filter(a => !a.spouse && a.age >= 17 && a.age < 52 && S.tick - (a.widowT || -1e9) >= 360);
   const men = singles.filter(a => a.sex === 'm');
   for (const f of singles) {
     if (f.sex !== 'f' || f.spouse || rnd(S) > 0.14 || !men.length) continue;
@@ -33,11 +34,12 @@ function families(S) {
   // births
   for (const a of S.agents) {
     if (a.sex !== 'f' || !a.spouse || a.age < 17 || a.age > 42) continue;
-    if (S.tick - (a.lastBirth || -1e9) < 450) continue;
+    if (a.preg || S.tick - (a.lastBirth || -1e9) < 450 - PREGNANCY) continue;
     const h = S._a.get(a.spouse); if (!h) { a.spouse = null; continue; }
     const g = S._g.get(a.group), store = g ? g.treasury / Math.max(1, g.members.length) : 1;
     const fert = clamp((a.wealth + h.wealth * 0.5 + store) / 8, 0.04, 1.6) * (a.wealth < 0.5 && store < 1 ? 0.25 : 1) * (g && g.home ? 1 : 0.55) * crowd * (g && g.sick ? 0.4 : 1);
-    if (rnd(S) < 0.034 * fert) { const sx = rnd(S) < 0.5 ? 'f' : 'm'; S.kids.push({ t: S.tick, mo: a.id, fa: h.id, lin: linOf(S, h), g: a.group, sex: sx, x: a.x, y: a.y }); a.lastBirth = S.tick; S.stats.births = (S.stats.births || 0) + 1; const tx = sx === 'f' ? 'Рождается дочь' : 'Рождается сын'; bio(S, a, 'child', tx); bio(S, h, 'child', tx); }
+    // conception: the child is born nine months later, on its own day (births() in 56-event-time.js)
+    if (rnd(S) < 0.034 * fert) a.preg = { t: S.tick, due: S.tick + PREGNANCY + Math.floor(rnd(S) * 21) - 10, fa: h.id, lin: linOf(S, h), sex: rnd(S) < 0.5 ? 'f' : 'm' };
   }
   // children: cost, mortality, growing up
   const keep = [];

@@ -485,7 +485,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm31', date: '2026-11-23', note: 'бюджет времени семьи: работа = световой день − дорога − малые дети ± нужда семьи' };
+const MODEL = { v: 'm32', date: '2026-11-23', note: 'час у событий, деревни решают в свой день месяца, беременность девять месяцев, год траура вдовы' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -534,6 +534,7 @@ function index(S) {
 function log(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1; S.evc = S.evc || {}; S.evc[type] = (S.evc[type] || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
+  evClock(S, ev);
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
@@ -548,6 +549,7 @@ function log(S, type, text, x, y, hue, ex) {
 function note(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
+  evClock(S, ev);
   (S.evArch || (S.evArch = {}))[ev.id] = ev;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
   return ev;
@@ -1397,6 +1399,7 @@ function fieldSpot(S, g) {
 }
 function finishSite(S, g) {
   const st = g.site; g.site = null;
+  if (st.started !== undefined) durNote(S, 'build_' + st.kind, S.tick - st.started);
   if (st.kind === 'house') {
     g.houses.push({ ...placedSite(st), built: S.tick, ...(st.earth ? { earth: true } : {}) });
     const k = g.houses.length;
@@ -1806,8 +1809,8 @@ function jobs(S, g) {
   else mem.slice().sort((a, b) => (b.role === 'leader') - (a.role === 'leader') || b.status - a.status).forEach((m, i) => { m.shel = i < cap; });
   if (!g.home) { for (const m of mem) m.job = 'gather'; return; }
   const wantH = g.wantH !== undefined ? Math.max(1, g.wantH) : Math.ceil(n / 4), wantF = Math.max(1, Math.ceil(n / 2.2));
-  if (S.tick % 90 === 0 || g.woodCell === null || S.wood[g.woodCell] < 3) g.woodCell = nearestForest(S, g.home, g);
-  if (S.tick % 360 === 0 || g.stoneDist === undefined) { const h = nearestHill(S, g.home, g); g.stoneCell = h.c; g.stoneDist = h.d; }
+  if ((S.tick - monthDay(g)) % 90 === 0 || g.woodCell === null || S.wood[g.woodCell] < 3) g.woodCell = nearestForest(S, g.home, g);
+  if ((S.tick - monthDay(g)) % 360 === 0 || g.stoneDist === undefined) { const h = nearestHill(S, g.home, g); g.stoneCell = h.c; g.stoneDist = h.d; }
   const needWS = !g.workshop && g.stoneCell !== null && n >= 5 && g.houses.length >= 2;
   const needGR = !g.granary && g.treasury > n * 5 && n >= 4;
   const threat = threatOf(S, g); let site = null;
@@ -2098,6 +2101,7 @@ function warband(S, A) {
   return able.filter(m => m !== L || n < 8).slice(0, Math.max(3, Math.min(Math.round(n * 0.45), 4 + Math.round(n * 0.25))));
 }
 function endWar(S, w) {
+  durNote(S, 'campaign', S.tick - w.t);
   for (const id of w.fighters) { const m = S._a.get(id); if (m && m.war === w.id) m.war = null; }
   S.wars = S.wars.filter(x => x !== w);
 }
@@ -2902,7 +2906,8 @@ function families(S) {
   S.kids = S.kids || [];
   const pop = popOf(S), crowd = pop > 650 ? 0.25 : pop > 520 ? 0.6 : 1;
   // marriages
-  const singles = S.agents.filter(a => !a.spouse && a.age >= 17 && a.age < 52);
+  // a widow or widower keeps a year of mourning before marrying again (Ч4)
+  const singles = S.agents.filter(a => !a.spouse && a.age >= 17 && a.age < 52 && S.tick - (a.widowT || -1e9) >= 360);
   const men = singles.filter(a => a.sex === 'm');
   for (const f of singles) {
     if (f.sex !== 'f' || f.spouse || rnd(S) > 0.14 || !men.length) continue;
@@ -2923,11 +2928,12 @@ function families(S) {
   // births
   for (const a of S.agents) {
     if (a.sex !== 'f' || !a.spouse || a.age < 17 || a.age > 42) continue;
-    if (S.tick - (a.lastBirth || -1e9) < 450) continue;
+    if (a.preg || S.tick - (a.lastBirth || -1e9) < 450 - PREGNANCY) continue;
     const h = S._a.get(a.spouse); if (!h) { a.spouse = null; continue; }
     const g = S._g.get(a.group), store = g ? g.treasury / Math.max(1, g.members.length) : 1;
     const fert = clamp((a.wealth + h.wealth * 0.5 + store) / 8, 0.04, 1.6) * (a.wealth < 0.5 && store < 1 ? 0.25 : 1) * (g && g.home ? 1 : 0.55) * crowd * (g && g.sick ? 0.4 : 1);
-    if (rnd(S) < 0.034 * fert) { const sx = rnd(S) < 0.5 ? 'f' : 'm'; S.kids.push({ t: S.tick, mo: a.id, fa: h.id, lin: linOf(S, h), g: a.group, sex: sx, x: a.x, y: a.y }); a.lastBirth = S.tick; S.stats.births = (S.stats.births || 0) + 1; const tx = sx === 'f' ? 'Рождается дочь' : 'Рождается сын'; bio(S, a, 'child', tx); bio(S, h, 'child', tx); }
+    // conception: the child is born nine months later, on its own day (births() in 56-event-time.js)
+    if (rnd(S) < 0.034 * fert) a.preg = { t: S.tick, due: S.tick + PREGNANCY + Math.floor(rnd(S) * 21) - 10, fa: h.id, lin: linOf(S, h), sex: rnd(S) < 0.5 ? 'f' : 'm' };
   }
   // children: cost, mortality, growing up
   const keep = [];
@@ -3630,6 +3636,79 @@ function routinePosition(plan, minute, position) {
   }
   positionOnRoute(plan.route, progress * plan.distance, position);
 }
+/* ---------- the hour of an event and the day of the month for decisions (Ч4) ---------- */
+// Every event gets an hour by its kind: the band strikes at dawn, the assembly meets in the morning, the dead are buried
+// before noon, the wedding feast starts before sunset, talk and secrets belong to the evening. Hours tied to the light
+// move with the season: a winter dawn raid is later than a summer one. The spread around the usual hour is drawn from the
+// event's id, not from the world's random stream, so giving events an hour changes nothing else in the world.
+// [anchor, offset, spread]: anchor 'r' = sunrise, 's' = sunset, 'h' = the clock; offset and spread in hours
+const EVENT_HOUR = {
+  // war: at first light, and the night before for a raid
+  battle: ['r', -0.5, 0.5], raid: ['r', -1.5, 0.75], war: ['r', 1, 1], conquest: ['h', 12, 2], revolt: ['r', 0, 1], coup: ['r', -2, 1],
+  ransom: ['h', 11, 2], revenge: ['s', 1.5, 1.5], conflict: ['h', 10, 3], border: ['h', 10, 3],
+  // the assembly and the court: in the morning, once the cattle is out
+  law: ['r', 2.5, 1], gov: ['r', 2.5, 1], land: ['r', 2.5, 1], debt: ['r', 2.5, 1], case: ['r', 3, 1], reform: ['r', 3, 1.5],
+  tax: ['r', 3, 1.5], money: ['h', 11, 2], succession: ['h', 13, 1], regime: ['h', 12, 2], state: ['h', 12, 2], alliance: ['h', 12, 2],
+  merge: ['h', 12, 2], crisis: ['h', 10, 2], collapse: ['h', 12, 3], faith: ['r', 0.5, 1],
+  // leaving and arriving: people set out at dawn and arrive by midday
+  quit: ['r', 0.5, 1], exile: ['r', 1, 1], exodus: ['r', 0.5, 1], emigr: ['r', 0.5, 1], schism: ['r', 0.5, 1], colony: ['r', 0.5, 1],
+  abandon: ['r', 0.5, 1], found: ['h', 12, 2], settle: ['h', 12, 2], boat: ['h', 11, 2],
+  // family: weddings before sunset, flight at night
+  marriage: ['s', -1, 1], elope: ['s', 3, 1.5], break: ['s', 1, 1.5],
+  // talk, plans and secrets: the evening by the fire
+  arc: ['s', 2, 1.5], secret: ['s', 2.5, 1.5], rumor: ['s', 2, 1.5],
+  // work done: in the working hours
+  tech: ['h', 14, 3], well: ['h', 15, 2], bridge: ['h', 15, 2], milestone: ['h', 15, 3], trade: ['h', 11, 2], route: ['h', 11, 2], market: ['h', 10, 2],
+  // hardship: found out in the morning; the sea and the heat take people by day
+  famine: ['r', 1, 1.5], tyranny: ['r', 3, 1.5], aid: ['h', 10, 2], drought: ['h', 13, 3], thirst: ['h', 15, 2], drown: ['h', 13, 3], plague: ['h', 9, 3], plagueEnd: ['h', 12, 3],
+  death: ['h', 4, 3]
+};
+const RITE_HOUR = { funeral: ['h', 11, 1], feast: ['s', -1.5, 1], wedding: ['s', -1, 1], cemetery: ['h', 12, 2] };
+// ids of the kinds that need no hour: the chronicle's summaries of an era and the first lines of the world
+function eventMinute(S, ev) {
+  const r = ev.type === 'rite' ? RITE_HOUR[ev.rite] || RITE_HOUR.feast : EVENT_HOUR[ev.type];
+  if (!r) return undefined;
+  const light = daylightHours(ev.t), base = r[0] === 'r' ? light.sunrise : r[0] === 's' ? light.sunset : 0;
+  const u = (Math.imul(ev.id ^ 0x5bd1e995, 0x2c1b3c6d) >>> 0) / 4294967296;
+  return clamp(Math.round((base + r[1] + (2 * u - 1) * r[2]) * 60), 0, DAY_MINUTES - 1);
+}
+// give the event its hour and count, for the audit, how many events have one and on which day of the month they fall
+function evClock(S, ev) {
+  if (ev.minute === undefined) { const m = eventMinute(S, ev); if (m !== undefined) ev.minute = m; }
+  const c = S.stats.clock || (S.stats.clock = { all: 0, timed: 0, day: new Array(30).fill(0) });
+  c.all++; if (Number.isInteger(ev.minute)) c.timed++; c.day[ev.t % 30]++;
+}
+const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+// Each village holds its monthly reckoning (shares, grievances, coups, laws, exits) on its own day of the month, the way
+// markets and courts in a district met on different days; the island-wide rounds (marriages, talk, relations between
+// villages) go on fixed days of their own. A month is still thirty days between two reckonings of the same village.
+const monthDay = g => (g.id * 7) % 30;
+function monthDays(S) {
+  const d = S.tick % 30, y = S.tick % 360;
+  for (const g of S.groups.slice()) if (!g.dead && monthDay(g) === d) groupMonth(S, g);
+  // the harvest feast falls on a village's own day in the ten days after the harvest is in
+  if (y >= 330 && y < 340) for (const g of S.groups.slice()) if (!g.dead && 330 + monthDay(g) % 10 === y) harvestFeast(S, g);
+  if (d === 6) families(S);
+  if (d === 12) plagueMonth(S);
+  if (d === 18) { affairsMonth(S); gossipMonth(S); goalsMonth(S); }
+  if (d === 24) { relations(S); tradeMonth(S); warMonth(S); marketWatch(S); }
+}
+
+/* ---------- how long things take (Ч4): measured in the world, compared in the audit with real references ---------- */
+function durNote(S, k, days) { const d = S.stats.dur || (S.stats.dur = {}), x = d[k] || (d[k] = [0, 0]); x[0] += days; x[1]++; }
+// a pregnancy lasts nine months: the child is conceived in the monthly round and born on its own day (Ч4)
+const PREGNANCY = 270;
+function births(S) {
+  for (const a of S.agents) {
+    const p = a.preg; if (!p || S.tick < p.due) continue;
+    a.preg = null;
+    const h = S._a.get(p.fa), sx = p.sex;
+    S.kids.push({ t: S.tick, mo: a.id, fa: p.fa, lin: p.lin, g: a.group, sex: sx, x: a.x, y: a.y }); a.lastBirth = S.tick;
+    S.stats.births = (S.stats.births || 0) + 1; durNote(S, 'preg', S.tick - p.t);
+    const tx = sx === 'f' ? 'Рождается дочь' : 'Рождается сын'; bio(S, a, 'child', tx); if (h) bio(S, h, 'child', tx);
+  }
+}
 /* ---------- secrets and rumours: an event not everybody knows, and people act on what they know ---------- */
 // A secret is a quiet event with ev.secret (kind), ev.guilty, ev.know (ids of those who know). S.secrets keeps the open ones.
 // Every month a knower may tell someone close; the one it concerns (a spouse, a village leader) acts when the news reaches them.
@@ -3790,13 +3869,15 @@ function dayBudget(S, g, a, light, homes) {
     const need = clamp((ratio - 1.2) / 1.5 + (perMouth < 1 ? 0.4 : 0), 0, 1);
     extra = 2 * need - (need < 0.2 && perMouth > 6 ? 1 : 0);
   }
-  const work = clamp(day - road - kids + extra, 0, day - road);
-  return { day, road, kids, extra, work, f: work / WORK_REF };
+  // the drudgery of work (Chayanov): the worn out rest; below half their strength people work less, not themselves to death
+  const tired = a.energy < 0.5 ? a.energy / 0.5 : 1;
+  const work = clamp((day - road - kids + extra) * tired, 0, day - road);
+  return { day, road, kids, extra, tired, work, f: work / WORK_REF };
 }
 // the day in words, for the person card: «Сегодня светло 9 ч: дорога 1 ч 20 мин, ребёнок 2 ч 30 мин; на работу 5 ч 10 мин»
 function dayWords(a) {
   const b = a._day; if (!b) return '';
-  const parts = [b.road >= 1 / 60 ? `дорога ${hm(b.road)}` : '', b.kids ? `${b.kids >= 2 ? 'младенец' : 'малый ребёнок'} ${hm(b.kids)}` : '', b.extra > 0.2 ? `ради семьи сверх обычного ${hm(b.extra)}` : b.extra < -0.2 ? `сыты и рано заканчивают: на ${hm(-b.extra)} меньше` : ''].filter(Boolean);
+  const parts = [b.road >= 1 / 60 ? `дорога ${hm(b.road)}` : '', b.kids ? `${b.kids >= 2 ? 'младенец' : 'малый ребёнок'} ${hm(b.kids)}` : '', b.extra > 0.2 ? `ради семьи сверх обычного ${hm(b.extra)}` : b.extra < -0.2 ? `сыты и рано заканчивают: на ${hm(-b.extra)} меньше` : '', b.tired < 0.95 ? 'выбился из сил и отдыхает' : ''].filter(Boolean);
   return `Сегодня светло ${hm(b.day)}${parts.length ? `: ${parts.join(', ')}` : ''}; на работу ${hm(b.work)}${b.f < 0.6 ? ' — меньше, чем у соседей' : b.f > 1.25 ? ' — долгий день' : ''}.`;
 }
 /* ---------- rites: a wedding feast, a funeral to the burial ground, the harvest festival ---------- */
@@ -3809,7 +3890,7 @@ function cemeteryOf(S, g) {
   if (g.cemetery) return g.cemetery;
   const p = specialSpot(S, g, 'cemetery'); if (!p) return null;
   g.cemetery = { x: p.x, y: p.y, graves: 0 };
-  log(S, 'rite', `У «${g.name}» появляется кладбище`, p.x, p.y, g.hue, { why: 'умерших теперь хоронят в одном месте, на окраине деревни, в стороне от улицы', gs: [g.id] });
+  log(S, 'rite', `У «${g.name}» появляется кладбище`, p.x, p.y, g.hue, { rite: 'cemetery', why: 'умерших теперь хоронят в одном месте, на окраине деревни, в стороне от улицы', gs: [g.id] });
   return g.cemetery;
 }
 // the wedding: kin gather at the groom's house, the families and the village spend on a feast, the two kins draw closer
@@ -3825,7 +3906,7 @@ function weddingFeast(S, f, m, wev) {
   gathering(S, 'wedding', h.x, h.y, 3, g.id);
   S.stats.weddings = (S.stats.weddings || 0) + 1;
   const L = S._a.get(g.leader), notable = L && (L === m || L === f || kin(L, m) || kin(L, f));
-  if (notable) log(S, 'rite', `Свадьба ${m.name} и ${f.name} в «${g.name}»: пир у дома ${m.name}`, h.x, h.y, g.hue, { why: sent([L === m || L === f ? 'женится сам вождь' : `${kin(L, m) ? m.name : f.name} — родня вождя ${L.name}`, `на пир уходит ${qty(cost, 'food')}`, 'роды жениха и невесты теперь ближе друг к другу']), who: [m.id, f.id, L.id], gs: [g.id], causes: wev ? [wev] : undefined });
+  if (notable) log(S, 'rite', `Свадьба ${m.name} и ${f.name} в «${g.name}»: пир у дома ${m.name}`, h.x, h.y, g.hue, { rite: 'wedding', why: sent([L === m || L === f ? 'женится сам вождь' : `${kin(L, m) ? m.name : f.name} — родня вождя ${L.name}`, `на пир уходит ${qty(cost, 'food')}`, 'роды жениха и невесты теперь ближе друг к другу']), who: [m.id, f.id, L.id], gs: [g.id], causes: wev ? [wev] : undefined });
 }
 // a funeral: kin walk to the burial ground; the grave stays; the leader's funeral is the whole village's
 function funeral(S, a, why) {
@@ -3838,18 +3919,18 @@ function funeral(S, a, why) {
   gathering(S, 'funeral', cem.x, cem.y, 3, g.id);
   S.stats.funerals = (S.stats.funerals || 0) + 1;
   const isL = g.leader === a.id;
-  const ex = { who: [a.id, ...mourners.map(o => o.id)].slice(0, 8), gs: [g.id] };
+  const ex = { who: [a.id, ...mourners.map(o => o.id)].slice(0, 8), gs: [g.id], rite: 'funeral' };
   const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${a.name} на кладбище` : `Похороны ${a.name} в «${g.name}»`;
   const ev = isL ? log(S, 'rite', text, cem.x, cem.y, g.hue, Object.assign({ why: sent([`${a.name} ${fem(a, 'правил', 'правила')} «${g.name}» ${yrs(Math.max(1, Math.round((S.tick - (g.since || g.founded)) / 360)))}`, mourners.length ? `за гробом идут ${mourners.map(o => o.name).slice(0, 4).join(', ')}` : '', `на кладбище «${g.name}» уже ${cem.graves} ${pl(cem.graves, 'могила', 'могилы', 'могил')}`]) }, ex)) : note(S, 'rite', text, cem.x, cem.y, g.hue, ex);
   return ev.id;
 }
-// the harvest festival at the end of autumn: a village with stores feasts together; a rich leader who hosts gains renown
-function harvestFestival(S) {
-  for (const g of S.groups) {
-    if (!g.home || g.dead || g.members.length < 5) continue;
-    const n = g.members.length, L = S._a.get(g.leader); if (!L) continue;
+// the harvest festival at the end of autumn, on the village's own day (monthDays): a village with stores feasts together; a rich leader who hosts gains renown
+function harvestFeast(S, g) {
+  {
+    if (!g.home || g.dead || g.members.length < 5) return;
+    const n = g.members.length, L = S._a.get(g.leader); if (!L) return;
     const host = L.wealth > 20 + n * 0.3;
-    if (!host && g.treasury < n * 3) continue;
+    if (!host && g.treasury < n * 3) return;
     if (host) { L.wealth -= n * 0.3; L.status += 1.5; L.rep = clamp((L.rep || 0) + 0.05, -1, 1); } else g.treasury -= n * 0.4;
     const mem = g.members.map(id => S._a.get(id)).filter(Boolean);
     for (let i = 0; i < mem.length; i++) { const a = mem[i], b = mem[(i + 1) % mem.length]; bump(a, b, 0.03); bump(b, a, 0.03); if (host && a !== L) bump(a, L, 0.04); }
@@ -3857,7 +3938,7 @@ function harvestFestival(S) {
     S.stats.festivals = (S.stats.festivals || 0) + 1;
     g.fests = (g.fests || 0) + 1;
     const text = host ? `Праздник урожая в «${g.name}»: ${L.name} ${fem(L, 'угощает', 'угощает')} всю деревню` : `Праздник урожая в «${g.name}»`;
-    const ex = { why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
+    const ex = { rite: 'feast', why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
     // the first festival of a village and a leader's feast go to the chronicle; ordinary years leave a quiet record
     if (g.fests === 1 || (host && S.tick - (g.feastLog || -1e9) > 360 * 5)) { log(S, 'rite', text, g.home.x, g.home.y, g.hue, ex); if (host) g.feastLog = S.tick; } else note(S, 'rite', text, g.home.x, g.home.y, g.hue, ex);
   }
@@ -4165,7 +4246,9 @@ function step(S, plans) {
   if (S.tick % 6 === 0) patrol(S);
   produce(S);
   lifecycle(S);
+  births(S);
   if (S.tick % 30 === 0) monthly(S);
+  monthDays(S);
   inflow(S);
 }
 
@@ -4458,6 +4541,7 @@ function removeAgent(S, a, why, departure) {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
     if (why !== 'killed') bio(S, a, why === 'drown' || why === 'lostAtSea' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
     const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'lostAtSea' ? ', в море' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
+    if (sp0) sp0.widowT = S.tick;
     { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); goalsOnDeath(S, a, why, fev); }
     legend(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
@@ -4581,24 +4665,14 @@ function monthly(S) {
   for (const a of S.agents) { a.rep = (a.rep || 0) * 0.98; a.ref = Math.max((a.ref || 3) * 0.985, a.wealth); if (a.age > 55 && a.group) a.status += 0.05; }
   seaMonth(S);
   waterMonth(S);
-  families(S);
-  plagueMonth(S);
   fatesMonth(S);
   for (let c = 0; c < S.wood.length; c++) if (S.ter[c] === 'f' && S.wood[c] < 60) S.wood[c] = Math.min(60, S.wood[c] + 0.35);
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
-  for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
+  // each village's own reckoning, marriages, talk and relations go on their own days: monthDays() in 56-event-time.js
   aidMonth(S);
   hamletsMonth(S);
   bondsMonth(S);
   householdsMonth(S);
-  affairsMonth(S);
-  gossipMonth(S);
-  goalsMonth(S);
-  if (S.tick % 360 === 330) harvestFestival(S);
-  relations(S);
-  tradeMonth(S);
-  warMonth(S);
-  marketWatch(S);
   sample(S);
   if (S.tick % 360 === 0) yearly(S);
 }
@@ -4853,7 +4927,7 @@ function groupMonth(S, g) {
       text: `«${g.name}» записывает свод правил: ${egal ? 'всем равные доли' : 'доли по статусу'}`, why: [`в деревне ${g.members.length} человек, ${stepsWord(g.depth)}`, 'спорить о каждом дележе стало слишком тяжело', 'записанное правило избавляет от бесконечных споров', g.code === 'egal' ? 'кто хочет делить по заслугам, будет недоволен' : 'кто ждёт равенства, будет недоволен'],
       authorLine: `Записывает свод правил «${g.name}»: ${egal ? 'всем равные доли' : 'доли по статусу'}`, lostLine: p => egal ? `Свод правил «${g.name}» уравнивает доли: богатым это не по душе` : `Свод правил «${g.name}» делит по статусу: ${fem(p, 'ему', 'ей')} это несправедливо`, grudge: egal ? 'уравнял доли за мой счёт' : 'записал доли по статусу' });
   }
-  if (S.tick % 90 === 0 || !g.target) pickTarget(S, g);
+  if ((S.tick - monthDay(g)) % 90 === 0 || !g.target) pickTarget(S, g);
 }
 
 function coup(S, g, L, ch, sup, cur, why) {

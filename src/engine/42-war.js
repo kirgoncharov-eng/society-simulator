@@ -84,6 +84,7 @@ function warband(S, A) {
   return able.filter(m => m !== L || n < 8).slice(0, Math.max(3, Math.min(Math.round(n * 0.45), 4 + Math.round(n * 0.25))));
 }
 function endWar(S, w) {
+  durNote(S, 'campaign', S.tick - w.t);
   for (const id of w.fighters) { const m = S._a.get(id); if (m && m.war === w.id) m.war = null; }
   S.wars = S.wars.filter(x => x !== w);
 }

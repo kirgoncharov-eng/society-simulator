@@ -9,8 +9,8 @@ function jobs(S, g) {
   else mem.slice().sort((a, b) => (b.role === 'leader') - (a.role === 'leader') || b.status - a.status).forEach((m, i) => { m.shel = i < cap; });
   if (!g.home) { for (const m of mem) m.job = 'gather'; return; }
   const wantH = g.wantH !== undefined ? Math.max(1, g.wantH) : Math.ceil(n / 4), wantF = Math.max(1, Math.ceil(n / 2.2));
-  if (S.tick % 90 === 0 || g.woodCell === null || S.wood[g.woodCell] < 3) g.woodCell = nearestForest(S, g.home, g);
-  if (S.tick % 360 === 0 || g.stoneDist === undefined) { const h = nearestHill(S, g.home, g); g.stoneCell = h.c; g.stoneDist = h.d; }
+  if ((S.tick - monthDay(g)) % 90 === 0 || g.woodCell === null || S.wood[g.woodCell] < 3) g.woodCell = nearestForest(S, g.home, g);
+  if ((S.tick - monthDay(g)) % 360 === 0 || g.stoneDist === undefined) { const h = nearestHill(S, g.home, g); g.stoneCell = h.c; g.stoneDist = h.d; }
   const needWS = !g.workshop && g.stoneCell !== null && n >= 5 && g.houses.length >= 2;
   const needGR = !g.granary && g.treasury > n * 5 && n >= 4;
   const threat = threatOf(S, g); let site = null;

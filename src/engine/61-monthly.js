@@ -93,24 +93,14 @@ function monthly(S) {
   for (const a of S.agents) { a.rep = (a.rep || 0) * 0.98; a.ref = Math.max((a.ref || 3) * 0.985, a.wealth); if (a.age > 55 && a.group) a.status += 0.05; }
   seaMonth(S);
   waterMonth(S);
-  families(S);
-  plagueMonth(S);
   fatesMonth(S);
   for (let c = 0; c < S.wood.length; c++) if (S.ter[c] === 'f' && S.wood[c] < 60) S.wood[c] = Math.min(60, S.wood[c] + 0.35);
   if (S.ruins) S.ruins = S.ruins.filter(r => S.tick - r.t < 360 * 25);
-  for (const g of S.groups.slice()) { if (!g.dead) groupMonth(S, g); }
+  // each village's own reckoning, marriages, talk and relations go on their own days: monthDays() in 56-event-time.js
   aidMonth(S);
   hamletsMonth(S);
   bondsMonth(S);
   householdsMonth(S);
-  affairsMonth(S);
-  gossipMonth(S);
-  goalsMonth(S);
-  if (S.tick % 360 === 330) harvestFestival(S);
-  relations(S);
-  tradeMonth(S);
-  warMonth(S);
-  marketWatch(S);
   sample(S);
   if (S.tick % 360 === 0) yearly(S);
 }
@@ -365,7 +355,7 @@ function groupMonth(S, g) {
       text: `«${g.name}» записывает свод правил: ${egal ? 'всем равные доли' : 'доли по статусу'}`, why: [`в деревне ${g.members.length} человек, ${stepsWord(g.depth)}`, 'спорить о каждом дележе стало слишком тяжело', 'записанное правило избавляет от бесконечных споров', g.code === 'egal' ? 'кто хочет делить по заслугам, будет недоволен' : 'кто ждёт равенства, будет недоволен'],
       authorLine: `Записывает свод правил «${g.name}»: ${egal ? 'всем равные доли' : 'доли по статусу'}`, lostLine: p => egal ? `Свод правил «${g.name}» уравнивает доли: богатым это не по душе` : `Свод правил «${g.name}» делит по статусу: ${fem(p, 'ему', 'ей')} это несправедливо`, grudge: egal ? 'уравнял доли за мой счёт' : 'записал доли по статусу' });
   }
-  if (S.tick % 90 === 0 || !g.target) pickTarget(S, g);
+  if ((S.tick - monthDay(g)) % 90 === 0 || !g.target) pickTarget(S, g);
 }
 
 function coup(S, g, L, ch, sup, cur, why) {
