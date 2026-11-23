@@ -1,0 +1,32 @@
+{
+  "model": "m31",
+  "date": "2026-11-23",
+  "islands": 24,
+  "years": 80,
+  "offset": 24,
+  "deaths": {
+    "war": 3.7,
+    "waterSea": 8.4,
+    "hunger": 8.5,
+    "oldAgeSickness": 62.9
+  },
+  "minPop": 87,
+  "childMortality": 0.43,
+  "medianVillage": 28,
+  "housesPerFamily": 1.11,
+  "bondsPerAdult": 3.1,
+  "arcsOver40": 67.5,
+  "dramaRepeats": 37,
+  "hereditary": 38.1,
+  "assembly": 5,
+  "overlord": 16.3,
+  "lawsAuthor": 100,
+  "lawsOpponent": 93.7,
+  "lawsCause": 100,
+  "politicalOver30": 50.2,
+  "dependants": 41.1,
+  "characterChanged": 33,
+  "driftPer40": 0.08,
+  "workNear": 8.3,
+  "workFar": 6.7
+}

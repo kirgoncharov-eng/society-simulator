@@ -3,8 +3,8 @@ const cv = $('cv'), plate = $('plate');
 let ctx = cv.getContext('2d');
 const rv = $('rv'), rctx = rv.getContext('2d'), riverBox = $('river');
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let S, speed = 1, playing = true, acc = 0, last = performance.now(), lastUi = 0, sel = null, forkSnap = null, forkLabel = '';
-let D = new Map(), F = [], lastFlash = 0, lastEvt = null, seenEv = 0, lastStop = -1e9, lastStopTick = -1e9;
+let S, playing = true, last = performance.now(), lastUi = 0, sel = null, forkSnap = null, forkLabel = '';
+let D = new Map(), F = [], lastEvt = null, seenEv = 0, lastStop = -1e9, lastStopTick = -1e9;
 let focusEv = null, view = { x: 500, y: 500, z: 1 }, vt = { x: 500, y: 500, z: 1 }, T = { k: 1, ox: 0, oy: 0 };
 let riverKey = '', riverHit = { dots: [], bands: [] };
 const C = {};
@@ -64,9 +64,8 @@ function world(seed) {
 }
 function resetView() {
   mainRunner.reset();
-  D = new Map(); F = []; sel = null; closeFocus(true);
-  acc = dayRemainder = 0;
-  lastFlash = S.flashes.reduce((m, f) => Math.max(m, f.id), 0);
+  D = new Map(); F = []; sel = followVillage = null; follow = false; closeFocus(true);
+  resetPlayback();
   seenEv = S.evId || 0; lastEvt = null; riverKey = ''; syncCtls(); ui(true);
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, дележ урожая, роды, ступени власти и неурядица, которая растёт с размером деревни, числом старших, недовольством и волокитой.`;
 }

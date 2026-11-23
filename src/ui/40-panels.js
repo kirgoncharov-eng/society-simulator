@@ -31,8 +31,6 @@ function ui(force) {
   $('hYear').textContent = $('year').textContent; $('hSeason').textContent = $('season').textContent;
   $('hPop').textContent = SIM.popOf(S); $('hGroups').textContent = S.groups.length;
   $('hEnt').textContent = (h.entropy[h.entropy.length - 1] || 0).toFixed(2); $('hGini').textContent = (h.gini[h.gini.length - 1] || 0).toFixed(2);
-  { const ti = S.events.findIndex(e => isKey(e) && e.type !== 'genesis'), tb = $('ticker');
-    if (ti >= 0) { const e = S.events[ti]; tb.hidden = false; tb.dataset.i = ti; tb.innerHTML = `<time>${SIM.date(e.t)}</time>${esc(e.text)}`; } else tb.hidden = true; }
   $('mGroups').textContent = `${S.groups.length}`;
   $('mEnt').textContent = (h.entropy[h.entropy.length - 1] || 0).toFixed(2);
   $('mGini').textContent = (h.gini[h.gini.length - 1] || 0).toFixed(2);
@@ -40,15 +38,11 @@ function ui(force) {
   const big = S.groups.reduce((m, g) => g.members.length > (m ? m.members.length : 0) ? g : m, null);
   const st = S.stats, maxD = S.groups.reduce((m, g) => Math.max(m, g.depth), 0);
   $('tally').textContent = `В деревнях и ватагах ${S.agents.length ? pct(inG / S.agents.length) : 0}% людей. Крупнейшая: ${big ? `«${big.name}», ${big.members.length}` : 'нет'}. Поселений ${S.groups.filter(g => g.home).length}, домов ${S.groups.reduce((s, g) => s + g.houses.length, 0)}, полей ${S.groups.reduce((s, g) => s + g.fields.length, 0)}, мастерских ${S.groups.filter(g => g.workshop).length}, руин ${(S.ruins || []).length}. Мастеров ${S.agents.filter(a => a.master && a.master !== 'gather').length}. Государств сейчас ${(S.states || []).length} (возникало ${st.states || 0}). Походов ${st.wars || 0}, битв ${st.battles || 0}, завоеваний ${st.conquests || 0}, восстаний ${st.revolts || 0}, грабежей караванов ${st.raids || 0}; в боях погибло ${st.war || 0}; стража прогоняла чужаков ${st.border || 0} раз; монета в ${S.groups.filter(g => g.coin).length} дер., займов ${st.loans || 0}, в кабале сейчас ${S.agents.filter(a => a.bond).length}, списаний долгов ${st.jubilees || 0}, восстаний должников ${st.debtRevolts || 0}; данников сейчас ${S.groups.filter(g => g.lord).length}. Караванов в пути ${S.agents.filter(a => a.car).length}, торговых путей ${Object.keys(S.routes || {}).length}, сделок ${S.stats.trades || 0}. Ступеней власти до ${maxD || 1}. За всё время: переворотов ${st.coups}, расколов ${st.schisms}, стычек ${st.conflicts}, слияний ${st.merges}, наведений порядка ${st.reforms}.`;
-  if (force || S.events[0]?.id !== lastEvt) {
-    lastEvt = S.events[0]?.id;
-    const list = S.events.map((e, i) => [e, i]).filter(([e]) => logAll || isKey(e)).slice(0, 50);
-    $('log').innerHTML = list.map(([e, i]) => `<li><button class="ev${isMajor(e) ? ' big' : ''}${e.type === 'era' ? ' era' : ''}" data-i="${i}"><i style="background:${typeColor(e.type, 1, e.hue)}"></i><span><time>${SIM.date(e.t)} · ${TL[e.type] || ''}</time>${esc(e.text)}${(isMajor(e) || e.type === 'era' || e.type === 'law' || e.type === 'faith') && e.why ? `<small>${esc(e.why)}</small>` : ''}</span></button></li>`).join('') || '<li class="empty">Пока ничего важного.</li>';
-  }
+  updateChronicle(force);
   const gs = S.groups.slice().sort((a, b) => b.members.length - a.members.length).slice(0, 10);
   $('groups').innerHTML = gs.length ? gs.map(g => {
     const L = S._a.get(g.leader), age = Math.floor((S.tick - g.founded) / 360);
-    return `<button class="grp" data-a="${g.leader}"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}${g.home && g.members.length >= 5 && RC.get(g.id) ? ` · <span style="font-weight:400;color:var(--slate)">${esc(RC.get(g.id).type.toLowerCase())}</span>` : ''}</strong><span class="n">${g.members.length}</span>
+    return `<button class="grp" data-a="${g.leader}" data-g="${g.id}"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}${g.home && g.members.length >= 5 && RC.get(g.id) ? ` · <span style="font-weight:400;color:var(--slate)">${esc(RC.get(g.id).type.toLowerCase())}</span>` : ''}</strong><span class="n">${g.members.length}</span>
     <small>${g.home ? 'вождь' : 'вожак'} ${esc(L ? L.name : '?')}${g.gen > 1 ? `, ${g.gen}-й по счёту` : ', основатель'} · ${age ? yrsTxt(age) : 'меньше года'} · ${g.home ? `домов ${g.houses.length}, полей ${g.fields.length}${g.workshop ? ', мастерская' : ''}${g.granary ? ', амбар' : ''}${g.fortifications?.length ? `, участков частокола ${g.fortifications.length}` : ''}${g.terr ? `, земли ${g.terr} кл.` : ''}${g.site ? ` · стройка «${BUILD_LABEL[g.site.kind] || 'площадка'}», ${BUILD_PHASE_LABEL[g.site.phase] || 'в работе'}, ${Math.floor(100 * g.site.prog / g.site.need)}%` : ''}${g.gov === 'assembly' ? ', вече' : ''}${g.land === 'private' ? ', частные поля' : ''}${g.coin ? ', монета' : ''}${g.lord && S._g.get(g.lord) ? ` · данник «${esc(S._g.get(g.lord).name)}»` : ''}${(() => { const v = S.groups.filter(o => o.lord === g.id); return v.length ? ` · данники: ${esc(v.map(o => o.name).join(', '))}` : ''; })()} · еда ${Math.round(g.treasury)}, лес ${Math.round(g.wood)}, камень ${Math.round(g.stone || 0)}, орудия ${Math.round(g.tools || 0)}${g.stoneCell === null ? ' · холмов рядом нет' : ''}` : 'кочует'} · ${SIM.stepsWord(g.depth)} · ${SIM.word('entropy', Math.min(1, g.entropy / 1.6), null, true)}</small>
     <span class="meter" title="${esc(SIM.VILLAGE.entropy.name + ': ' + SIM.VILLAGE.entropy.about)}"><span style="width:${Math.min(100, g.entropy / 1.6 * 100)}%"></span></span></button>`;
   }).join('') : '<p class="empty">Деревень и ватаг пока нет: люди ещё присматриваются друг к другу.</p>';
@@ -57,6 +51,20 @@ function ui(force) {
   drawSoc();
   portraits(force);
   card();
+}
+function updateChronicle(force) {
+  const events = visibleEvents();
+  const latest = events.find(e => isKey(e) && e.type !== 'genesis'), ticker = $('ticker');
+  if (latest) {
+    ticker.hidden = false;
+    ticker.dataset.event = latest.id;
+    ticker.innerHTML = `<time>${eventDate(latest)}</time>${esc(latest.text)}`;
+  } else ticker.hidden = true;
+  if (force || events[0]?.id !== lastEvt) {
+    lastEvt = events[0]?.id;
+    const list = events.filter(e => logAll || isKey(e)).slice(0, 50);
+    $('log').innerHTML = list.map(e => `<li><button class="ev${isMajor(e) ? ' big' : ''}${e.type === 'era' ? ' era' : ''}" data-event="${e.id}"><i style="background:${typeColor(e.type, 1, e.hue)}"></i><span><time>${eventDate(e)} · ${TL[e.type] || ''}</time>${esc(e.text)}${(isMajor(e) || e.type === 'era' || e.type === 'law' || e.type === 'faith') && e.why ? `<small>${esc(e.why)}</small>` : ''}</span></button></li>`).join('') || '<li class="empty">Пока ничего важного.</li>';
+  }
 }
 // a trait in words: «Властолюбие — честолюбив», a small bar, and on hover what it is and what it changes
 function traitRow(kind, v, a, village, neg) {
@@ -112,7 +120,7 @@ function bondsTxt(a) {
   return `<p class="rel"><b>Связи</b><br>${bs.map(([o, b]) => `${esc(o.name)} — ${esc(SIM.bondLabel(a, o, b[0]))}: ${esc(b[3])}, г. ${yr(b[1])}${evLink(b[5])}`).join('<br>')}</p>`;
 }
 function dailyPlanText(a) {
-  const plan = dayWatch && routineWorld === S && dailyRoutes.get(a.id);
+  const plan = (dayWatch || effectiveMode === 'days') && hasDailyView() && dailyRoutes.get(a.id);
   if (!plan) return '';
   const label = { relocation: 'переселяется', caravan: 'едет с караваном', escape: 'уходит от родных мест', rite: 'идёт на обряд', delivery: 'несёт груз на склад' };
   const task = plan.blocked ? 'ждёт прохода' : label[plan.kind] || JOB[plan.kind];
@@ -143,7 +151,7 @@ function card() {
   ${bondsTxt(a)}
   ${a.goals && a.goals.length ? `<div class="rel"><b>Цели и дуги</b>${arcsHtml(a.goals, true)}</div>` : ''}
   ${a.feud && !a.feud.done ? `<p class="rel"><b>Ждёт мести</b> за ${esc(a.feud.rel)} ${esc(a.feud.v)}: ${a.feud.personal ? esc(a.feud.Lname) : `«${esc(a.feud.gname)}»`}.</p>` : ''}
-  <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : 'Следить камерой'}</button></div>
+  <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : followVillage ? 'Следить за деревней' : 'Следить камерой'}</button></div>
   ${a.bio && a.bio.length > 1 ? `<details class="chron1"><summary>Летопись жизни · ${arcOf({ bio: a.bio })}</summary>${storyText({ bio: a.bio }, true)}</details>` : ''}
   ${a.load > 0.3 ? `<p class="rel">${a.haul ? 'Несёт на склад' : 'Набирает груз'}: ${goodsTxt(a.load, a.lk)}.</p>` : ''}
   ${a.car ? `<p class="rel">${a.car.phase === 'go' ? `Везёт ${goodsTxt(a.car.qx, a.car.x)} в «${esc((S._g.get(a.car.to) || {}).name || '?')}»` : `Возвращается домой: везёт ${goodsTxt(a.car.qy, a.car.y)}${a.car.failed ? ' (сделка сорвалась, товар назад)' : ''}`}. Караванов за жизнь: ${a.trades || 0}.</p>` : a.trades ? `<p class="rel">Купец: караванов за жизнь ${a.trades}.</p>` : ''}
@@ -158,7 +166,7 @@ function syncCtls() {
     + TOG.map(([k, l, p]) => `<div class="ctl"><label class="chk" style="color:var(--ink)" for="c-${k}"><input type="checkbox" id="c-${k}" ${(S.params[k] ?? 1) >= 0.5 ? 'checked' : ''}>${l}</label><p>${p}</p></div>`).join('');
   function setParam(k, value) {
     S.params[k] = value;
-    if (dayWatch) { mainRunner.reset(); routineWorld = null; }
+    mainRunner.reset(); routineWorld = null; projection = chronicle = directed = null;
   }
   for (const [k] of CTL) $('c-' + k).addEventListener('input', e => { setParam(k, +e.target.value); $('o-' + k).textContent = pct(S.params[k]) + '%'; });
   for (const [k] of TOG) $('c-' + k).addEventListener('change', e => { setParam(k, e.target.checked ? 1 : 0); });

@@ -16,22 +16,9 @@ function frame(now) {
     if (now - EX.lastUi > 400) { exUi(); EX.lastUi = now; }
     requestAnimationFrame(frame); return;
   }
-  if (playing && dayWatch) {
-    if (!mainRunner.busy && advanceObservedClock(dt)) mainRunner.advance(1, dayAdvanced);
-  } else if (playing) {
-    acc = Math.min(60, acc + dt * 12 * speed / 1000);
-    // Stop at the same monthly checkpoints as the synchronous simulation.
-    const checkpoint = 30 - S.tick % 30;
-    const days = Math.min(Math.floor(acc), checkpoint);
-    const batch = Math.min(checkpoint, Math.max(1, speed / 2));
-    if (!mainRunner.busy && days >= batch) {
-      acc -= days;
-      mainRunner.advance(days, dayAdvanced);
-    }
-  }
-  // At high speed leave time for controls and snapshots between canvas draws.
-  if (dayWatch || speed < 16 || now - lastPaint >= 32) {
-    updateDailyView();
+  advanceViewClock(dt);
+  if (effectiveMode !== 'centuries' || now - lastPaint >= 32) {
+    updateDailyView(now);
     if (V3.on && V3.ready) render3D(now); else draw(now);
     lastPaint = now;
   }
@@ -40,24 +27,32 @@ function frame(now) {
 }
 
 function dayAdvanced(completed) {
-  if (!completed || S.tick % 30) return;
+  if (!completed || S.tick % 30 || directed) return;
   checkStops(performance.now());
-  if (!playing) acc = 0;
+  if (!playing) clockCredit = 0;
 }
 
 $('play').addEventListener('click', () => {
   playing = !playing;
-  if (!playing && mainRunner.busy) mainRunner.reset();
+  if (!playing) {
+    clockCredit = 0;
+    if (mainRunner.busy) mainRunner.reset();
+  }
   if (playing && focusEv) closeFocus();
   syncPlay();
 });
 document.querySelectorAll('input[name=sp]').forEach(r => r.addEventListener('change', e => {
-  dayWatch = e.target.value === 'day';
-  if (!dayWatch) speed = +e.target.value;
+  viewMode = e.target.value;
+  ignoredDirection = directed?.event.id ?? ignoredDirection;
+  directed = null;
   if (mainRunner.busy) mainRunner.reset();
-  acc = dayRemainder = 0;
-  routineWorld = null;
+  clockCredit = 0;
+  syncMode();
 }));
+$('director').addEventListener('change', () => {
+  if (!$('director').checked) directed = null;
+  else considerDirection(projection?.events.find(e => watchedEvent(e, watchTarget())));
+});
 $('fork').addEventListener('click', () => { forkSnap = SIM.serialize(S); forkLabel = SIM.date(S.tick) + (S.minute ? ` · ${clockTime(S.minute)}` : ''); $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; });
 $('back').addEventListener('click', () => {
   if (!forkSnap) return;
@@ -70,21 +65,41 @@ $('back').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => { world((Math.random() * 99999) | 0); intro(); });
 document.querySelectorAll('[data-shock]').forEach(b => b.addEventListener('click', () => {
-  SIM.shock(S, b.dataset.shock); mainRunner.reset(); routineWorld = null; seenEv = S.evId || 0; ui(true);
+  SIM.shock(S, b.dataset.shock); mainRunner.reset(); routineWorld = null; projection = chronicle = directed = null; seenEv = S.evId || 0; ui(true);
   if (S.events[0] && S.events[0].type !== 'genesis') { focus(S.events[0], false); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); }
 }));
-$('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
+$('portraits').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; followVillage = directed = null; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
 document.querySelectorAll('.ptabs [data-p]').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('.ptabs [data-p]').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); $('p-' + x.dataset.p).hidden = !on; });
   sizeCanvas(); portKey = ''; ui(true); if (b.dataset.p === 'fates') drawFates(true);
 }));
-$('cardx').addEventListener('click', () => { sel = null; follow = false; $('card').innerHTML = EMPTY; });
-$('card').addEventListener('click', e => { if (e.target.closest('#cfollow')) { follow = !follow; if (!follow) { vt.z = 1; } card(); } });
-$('ticker').addEventListener('click', () => { const ev = S.events[+$('ticker').dataset.i]; if (ev) focus(ev, true); });
+$('cardx').addEventListener('click', () => { sel = followVillage = directed = null; follow = false; $('card').innerHTML = EMPTY; });
+$('card').addEventListener('click', e => {
+  if (!e.target.closest('#cfollow')) return;
+  follow = !follow;
+  if (!follow) { vt.z = 1; directed = null; }
+  else considerDirection(projection?.events.find(e => watchedEvent(e, watchTarget())));
+  card();
+});
+$('ticker').addEventListener('click', () => { const ev = visibleEvent(+$('ticker').dataset.event); if (ev) focus(ev, true); });
 $('lf1').addEventListener('click', () => { logAll = false; $('lf1').classList.add('on'); $('lf2').classList.remove('on'); ui(true); });
 $('lf2').addEventListener('click', () => { logAll = true; $('lf2').classList.add('on'); $('lf1').classList.remove('on'); ui(true); });
-$('groups').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { sel = +b.dataset.a; const ag = S._a.get(sel), gg = ag && S._g.get(ag.group); if (V3.on && gg && gg.home) fly3D(gg.home.x, gg.home.y); card(); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
-$('log').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const ev = S.events[+b.dataset.i]; if (ev) { focus(ev, true); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } });
+$('groups').addEventListener('click', e => {
+  const b = e.target.closest('[data-a]');
+  if (!b) return;
+  sel = +b.dataset.a;
+  followVillage = +b.dataset.g;
+  directed = null;
+  const village = S._g.get(followVillage);
+  if (V3.on && village?.home) fly3D(village.home.x, village.home.y);
+  card();
+  plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
+});
+$('log').addEventListener('click', e => {
+  const b = e.target.closest('[data-event]');
+  const ev = b && visibleEvent(+b.dataset.event);
+  if (ev) { focus(ev, true); plate.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); }
+});
 let mapDrag;
 const zoom = $('camZoom');
 function zoomCamera(value) {
@@ -124,11 +139,13 @@ cv.addEventListener('pointerup', e => {
   if (mapDrag?.id !== e.pointerId) return;
   const moved = mapDrag.moved; mapDrag = null;
   if (moved) return;
+  if (effectiveMode === 'centuries') return;
   const r = cv.getBoundingClientRect(), dx = cv.width / r.width;
   const x = ((e.clientX - r.left) * dx - T.ox) / T.k, y = ((e.clientY - r.top) * dx - T.oy) / T.k;
   let best = null, bd = 32 / view.z;
   for (const a of S.agents) { const d = D.get(a.id); if (!d) continue; const dd = Math.hypot(d.x - x, d.y - y); if (dd < bd) { bd = dd; best = a; } }
   sel = best ? best.id : null;
+  followVillage = directed = null;
   if (!sel) $('card').innerHTML = EMPTY;
   card();
 });
@@ -138,7 +155,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors
 let introOpen = false;
 function intro() {
   introOpen = true;
-  playing = false; acc = dayRemainder = 0; syncPlay();
+  playing = false; clockCredit = 0; syncPlay();
   const landing = firstLanding(S);
   if (landing) {
     vt = { x: landing.x1, y: landing.y1, z: 1.65 };
@@ -156,19 +173,21 @@ function start(data) {
   let restored = false;
   if (data && data.w) { try { S = SIM.restore(data.w); resetView(); restored = true; } catch (e) { world(2026); } }
   else world(2026);
-  if (restored && S.minute > 0) {
-    dayWatch = true;
-    $('spDay').checked = true;
+  if (restored && (S.minute > 0 || data.mode)) {
+    viewMode = Object.hasOwn(MODE_DAY_MS, data.mode) ? data.mode : 'scene';
+    document.querySelector(`input[name=sp][value="${viewMode}"]`).checked = true;
+    $('director').checked = data.director !== false;
     playing = false;
     syncPlay();
   }
   if (data && data.fork) { forkSnap = data.fork; forkLabel = data.forkLabel || ''; $('back').disabled = false; $('back').textContent = `Вернуться к ${forkLabel}`; }
-  window.claude?.hot?.snapshot?.(() => ({ w: SIM.serialize(S), fork: forkSnap, forkLabel }));
+  window.claude?.hot?.snapshot?.(() => ({ w: SIM.serialize(S), fork: forkSnap, forkLabel, mode: viewMode, director: $('director').checked }));
   if (!restored) intro();
   set3D(true);
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 window.__lab = () => S; window.__v3 = () => V3;
+window.__labView = () => ({ mode: effectiveMode, flashes: F.map(f => f.id), night: dailyNight });
 window.__labAdvance = async days => {
   playing = false;
   if (mainRunner.busy) mainRunner.reset();
@@ -179,6 +198,8 @@ window.__labAdvance = async days => {
     if (!completed) throw new Error('World advance interrupted');
   }
   seenEv = S.evId || 0;
+  routineWorld = null;
+  projection = chronicle = null;
   ui(true);
 };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
