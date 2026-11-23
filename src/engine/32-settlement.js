@@ -80,6 +80,7 @@ function fieldSpot(S, g) {
 }
 function finishSite(S, g) {
   const st = g.site; g.site = null;
+  if (st.started !== undefined) durNote(S, 'build_' + st.kind, S.tick - st.started);
   if (st.kind === 'house') {
     g.houses.push({ ...placedSite(st), built: S.tick, ...(st.earth ? { earth: true } : {}) });
     const k = g.houses.length;

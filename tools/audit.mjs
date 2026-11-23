@@ -126,7 +126,7 @@ export function runIsland(i, years) {
   // drama of the top 20 lives (the Fates tab): variety of turns, finished arcs, repeats and the loops behind them
   const drama = SIM.dramaMeasure(SIM.topFates(S, 20));
   for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
-  return { history, st, arcs, drama, power, laws, life, hist, tb, pops, villages, cbr, adults: adults.length, age, minPop,
+  return { history, st, arcs, drama, power, laws, life, hist, tb, pops, villages, cbr, adults: adults.length, age, minPop, memory: S.params.memory,
     famN, houseN, villN, roofN, lodgerN, customW, customI, bondN, adultN, feuds, feudsNamed, refK, bondRef, bondK };
 }
 
@@ -152,6 +152,8 @@ async function main() {
   const life = { vy: 0, dep: 0, old: 0, pol: 0, kept: 0, broken: 0, old40: 0, tempered: 0 };
   const hist = { changes: 0, caused: 0, drift: 0, villageYears: 0, dynLen: [], dynGen: [], vassLen: [], kinds: [], kindsCaused: [], stLen: [], stBorn: 0, stFell: 0 };
   const tb = { near: [0, 0], far: [0, 0], well: [0, 0], nowell: [0, 0] };
+  // the clock of events (Ч4): events with an hour, events by day of the month; how long things take
+  const clock = { all: 0, timed: 0, day: new Array(30).fill(0) }, dur = {}; let memory = 0;
   let B = 0, CD = 0, minPop = Infinity, customN = 0;
   let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
   await runIslands(import.meta.url, runIsland, W, Y, island => {
@@ -168,6 +170,9 @@ async function main() {
     for (const k of ['n', 'author', 'against', 'cause', 'viaPower', 'reforms']) laws[k] += island.laws[k]; for (const k in island.laws.kinds) laws.kinds[k] = (laws.kinds[k] || 0) + island.laws.kinds[k];
     for (const k in life) life[k] += island.life[k] || 0;
     for (const k in tb) { tb[k][0] += island.tb[k][0]; tb[k][1] += island.tb[k][1]; }
+    if (st.clock) { clock.all += st.clock.all; clock.timed += st.clock.timed; st.clock.day.forEach((n, d) => { clock.day[d] += n; }); }
+    for (const k in st.dur || {}) { const x = dur[k] || (dur[k] = [0, 0]); x[0] += st.dur[k][0]; x[1] += st.dur[k][1]; }
+    memory += island.memory / W;
     { const h = island.hist; for (const k of ['changes', 'caused', 'drift', 'villageYears']) hist[k] += h[k]; hist.dynLen.push(...h.dynLen); hist.dynGen.push(...h.dynGen); hist.vassLen.push(...h.vassLen); hist.kinds.push(h.kinds.length); hist.kindsCaused.push(h.kindsCaused.length);
       for (const [f, e] of h.states) { hist.stBorn++; if (e) { hist.stFell++; hist.stLen.push((e - f) / 360); } } }
     for (const k in power) power[k] += island.power[k]; heredBy.push(island.power.vy ? Math.round(100 * island.power.hered / island.power.vy) : 0);
@@ -214,6 +219,16 @@ async function main() {
     console.log(`regime as history: changes ${h.changes} (with a cause ${h.caused}, drifting ten years ${h.drift}; drifting per village per 40 years ${(h.drift / Math.max(1, h.villageYears) * 40).toFixed(2)}); kinds of regime by island at the end ${h.kinds.join(' ')} (reached by a change with a cause ${h.kindsCaused.join(' ')}); dynasties ended ${h.dynLen.length}, median ${m(h.dynLen)} years, ${percent(h.dynGen.filter(x => x >= 3).length, h.dynGen.length)} after 3+ generations; subjection ended ${h.vassLen.length} times, median ${m(h.vassLen)} years; states born ${h.stBorn}, fell ${h.stFell}, median life ${m(h.stLen)} years`); }
   { const h = x => x[1] ? (x[0] / x[1]).toFixed(1) : '-';
     console.log(`time budget: work hours a day with a walk under 30 min ${h(tb.near)}, over 1.5 h ${h(tb.far)}; productive hours per adult in villages with a well ${h(tb.well)}, without ${h(tb.nowell)}`); }
+  { const busiest = Math.max(...clock.day), bd = clock.day.indexOf(busiest), m = k => dur[k] && dur[k][1] ? Math.round(dur[k][0] / dur[k][1]) : '-';
+    const half = Math.round(Math.log(0.5) / Math.log(1 - (0.01 + 0.07 * (1 - memory))));
+    console.log(`event clock: with an hour ${percent(clock.timed, clock.all)} of ${clock.all} events; busiest day of the month ${bd} with ${percent(busiest, clock.all)}`);
+    console.log('durations (days, model | real reference):');
+    for (const [name, v, ref] of [['pregnancy', m('preg'), '266 from conception'], ['house', m('build_house'), 'a hut or a log house by a family with help: 14-60'],
+      ['well', m('build_well'), 'a hand-dug well: 7-30'], ['granary', m('build_granary'), '14-30'], ['workshop', m('build_workshop'), '14-45'], ['palisade', m('build_palisade'), 'a village stockade: 30-90'],
+      ['bridge', m('build_bridge'), 'a timber footbridge: 14-60'], ['fishing boat', m('build_fboat'), 'a dugout or plank boat: 30-60'], ['war campaign', m('campaign'), 'a raid or a war party: 2-30'],
+      ['mourning', '3 + a widow\'s year 360', 'burial on the third day; a year of mourning for a widow'], ['trust between people', `halves in ${half} months`, 'no single figure: fades without contact'],
+      ['tyrant\'s line remembered', '30 years', 'about a generation']]) console.log(`  ${name}: ${v} | ${ref}`);
+    Object.assign(rec, { timedEvents: pc1(clock.timed, clock.all), busiestDay: pc1(busiest, clock.all), pregnancy: m('preg'), houseDays: m('build_house'), campaignDays: m('campaign') }); }
   console.log(`child mortality before 15 (deaths/births in window): ${(CD / Math.max(1, B)).toFixed(2)}`);
   Object.assign(rec, { childMortality: +(CD / Math.max(1, B)).toFixed(2), medianVillage: med(allV), housesPerFamily: +(houseN / Math.max(1, famN)).toFixed(2),
     bondsPerAdult: +(bondN / Math.max(1, adultN)).toFixed(1), arcsOver40: pc1(arcs.lived, arcs.old), dramaRepeats: drama.n ? Math.round(drama.repeats / drama.n * 100) : null,
