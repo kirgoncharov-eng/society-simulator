@@ -52,6 +52,17 @@ function ui(force) {
   portraits(force);
   card();
 }
+function chronicleEntry(e) {
+  const major = isMajor(e);
+  const era = e.type === 'era';
+  const context = e.why && (major || era || e.type === 'law' || e.type === 'faith')
+    ? `<small>${esc(e.why)}</small>` : '';
+  return `<li><button class="ev${major ? ' big' : ''}${era ? ' era' : ''}" data-event="${e.id}">
+    <i style="background:${typeColor(e.type, 1, e.hue)}"></i>
+    <span><time>${eventDate(e)} · ${TL[e.type] || ''}</time>${esc(e.text)}${context}</span>
+  </button></li>`;
+}
+
 function updateChronicle(force) {
   const events = visibleEvents();
   const latest = events.find(e => isKey(e) && e.type !== 'genesis'), ticker = $('ticker');
@@ -60,10 +71,25 @@ function updateChronicle(force) {
     ticker.dataset.event = latest.id;
     ticker.innerHTML = `<time>${eventDate(latest)}</time>${esc(latest.text)}`;
   } else ticker.hidden = true;
+  const query = archiveQuery.value.trim();
+  if (force) {
+    const active = !query;
+    for (const [id, selected] of [['lf1', active && !logAll], ['lf2', active && logAll]]) {
+      const button = $(id);
+      button.classList.toggle('on', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    }
+  }
+  if (query) {
+    lastEvt = events[0]?.id;
+    showArchiveSearch(events, query);
+    return;
+  }
+  if (archiveSearch) resetArchiveSearch();
   if (force || events[0]?.id !== lastEvt) {
     lastEvt = events[0]?.id;
     const list = events.filter(e => logAll || isKey(e)).slice(0, 50);
-    $('log').innerHTML = list.map(e => `<li><button class="ev${isMajor(e) ? ' big' : ''}${e.type === 'era' ? ' era' : ''}" data-event="${e.id}"><i style="background:${typeColor(e.type, 1, e.hue)}"></i><span><time>${eventDate(e)} · ${TL[e.type] || ''}</time>${esc(e.text)}${(isMajor(e) || e.type === 'era' || e.type === 'law' || e.type === 'faith') && e.why ? `<small>${esc(e.why)}</small>` : ''}</span></button></li>`).join('') || '<li class="empty">Пока ничего важного.</li>';
+    $('log').innerHTML = list.map(chronicleEntry).join('') || '<li class="empty">Пока ничего важного.</li>';
   }
 }
 // a trait in words: «Властолюбие — честолюбив», a small bar, and on hover what it is and what it changes

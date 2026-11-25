@@ -1,6 +1,6 @@
 # Сторонние модули
 
-Лицензии сверены с первоисточниками 23 ноября 2026 года. В сборку входят Petrovich и браузерная сборка Dagre с Graphlib. Остальные проекты перечислены для будущих этапов и исследования.
+Лицензии сверены с первоисточниками 23 ноября 2026 года. В сборку входят Petrovich, Dagre с Graphlib и MiniSearch. Остальные проекты перечислены для будущих этапов и исследования.
 
 | Проект | Применение | Лицензия и авторские права | Условия распространения |
 |---|---|---|---|
@@ -15,7 +15,7 @@
 | [Felt](https://github.com/mkremins/felt) | Своя реализация поиска сюжетов в Н1/Н2 по статье [Felt: A Simple Story Sifter](https://mkremins.github.io/publications/Felt_SimpleStorySifter.pdf), 2019. Авторы Max Kreminski, Melanie Dickinson и Noah Wardrip-Fruin. | Лицензия и отдельный копирайт кода не подтверждены. В репозитории нет файла лицензии. | Код не заимствуем. |
 | [Winnow](https://github.com/mkremins/winnow) | Своя реализация постепенного распознавания сюжетов в Н1/Н2 по статье [Winnow: A Domain-Specific Language for Incremental Story Sifting](https://mkremins.github.io/publications/Winnow_AIIDE2021.pdf), 2021. Авторы Max Kreminski, Melanie Dickinson и Michael Mateas. | Лицензия и отдельный копирайт кода не подтверждены. В репозитории нет файла лицензии. | Код не заимствуем. |
 | [`@dagrejs/dagre` 2.0.0](https://github.com/dagrejs/dagre/tree/v2.0.0) с [`@dagrejs/graphlib` 2.2.4](https://github.com/dagrejs/graphlib/tree/v2.2.4) | Браузерная сборка [в исходниках UI](src/ui/08-dagre.js) раскладывает карту причин Н1. Н3 сможет использовать ту же раскладку. | [MIT Dagre](https://github.com/dagrejs/dagre/blob/v2.0.0/LICENSE) и [MIT Graphlib](https://github.com/dagrejs/graphlib/blob/v2.2.4/LICENSE), Copyright (c) 2012–2014 Chris Pettitt для обоих пакетов. | Общий копирайт и полный текст MIT включены в исходник и страницу. |
-| [MiniSearch](https://github.com/lucaong/minisearch) | Поиск по архиву в Н1–Н2 с опечатками и формами имён из Petrovich. | [MIT](https://github.com/lucaong/minisearch/blob/master/LICENSE.txt), Copyright 2022 Luca Ongaro. | Сохранять копирайт и текст лицензии. |
+| [MiniSearch 7.2.0](https://github.com/lucaong/minisearch/tree/v7.2.0) | [Код в UI](src/ui/09-minisearch.js) скомпилирован из TypeScript по тегу v7.2.0 и встроен в страницу. Поиск по хронике и архиву учитывает опечатки и формы имён из Petrovich. | [MIT](https://github.com/lucaong/minisearch/blob/v7.2.0/LICENSE.txt), Copyright 2022 Luca Ongaro. | Копирайт и полный текст MIT включены в исходник и страницу. |
 | [Howler.js](https://github.com/goldfire/howler.js) | Пространственный звук двора на этапе 2 по месту и происходящему. | [MIT](https://github.com/goldfire/howler.js/blob/master/LICENSE.md), Copyright (c) 2013–2020 James Simpson and GoldFire Studios, Inc. | Сохранять копирайт и текст лицензии. |
 | [Freesound](https://freesound.org/) | Записи для звуков 3D-двора на этапе 2. | [Лицензия у каждой записи своя](https://freesound.org/help/faq/). Допустимы CC0 и CC BY. CC BY-NC не используем. | Для каждого взятого файла указать в этом реестре ссылку на запись и лицензию. Для CC BY указать автора и отметить изменения, если они были. |
 | [Poly Haven](https://polyhaven.com/) | Материалы и освещение для 3D-двора на этапе 2. | [CC0](https://polyhaven.com/license) для опубликованных ассетов. | Атрибуция по лицензии необязательна. |
