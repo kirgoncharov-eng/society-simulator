@@ -7,7 +7,23 @@ function causesHtml(e) {
 function evLink(id) { return id && visibleEvent(id) ? ` <button class="evlink" data-ev="${id}" aria-label="Открыть событие-причину" title="Открыть событие-причину">↗</button>` : ''; }
 // any [data-ev] button opens that event in the focus box
 document.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('[data-ev]'); if (!b) return; const e = visibleEvent(+b.dataset.ev); if (e) { ev.preventDefault(); focus(e, true); } });
-function focus(e, pause) {
+function eventPeople(e) {
+  const ids = new Set([...(e.who || []), ...(e.author ? [e.author] : []), ...(e.against || [])]);
+  const people = [];
+  let missing = 0;
+  for (const id of ids) {
+    const person = fateById(id);
+    if (!person) { missing++; continue; }
+    const role = e.author === id ? (person.sex === 'f' ? 'предложила' : 'предложил') : e.against?.includes(id) ? 'против' : '';
+    const label = esc(person.name) + (role ? ` <small>${role}</small>` : '');
+    people.push(person.alive
+      ? `<button type="button" class="evlink" data-event-person="${id}" title="Открыть карточку и следить">${label}</button>`
+      : `<details class="event-fate" data-event-fate="${id}"><summary>${label} · летопись</summary><div></div></details>`);
+  }
+  if (!people.length && !missing) return '';
+  return `<div class="event-people"><b>Участники</b><div>${people.join('')}</div>${missing ? '<p class="who">Летописи некоторых участников не сохранились.</p>' : ''}</div>`;
+}
+function focus(e, pause, causeRoot) {
   focusEv = e;
   if (pause) {
     playing = false;
@@ -19,12 +35,44 @@ function focus(e, pause) {
   else vt = { x: 500, y: 500, z: 1 };
   const box = $('focus');
   box.style.setProperty('--c', typeColor(e.type, 1, e.hue));
-  const people = (e.who || []).map(id => S._a.get(id)).filter(Boolean);
-  box.innerHTML = `<em>${TL[e.type] || 'Событие'} · ${eventDate(e)}</em><strong>${esc(e.text)}</strong>${e.why ? `<p><b>Почему:</b> ${esc(e.why)}</p>` : ''}${causesHtml(e)}${people.length ? `<p class="who">Подсвечены участники: ${esc(people.slice(0, 6).map(a => a.name).join(', '))}${people.length > 6 ? ` и ещё ${people.length - 6}` : ''}.</p>` : ''}
-  <div class="acts"><button class="main" id="go">${playing ? 'Закрыть' : 'Дальше'}</button>${people[0] ? `<button id="follow">Следить за ${esc(people[0].name)}</button>` : ''}</div>`;
+  const root = causeRoot || e;
+  const hasMap = root.causes?.some(id => id < root.id && visibleEvent(id));
+  const map = hasMap ? `<details id="causeMap" class="cause-map"${causeRoot ? ' open' : ''}>
+    <summary>Карта причин</summary><div class="cause-viewport" role="region" aria-label="Карта причин" tabindex="0"></div>
+    <p class="who cause-more" hidden>На карте ближайшие причины. Другие связи можно открыть из карточек событий.</p></details>` : '';
+  box.innerHTML = `<em>${TL[e.type] || 'Событие'} · ${eventDate(e)}</em><strong>${esc(e.text)}</strong>${e.why ? `<p><b>Почему:</b> ${esc(e.why)}</p>` : ''}${causesHtml(e)}${eventPeople(e)}${map}
+  <div class="acts"><button class="main" id="go">${playing ? 'Закрыть' : 'Дальше'}</button></div>`;
   box.hidden = false;
   $('go').onclick = () => { closeFocus(); if (!playing) { playing = true; syncPlay(); } };
-  if ($('follow')) $('follow').onclick = () => { sel = people[0].id; followVillage = null; closeFocus(); follow = true; playing = true; syncPlay(); card(); };
+  for (const button of box.querySelectorAll('[data-event-person]')) button.onclick = () => {
+    sel = +button.dataset.eventPerson;
+    followVillage = directed = null;
+    closeFocus();
+    follow = true;
+    playing = true;
+    syncPlay();
+    card();
+  };
+  for (const details of box.querySelectorAll('[data-event-fate]')) details.addEventListener('toggle', () => {
+    if (!details.open || details.lastElementChild.hasChildNodes()) return;
+    const person = fateById(+details.dataset.eventFate);
+    if (person) details.lastElementChild.innerHTML = arcsHtml(person.goals, true) + storyText(person, true);
+  });
+
+  if (hasMap) {
+    const details = $('causeMap');
+    const viewport = details.querySelector('.cause-viewport');
+    const render = () => drawCauseMap(viewport, root, e);
+    details.addEventListener('toggle', () => { if (details.open && !viewport.firstChild) render(); });
+    viewport.onclick = event => {
+      const button = event.target.closest('[data-cause-node]');
+      const node = button && visibleEvent(+button.dataset.causeNode);
+      if (!node || node.id === e.id) return;
+      focus(node, true, root);
+      $('causeMap').querySelector('[aria-current="step"]')?.focus({ preventScroll: true });
+    };
+    if (details.open) render();
+  }
 }
 function closeFocus(silent) {
   focusEv = null;

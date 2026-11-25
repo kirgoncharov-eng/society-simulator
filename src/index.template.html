@@ -126,6 +126,22 @@ body.flat #cv:active{cursor:grabbing}
 .focus .who{font-size:13px;color:var(--muted)}
 .focus .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
 .evlink{min-height:0;padding:1px 7px;margin:2px 0 2px 4px;border:1px solid var(--rule);border-radius:4px;background:var(--panel);color:var(--slate);font:500 13px/1.35 Inter,system-ui,sans-serif;text-align:left;cursor:pointer}.evlink:hover{border-color:var(--slate)}.causes .evlink{display:block;margin:4px 0 0}
+.event-people{margin:4px 0 10px}
+.event-people .evlink{margin-left:0;margin-right:5px}
+.event-people small{color:var(--muted)}
+.event-fate summary,.cause-map summary{cursor:pointer;color:var(--slate)}
+.event-fate{margin:3px 0;font-size:13px}
+.cause-map{margin:8px 0 10px}
+.cause-map summary{font-weight:600}
+.cause-viewport{max-height:280px;overflow:auto;margin:6px 0;border:1px solid var(--rule);border-radius:4px;background:var(--panel)}
+.cause-diagram{position:relative;margin-inline:auto}
+.cause-diagram svg{position:absolute;inset:0;pointer-events:none}
+.cause-diagram polyline{fill:none;stroke:var(--muted);stroke-width:1.5}
+.cause-diagram marker path{fill:var(--muted)}
+.cause-diagram .cause-node{position:absolute;display:block;min-width:0;padding:6px 8px;background:var(--bg);text-align:left;font:inherit;font-size:12px;line-height:1.25}
+.cause-node[aria-current]{border-color:var(--slate);box-shadow:inset 0 0 0 1px var(--slate)}
+.cause-node time{display:block;margin-bottom:3px;color:var(--muted);white-space:nowrap}
+.cause-node span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 .ev{display:grid;grid-template-columns:10px minmax(0,1fr);gap:4px 10px;width:100%;text-align:left;padding:9px 0;border:0;border-bottom:1px solid var(--rule);border-radius:0;background:none;font:400 15px/1.4 Inter,system-ui,sans-serif;min-height:44px}
 .ev:hover{background:var(--panel)}
 .ev i{width:8px;height:8px;border-radius:50%;margin-top:6px}
