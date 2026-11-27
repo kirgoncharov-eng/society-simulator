@@ -52,6 +52,7 @@ function log(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1; S.evc = S.evc || {}; S.evc[type] = (S.evc[type] || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
   evClock(S, ev);
+  if (MINOR_CHECK.has(type) && minorEvent(S, ev)) ev.minor = true;
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);

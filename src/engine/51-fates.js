@@ -103,7 +103,7 @@ const SHADE_KEY = new Set(['born', 'marry', 'death', 'drowned', 'leader', 'depos
 function shade(S, a, why) {
   const bio = (a.bio || []).filter(b => b[3] || SHADE_KEY.has(b[1])).slice(-40);
   (S.shades || (S.shades = {}))[a.id] = { id: a.id, name: a.name, sex: a.sex, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, died: S.tick, why,
-    bio, mother: a.mother, father: a.father, spouse: a.spouse || null, group: a.group ? groupName(S, a.group) : null, lin: a.lin ? clanName(S, a.lin, true) : null };
+    bio, mother: a.mother, father: a.father, spouse: a.spouse || null, group: a.group ? groupName(S, a.group) : null, lin: a.lin ? clanName(S, a.lin, true) : null, linId: a.lin || null };
 }
 // once a year with the archive: a shade lives while an event in the feed or the archive names the person
 function shadesGC(S) {
