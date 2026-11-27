@@ -2,23 +2,73 @@ name: pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/pages.yml']
   workflow_dispatch:
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-concurrency: { group: pages, cancel-in-progress: true }
+
+permissions: {}
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PAGES_ARTIFACT_NAME: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+    outputs:
+      artifact_name: ${{ steps.wait.outputs.name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm run build && mkdir -p site && cp dist/index.html site/index.html
-      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
-        with: { path: site }
+        id: artifact
+        with:
+          name: ${{ env.PAGES_ARTIFACT_NAME }}
+          path: site
+      - name: Wait for Pages artifact metadata
+        id: wait
+        timeout-minutes: 2
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_ARTIFACT_ID: ${{ steps.artifact.outputs.artifact_id }}
+        run: |
+          if [[ ! "$PAGES_ARTIFACT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::GitHub Pages upload did not return an artifact ID."
+            exit 1
+          fi
+          for delay in 0 2 4 8 16 30; do
+            sleep "$delay"
+            if available=$(gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+              -f "name=$PAGES_ARTIFACT_NAME" \
+              --jq '.artifacts[] | select(.expired == false) | .id') \
+              && [[ "$available" == "$PAGES_ARTIFACT_ID" ]]; then
+              printf 'name=%s\n' "$PAGES_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::Pages artifact $PAGES_ARTIFACT_NAME ($PAGES_ARTIFACT_ID) did not become visible."
+          exit 1
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
+    steps:
+      - uses: actions/configure-pages@v5
       - id: d
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
