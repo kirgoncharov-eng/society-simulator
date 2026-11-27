@@ -63,7 +63,7 @@ function patrol(S) {
     const kill = G && (S.hostility[k] || 0) > 1.2 && rnd(S) < 0.05;
     if ((S.borderLog[k] || 0) < S.tick || kill) {
       S.borderLog[k] = S.tick + 360 * 2;
-      log(S, 'border', kill ? `Стычка на меже: стража «${O.name}» убивает ${nameCase(a, 'accusative')} из «${G.name}»` : `Стража «${O.name}» гонит ${G ? `людей «${G.name}»` : 'кочевников'} со своей земли`, a.x, a.y, O.hue, { why: sent([`${a.name} ${a.job === 'wood' ? 'рубил лес' : a.job === 'stone' ? 'ломал камень' : 'собирал и охотился'} на земле «${O.name}»`, `стражник ${guard.name} заметил чужака`, G ? `между деревнями ${hostWord(S.hostility[k] || 0)}` : '', G ? `теперь «${G.name}» придётся искать ${a.job === 'gather' ? 'другие угодья' : a.job === 'wood' ? 'другой лес' : 'другие холмы'} или торговать` : '']), who: [a.id, guard.id], gs: [o, G && G.id].filter(Boolean) });
+      log(S, 'border', kill ? `Стычка на меже: стража «${O.name}» убивает ${nameCase(a, 'accusative')} из «${G.name}»` : `Стража «${O.name}» гонит ${G ? `людей «${G.name}»` : 'кочевников'} со своей земли`, a.x, a.y, O.hue, { why: sent([`${a.name} ${a.job === 'wood' ? 'рубил лес' : a.job === 'stone' ? 'ломал камень' : 'собирал и охотился'} на земле «${O.name}»`, `стражник ${guard.name} заметил чужака`, G ? `между деревнями ${hostWord(S.hostility[k] || 0)}` : '', G ? `теперь «${G.name}» придётся искать ${a.job === 'gather' ? 'другие угодья' : a.job === 'wood' ? 'другой лес' : 'другие холмы'} или торговать` : '']), who: [a.id, guard.id], gs: [o, G && G.id].filter(Boolean), kill: kill || undefined, pair: G ? k : undefined });
     }
     if (kill) removeAgent(S, a, 'war');
   }

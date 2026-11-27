@@ -82,9 +82,9 @@ $('card').addEventListener('click', e => {
   card();
 });
 $('ticker').addEventListener('click', () => { const ev = visibleEvent(+$('ticker').dataset.event); if (ev) focus(ev, true); });
-for (const [id, all] of [['lf1', false], ['lf2', true]]) {
+for (const [id, all, mine] of [['lf1', false, false], ['lf2', true, false], ['lf3', false, true]]) {
   $(id).addEventListener('click', () => {
-    logAll = all;
+    logAll = all; logMine = mine;
     resetArchiveSearch();
     updateChronicle(true);
   });
@@ -192,6 +192,7 @@ function start(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 window.__lab = () => S; window.__v3 = () => V3;
+window.__labSelect = id => { sel = id; follow = false; card(); updateChronicle(true); };
 window.__labView = () => ({ mode: effectiveMode, flashes: F.map(f => f.id), night: dailyNight });
 window.__labAdvance = async days => {
   playing = false;

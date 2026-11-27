@@ -65,6 +65,8 @@ export function runIsland(i, years) {
   // regime as history (П4): regime changes with a cause or drifting; dynasties and subjection: how long they last
   const hist = { changes: 0, caused: 0, drift: 0, villageYears: 0, dynLen: [], dynGen: [], vassLen: [] }; const dynOn = new Map(), vassOn = new Map();
   let seenEv = 0;
+  // the observer (Н2): rites and skirmishes of the first 40 years in the common feed; family events in «my story»
+  const obs = { feed: 0, shown: 0, famEv: 0, famIn: 0, dau: 0, dauIn: 0 };
   for (let y = 1; y <= years; y++) {
     for (let d = 0; d < 360; d++) {
       SIM.step(S);
@@ -78,6 +80,13 @@ export function runIsland(i, years) {
     peakTradeLinks = Math.max(peakTradeLinks, activeTradeLinks);
     if (S.tick === lastBirthTick) cohortBirths = S.stats.births || 0;
     if (y % 20 === 0) pops.push(SIM.popOf(S));
+    if (y <= 40) for (const e of S.events) { if (e.id <= seenEv) break; if (e.type === 'rite' || e.type === 'border' || e.type === 'conflict') { obs.feed++; if (!e.minor) obs.shown++; } }
+    if (y === 40) for (const a of S.agents.filter(p => p.age >= 30).slice(0, 60)) {
+      const story = new Set(SIM.storyOf(S, a.id, 1e9).map(x => x.ev.id)), fam = SIM.familyOf(S, a);
+      for (const [id, rel] of fam) { const p = SIM.personOf(S, id); if (!p || rel === 'self') continue;
+        for (const b of p.bio || []) if (b[3] && SIM.eventById(S, b[3])) { const e = SIM.eventById(S, b[3]); if (![...(e.who || []), e.author, ...(e.against || [])].includes(id)) continue; obs.famEv++; if (story.has(b[3])) obs.famIn++;
+          if (rel === 'child' && p.sex === 'f' && b[1] === 'marry') { obs.dau++; if (story.has(b[3])) obs.dauIn++; } } }
+    }
     for (const g of S.groups) { if (!g.home) continue; if (g.members.length >= 6) hist.villageYears++;
       if (g.dynasty && !dynOn.has(g.id)) dynOn.set(g.id, S.tick); if (!g.dynasty && dynOn.has(g.id)) { hist.dynLen.push((S.tick - dynOn.get(g.id)) / 360); hist.dynGen.push(g.dynGen || 1); dynOn.delete(g.id); }
       if (g.lord && !vassOn.has(g.id)) vassOn.set(g.id, S.tick); if (!g.lord && vassOn.has(g.id)) { hist.vassLen.push((S.tick - vassOn.get(g.id)) / 360); vassOn.delete(g.id); } }
@@ -126,7 +135,7 @@ export function runIsland(i, years) {
   // drama of the top 20 lives (the Fates tab): variety of turns, finished arcs, repeats and the loops behind them
   const drama = SIM.dramaMeasure(SIM.topFates(S, 20));
   for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
-  return { history, st, arcs, drama, power, laws, life, hist, tb, pops, villages, cbr, adults: adults.length, age, minPop, memory: S.params.memory,
+  return { history, st, arcs, drama, power, laws, life, hist, tb, pops, villages, cbr, adults: adults.length, age, minPop, memory: S.params.memory, obs,
     famN, houseN, villN, roofN, lodgerN, customW, customI, bondN, adultN, feuds, feudsNamed, refK, bondRef, bondK };
 }
 
@@ -154,6 +163,7 @@ async function main() {
   const tb = { near: [0, 0], far: [0, 0], well: [0, 0], nowell: [0, 0] };
   // the clock of events (Ч4): events with an hour, events by day of the month; how long things take
   const clock = { all: 0, timed: 0, day: new Array(30).fill(0) }, dur = {}; let memory = 0;
+  const obs = { feed: 0, shown: 0, famEv: 0, famIn: 0, dau: 0, dauIn: 0 };
   let B = 0, CD = 0, minPop = Infinity, customN = 0;
   let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
   await runIslands(import.meta.url, runIsland, W, Y, island => {
@@ -170,6 +180,7 @@ async function main() {
     for (const k of ['n', 'author', 'against', 'cause', 'viaPower', 'reforms']) laws[k] += island.laws[k]; for (const k in island.laws.kinds) laws.kinds[k] = (laws.kinds[k] || 0) + island.laws.kinds[k];
     for (const k in life) life[k] += island.life[k] || 0;
     for (const k in tb) { tb[k][0] += island.tb[k][0]; tb[k][1] += island.tb[k][1]; }
+    for (const k in obs) obs[k] += island.obs[k];
     if (st.clock) { clock.all += st.clock.all; clock.timed += st.clock.timed; st.clock.day.forEach((n, d) => { clock.day[d] += n; }); }
     for (const k in st.dur || {}) { const x = dur[k] || (dur[k] = [0, 0]); x[0] += st.dur[k][0]; x[1] += st.dur[k][1]; }
     memory += island.memory / W;
@@ -221,6 +232,8 @@ async function main() {
     console.log(`time budget: work hours a day with a walk under 30 min ${h(tb.near)}, over 1.5 h ${h(tb.far)}; productive hours per adult in villages with a well ${h(tb.well)}, without ${h(tb.nowell)}`); }
   { const busiest = Math.max(...clock.day), bd = clock.day.indexOf(busiest), m = k => dur[k] && dur[k][1] ? Math.round(dur[k][0] / dur[k][1]) : '-';
     const half = Math.round(Math.log(0.5) / Math.log(1 - (0.01 + 0.07 * (1 - memory))));
+    console.log(`observer (Н2): rites and skirmishes in the common feed over 40 years ${(obs.feed / W).toFixed(1)} per island, shown ${(obs.shown / W).toFixed(1)} (${obs.shown ? (obs.feed / obs.shown).toFixed(1) : '-'} times fewer); family events in «my story» ${percent(obs.famIn, obs.famEv)} of ${obs.famEv}; daughters' weddings ${percent(obs.dauIn, obs.dau)} of ${obs.dau}`);
+    Object.assign(rec, { feedRites: +(obs.shown / W).toFixed(1), familyInStory: pc1(obs.famIn, obs.famEv), daughterWeddings: pc1(obs.dauIn, obs.dau) });
     console.log(`event clock: with an hour ${percent(clock.timed, clock.all)} of ${clock.all} events; busiest day of the month ${bd} with ${percent(busiest, clock.all)}`);
     console.log('durations (days, model | real reference):');
     for (const [name, v, ref] of [['pregnancy', m('preg'), '266 from conception'], ['house', m('build_house'), 'a hut or a log house by a family with help: 14-60'],

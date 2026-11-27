@@ -56,7 +56,7 @@ function harvestFeast(S, g) {
     S.stats.festivals = (S.stats.festivals || 0) + 1;
     g.fests = (g.fests || 0) + 1;
     const text = host ? `Праздник урожая в «${g.name}»: ${L.name} ${fem(L, 'угощает', 'угощает')} всю деревню` : `Праздник урожая в «${g.name}»`;
-    const ex = { rite: 'feast', why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
+    const ex = { rite: 'feast', host: host ? L.id : undefined, why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
     // the first festival of a village and a leader's feast go to the chronicle; ordinary years leave a quiet record
     if (g.fests === 1 || (host && S.tick - (g.feastLog || -1e9) > 360 * 5)) { log(S, 'rite', text, g.home.x, g.home.y, g.hue, ex); if (host) g.feastLog = S.tick; } else note(S, 'rite', text, g.home.x, g.home.y, g.hue, ex);
   }

@@ -52,14 +52,32 @@ function ui(force) {
   portraits(force);
   card();
 }
-function chronicleEntry(e) {
+// Н2: the story of the one you follow — why an event is in it: their own, a relative's, their lineage's, their village's
+const STORY_TAG = { self: '', line: 'род', village: 'деревня' }, REL_WORD = { spouse: ['муж', 'жена'], parent: ['отец', 'мать'], child: ['сын', 'дочь'], sibling: ['брат', 'сестра'] };
+function relWord(rel) { const p = rel && SIM.personOf(S, rel[1]); return rel ? REL_WORD[rel[0]][p && p.sex === 'f' ? 1 : 0] + (p ? ' ' + p.name : '') : ''; }
+let storyCache = null;
+function storyCtx() {
+  const a = sel != null && SIM.personOf(S, sel); if (!a) return null;
+  if (storyCache && storyCache.id === sel && storyCache.tick === S.tick && storyCache.ev === S.evId) return storyCache;
+  return (storyCache = { id: sel, tick: S.tick, ev: S.evId, a, fam: SIM.familyOf(S, a), lin: a.lin || a.linId || null });
+}
+// a minor rite or skirmish (the engine marks it) stays out of «Все события» unless it touches the one you follow
+function shownInAll(e) { if (!e.minor) return true; const c = storyCtx(); return !!(c && SIM.storyWhy(S, e, c.a, c.fam, c.lin)); }
+function storyList() {
+  const c = storyCtx();
+  if (!c) return '<li class="empty">Выберите человека на карте или в списке деревень: здесь будет его история — его события, его семьи, рода и деревни.</li>';
+  const items = SIM.storyOf(S, sel, 60);
+  return `<li class="empty">История: ${esc(c.a.name)}${c.a.alive === false || !S._a.has(sel) ? ' (умер' + (c.a.sex === 'f' ? 'ла' : '') + ')' : ''}</li>` +
+    (items.map(({ ev, why, rel }) => chronicleEntry(ev, why === 'family' ? esc(relWord(rel)) : STORY_TAG[why] || '')).join('') || '<li class="empty">Пока ничего.</li>');
+}
+function chronicleEntry(e, tag) {
   const major = isMajor(e);
   const era = e.type === 'era';
   const context = e.why && (major || era || e.type === 'law' || e.type === 'faith')
     ? `<small>${esc(e.why)}</small>` : '';
   return `<li><button class="ev${major ? ' big' : ''}${era ? ' era' : ''}" data-event="${e.id}">
     <i style="background:${typeColor(e.type, 1, e.hue)}"></i>
-    <span><time>${eventDate(e)} · ${TL[e.type] || ''}</time>${esc(e.text)}${context}</span>
+    <span><time>${eventDate(e)} · ${TL[e.type] || ''}${tag ? ` · <b class="story-tag">${tag}</b>` : ''}</time>${esc(e.text)}${context}</span>
   </button></li>`;
 }
 
@@ -74,7 +92,7 @@ function updateChronicle(force) {
   const query = archiveQuery.value.trim();
   if (force) {
     const active = !query;
-    for (const [id, selected] of [['lf1', active && !logAll], ['lf2', active && logAll]]) {
+    for (const [id, selected] of [['lf1', active && !logAll && !logMine], ['lf2', active && logAll && !logMine], ['lf3', active && logMine]]) {
       const button = $(id);
       button.classList.toggle('on', selected);
       button.setAttribute('aria-pressed', String(selected));
@@ -86,9 +104,13 @@ function updateChronicle(force) {
     return;
   }
   if (archiveSearch) resetArchiveSearch();
+  if (logMine) {
+    if (force || events[0]?.id !== lastEvt || storyCache?.id !== sel) { lastEvt = events[0]?.id; $('log').innerHTML = storyList(); }
+    return;
+  }
   if (force || events[0]?.id !== lastEvt) {
     lastEvt = events[0]?.id;
-    const list = events.filter(e => logAll || isKey(e)).slice(0, 50);
+    const list = events.filter(e => logAll ? shownInAll(e) : isKey(e)).slice(0, 50);
     $('log').innerHTML = list.map(chronicleEntry).join('') || '<li class="empty">Пока ничего важного.</li>';
   }
 }

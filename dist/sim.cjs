@@ -53,6 +53,7 @@ function log(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1; S.evc = S.evc || {}; S.evc[type] = (S.evc[type] || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
   evClock(S, ev);
+  if (MINOR_CHECK.has(type) && minorEvent(S, ev)) ev.minor = true;
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
@@ -108,6 +109,7 @@ function archiveGC(S) {
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
   for (const id in A) if (!keep.has(+id)) delete A[id];
+  shadesGC(S);
 }
 /*
  * First-name rules and matching adapted from petrovich-js 0.2.1.
@@ -1898,7 +1900,7 @@ function patrol(S) {
     const kill = G && (S.hostility[k] || 0) > 1.2 && rnd(S) < 0.05;
     if ((S.borderLog[k] || 0) < S.tick || kill) {
       S.borderLog[k] = S.tick + 360 * 2;
-      log(S, 'border', kill ? `Стычка на меже: стража «${O.name}» убивает ${nameCase(a, 'accusative')} из «${G.name}»` : `Стража «${O.name}» гонит ${G ? `людей «${G.name}»` : 'кочевников'} со своей земли`, a.x, a.y, O.hue, { why: sent([`${a.name} ${a.job === 'wood' ? 'рубил лес' : a.job === 'stone' ? 'ломал камень' : 'собирал и охотился'} на земле «${O.name}»`, `стражник ${guard.name} заметил чужака`, G ? `между деревнями ${hostWord(S.hostility[k] || 0)}` : '', G ? `теперь «${G.name}» придётся искать ${a.job === 'gather' ? 'другие угодья' : a.job === 'wood' ? 'другой лес' : 'другие холмы'} или торговать` : '']), who: [a.id, guard.id], gs: [o, G && G.id].filter(Boolean) });
+      log(S, 'border', kill ? `Стычка на меже: стража «${O.name}» убивает ${nameCase(a, 'accusative')} из «${G.name}»` : `Стража «${O.name}» гонит ${G ? `людей «${G.name}»` : 'кочевников'} со своей земли`, a.x, a.y, O.hue, { why: sent([`${a.name} ${a.job === 'wood' ? 'рубил лес' : a.job === 'stone' ? 'ломал камень' : 'собирал и охотился'} на земле «${O.name}»`, `стражник ${guard.name} заметил чужака`, G ? `между деревнями ${hostWord(S.hostility[k] || 0)}` : '', G ? `теперь «${G.name}» придётся искать ${a.job === 'gather' ? 'другие угодья' : a.job === 'wood' ? 'другой лес' : 'другие холмы'} или торговать` : '']), who: [a.id, guard.id], gs: [o, G && G.id].filter(Boolean), kill: kill || undefined, pair: G ? k : undefined });
     }
     if (kill) removeAgent(S, a, 'war');
   }
@@ -2429,6 +2431,26 @@ function legend(S, a, why) {
   S.legends.push({ id: a.id, name: a.name, sex: a.sex, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, died: S.tick, why, bio: a.bio.slice(), goals: a.goals ? JSON.parse(JSON.stringify(a.goals)) : undefined, drama: a.drama, mother: a.mother, father: a.father, group: a.group ? groupName(S, a.group) : null });
   S.legends.sort((x, y) => y.drama - x.drama);
   if (S.legends.length > 40) S.legends.length = 40;
+}
+// a shade (Н1): a short record of anyone who leaves the world, kept for as long as some event still names them, so the
+// observer can open the dead participant of an old quarrel. Legends keep the forty most dramatic lives in full; a shade
+// keeps the key lines of everyone else: birth, marriage, power, quarrels, the lines with an event, the children
+const SHADE_KEY = new Set(['born', 'marry', 'death', 'drowned', 'leader', 'deposed', 'coup', 'schism', 'found', 'exiled', 'feud', 'revenge', 'murder', 'elope', 'returned', 'heir', 'bond', 'freed', 'master', 'client', 'retainer', 'plague', 'orphan', 'spouseDied', 'enemy', 'sworn', 'love', 'betrayed', 'reconcile', 'affair', 'jealousy', 'quit', 'law', 'lawLost', 'child', 'childDied', 'move', 'temper']);
+function shade(S, a, why) {
+  const bio = (a.bio || []).filter(b => b[3] || SHADE_KEY.has(b[1])).slice(-40);
+  (S.shades || (S.shades = {}))[a.id] = { id: a.id, name: a.name, sex: a.sex, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, died: S.tick, why,
+    bio, mother: a.mother, father: a.father, spouse: a.spouse || null, group: a.group ? groupName(S, a.group) : null, lin: a.lin ? clanName(S, a.lin, true) : null, linId: a.lin || null };
+}
+// once a year with the archive: a shade lives while an event in the feed or the archive names the person
+function shadesGC(S) {
+  if (!S.shades) return;
+  const named = new Set(), add = e => { for (const id of e.who || []) named.add(id); if (e.author) named.add(e.author); for (const id of e.against || []) named.add(id); };
+  for (const e of S.events) add(e);
+  for (const id in S.evArch || {}) add(S.evArch[id]);
+  for (const id in S.shades) {
+    if (!named.has(+id)) { delete S.shades[id]; continue; }
+    for (const b of S.shades[id].bio) if (b[3] && !eventById(S, b[3])) b[3] = null;
+  }
 }
 function feudFor(S, victim, killers, how, killer, ev) {
   if (!killers) return;
@@ -3569,7 +3591,7 @@ function harvestFeast(S, g) {
     S.stats.festivals = (S.stats.festivals || 0) + 1;
     g.fests = (g.fests || 0) + 1;
     const text = host ? `Праздник урожая в «${g.name}»: ${L.name} ${fem(L, 'угощает', 'угощает')} всю деревню` : `Праздник урожая в «${g.name}»`;
-    const ex = { rite: 'feast', why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
+    const ex = { rite: 'feast', host: host ? L.id : undefined, why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
     // the first festival of a village and a leader's feast go to the chronicle; ordinary years leave a quiet record
     if (g.fests === 1 || (host && S.tick - (g.feastLog || -1e9) > 360 * 5)) { log(S, 'rite', text, g.home.x, g.home.y, g.hue, ex); if (host) g.feastLog = S.tick; } else note(S, 'rite', text, g.home.x, g.home.y, g.hue, ex);
   }
@@ -3789,6 +3811,86 @@ function returnStep(S, a, x) {
   S.stats.homecomings = (S.stats.homecomings || 0) + 1;
   bio(S, a, 'returned', `Возвращается в «${g.name}»: ${L.name} ${fem(L, 'принимает', 'принимает')} обратно`, ev.id);
   goalEnd(S, a, x, 'done', `Снова живёт в «${g.name}»`, ev.id, true);
+}
+/* ---------- the observer (Н2): what matters to the whole island, and the story of the one you follow ---------- */
+// Rites and border skirmishes of other people's villages fill the common feed: a harvest feast every few years in every
+// village, the wedding of every leader's nephew. They stay in the chronicle, but the common feed shows them only when they
+// matter to the island: a leader marries or is buried, blood is shed on the border or two feuding villages clash, or the
+// thing happens for the first time in the world. A minor event still shows in the story of anyone it concerns.
+const MINOR_CHECK = new Set(['rite', 'border', 'conflict']);
+function minorEvent(S, ev) {
+  const seen = S.firstSeen || (S.firstSeen = {}), kind = ev.type + ':' + (ev.rite || '');
+  if (!seen[kind]) { seen[kind] = ev.id; return false; }
+  const g = ev.gs && S._g.get(ev.gs[0]), L = g && g.leader;
+  if (ev.type === 'rite') {
+    // a leader's funeral: power passes to someone else
+    if (ev.rite === 'funeral') return false;
+    // a wedding: only the leader's own (the groom and the bride come first in who), not the kin's
+    if (ev.rite === 'wedding') return !(L && ev.who && ev.who.slice(0, 2).includes(L));
+    // a harvest feast: only a leader's first feast at his own cost in a village of fifteen or more, a show of power
+    if (ev.rite === 'feast') {
+      const h = ev.host && S._a.get(ev.host);
+      if (!h || h.feastEv) return true;
+      h.feastEv = ev.id;
+      return !g || g.members.length < 15;
+    }
+    return true;
+  }
+  if (ev.type === 'border') {
+    if (ev.kill || !ev.pair) return !ev.kill;
+    const first = S.borderSeen || (S.borderSeen = {});
+    if (!first[ev.pair]) { first[ev.pair] = ev.id; return false; }
+    return (S.hostility[ev.pair] || 0) < 0.8;
+  }
+  if (ev.type === 'conflict') return !ev.big;
+  return false;
+}
+
+// the family of a person: spouse, parents, children and brothers and sisters, the living and the dead
+function personOf(S, id) { return S._a.get(id) || (S.legends || []).find(l => l.id === id) || (S.shades && S.shades[id]) || null; }
+function familyOf(S, a) {
+  const fam = new Map([[a.id, 'self']]);
+  const put = (id, rel) => { if (id && !fam.has(id)) fam.set(id, rel); };
+  put(a.spouse, 'spouse'); put(a.mother, 'parent'); put(a.father, 'parent');
+  const dead = [...(S.legends || []), ...Object.values(S.shades || {})];
+  for (const o of [...S.agents, ...dead]) {
+    if (o.id === a.id) continue;
+    if (o.mother === a.id || o.father === a.id) put(o.id, 'child');
+    else if ((a.mother && o.mother === a.mother) || (a.father && o.father === a.father)) put(o.id, 'sibling');
+  }
+  return fam;
+}
+const linIdOf = (S, id) => { const o = S._a.get(id); return o ? o.lin : (S.shades && S.shades[id] && S.shades[id].linId) || null; };
+// why an event belongs to someone's story: 'self', 'family', 'line' (another member of the lineage) or 'village'
+function storyWhy(S, ev, a, fam, lin) {
+  const ids = [...(ev.who || []), ...(ev.author ? [ev.author] : []), ...(ev.against || [])];
+  let line = false;
+  for (const id of ids) {
+    if (id === a.id) return 'self';
+    if (fam.has(id)) return 'family';
+    if (lin && !line && linIdOf(S, id) === lin) line = true;
+  }
+  if (line) return 'line';
+  if (!ev.quiet && !ev.minor && a.group && ev.gs && ev.gs.includes(a.group)) return 'village';
+  return null;
+}
+// the story of one person: their events, their family's, their lineage's and the main events of their village, newest
+// first, from the feed and the archive. Returns [{ ev, why }]
+function storyOf(S, id, limit = 80) {
+  const a = personOf(S, id); if (!a) return [];
+  const fam = familyOf(S, a), lin = a.lin || a.linId || null, out = [], seen = new Set();
+  const take = ev => { if (seen.has(ev.id)) return; seen.add(ev.id); const why = storyWhy(S, ev, a, fam, lin); if (why) out.push({ ev, why, rel: why === 'family' ? relOf(ev, fam) : undefined }); };
+  for (const ev of S.events) take(ev);
+  for (const k in S.evArch || {}) take(S.evArch[k]);
+  out.sort((x, y) => y.ev.id - x.ev.id);
+  return out.slice(0, limit);
+}
+// the closest relative among the participants: spouse, then children, parents, brothers and sisters; [relation, id]
+const REL_RANK = { spouse: 0, child: 1, parent: 2, sibling: 3 };
+function relOf(ev, fam) {
+  let best = null;
+  for (const id of [...(ev.who || []), ...(ev.author ? [ev.author] : []), ...(ev.against || [])]) { const r = fam.get(id); if (r && r !== 'self' && (!best || REL_RANK[r] < REL_RANK[best[0]])) best = [r, id]; }
+  return best || undefined;
 }
 /* ---------- lineages: a line from a founder, its head, and how lines take sides (П1, see docs/POLITICS.md) ---------- */
 // a.lin: the lineage, the id of its founder (whoever landed or came from outside); children take the father's line,
@@ -4170,14 +4272,14 @@ function removeAgent(S, a, why, departure) {
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
   if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why, departure);
-  if (why === 'emigr') legend(S, a, 'emigr');
+  if (why === 'emigr') { legend(S, a, 'emigr'); shade(S, a, 'emigr'); }
   if (why !== 'move' && why !== 'emigr') {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
     if (why !== 'killed') bio(S, a, why === 'drown' || why === 'lostAtSea' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
     const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'lostAtSea' ? ', в море' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
     if (sp0) sp0.widowT = S.tick;
     { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); goalsOnDeath(S, a, why, fev); }
-    legend(S, a, why);
+    legend(S, a, why); shade(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
     const w = Math.max(0, a.wealth), g = S._g.get(a.group);
     if (kids.length) { for (const k of kids) { k.wealth += w * (sp ? 0.7 : 1) / kids.length; if (w / kids.length > 12) bio(S, k, 'inherit', `Наследует от ${a.sex === 'f' ? 'матери' : 'отца'} ${nameCase(a, 'genitive')} запас ${Math.round(w * (sp ? 0.7 : 1) / kids.length)}`); } if (sp) sp.wealth += w * 0.3; }
@@ -4951,7 +5053,7 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {

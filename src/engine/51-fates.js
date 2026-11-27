@@ -96,6 +96,26 @@ function legend(S, a, why) {
   S.legends.sort((x, y) => y.drama - x.drama);
   if (S.legends.length > 40) S.legends.length = 40;
 }
+// a shade (Н1): a short record of anyone who leaves the world, kept for as long as some event still names them, so the
+// observer can open the dead participant of an old quarrel. Legends keep the forty most dramatic lives in full; a shade
+// keeps the key lines of everyone else: birth, marriage, power, quarrels, the lines with an event, the children
+const SHADE_KEY = new Set(['born', 'marry', 'death', 'drowned', 'leader', 'deposed', 'coup', 'schism', 'found', 'exiled', 'feud', 'revenge', 'murder', 'elope', 'returned', 'heir', 'bond', 'freed', 'master', 'client', 'retainer', 'plague', 'orphan', 'spouseDied', 'enemy', 'sworn', 'love', 'betrayed', 'reconcile', 'affair', 'jealousy', 'quit', 'law', 'lawLost', 'child', 'childDied', 'move', 'temper']);
+function shade(S, a, why) {
+  const bio = (a.bio || []).filter(b => b[3] || SHADE_KEY.has(b[1])).slice(-40);
+  (S.shades || (S.shades = {}))[a.id] = { id: a.id, name: a.name, sex: a.sex, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, died: S.tick, why,
+    bio, mother: a.mother, father: a.father, spouse: a.spouse || null, group: a.group ? groupName(S, a.group) : null, lin: a.lin ? clanName(S, a.lin, true) : null, linId: a.lin || null };
+}
+// once a year with the archive: a shade lives while an event in the feed or the archive names the person
+function shadesGC(S) {
+  if (!S.shades) return;
+  const named = new Set(), add = e => { for (const id of e.who || []) named.add(id); if (e.author) named.add(e.author); for (const id of e.against || []) named.add(id); };
+  for (const e of S.events) add(e);
+  for (const id in S.evArch || {}) add(S.evArch[id]);
+  for (const id in S.shades) {
+    if (!named.has(+id)) { delete S.shades[id]; continue; }
+    for (const b of S.shades[id].bio) if (b[3] && !eventById(S, b[3])) b[3] = null;
+  }
+}
 function feudFor(S, victim, killers, how, killer, ev) {
   if (!killers) return;
   for (const o of S.agents) {
