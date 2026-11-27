@@ -108,6 +108,7 @@ function archiveGC(S) {
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
   for (const id in A) if (!keep.has(+id)) delete A[id];
+  shadesGC(S);
 }
 /*
  * First-name rules and matching adapted from petrovich-js 0.2.1.
@@ -2430,6 +2431,26 @@ function legend(S, a, why) {
   S.legends.sort((x, y) => y.drama - x.drama);
   if (S.legends.length > 40) S.legends.length = 40;
 }
+// a shade (Н1): a short record of anyone who leaves the world, kept for as long as some event still names them, so the
+// observer can open the dead participant of an old quarrel. Legends keep the forty most dramatic lives in full; a shade
+// keeps the key lines of everyone else: birth, marriage, power, quarrels, the lines with an event, the children
+const SHADE_KEY = new Set(['born', 'marry', 'death', 'drowned', 'leader', 'deposed', 'coup', 'schism', 'found', 'exiled', 'feud', 'revenge', 'murder', 'elope', 'returned', 'heir', 'bond', 'freed', 'master', 'client', 'retainer', 'plague', 'orphan', 'spouseDied', 'enemy', 'sworn', 'love', 'betrayed', 'reconcile', 'affair', 'jealousy', 'quit', 'law', 'lawLost', 'child', 'childDied', 'move', 'temper']);
+function shade(S, a, why) {
+  const bio = (a.bio || []).filter(b => b[3] || SHADE_KEY.has(b[1])).slice(-40);
+  (S.shades || (S.shades = {}))[a.id] = { id: a.id, name: a.name, sex: a.sex, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, died: S.tick, why,
+    bio, mother: a.mother, father: a.father, spouse: a.spouse || null, group: a.group ? groupName(S, a.group) : null, lin: a.lin ? clanName(S, a.lin, true) : null };
+}
+// once a year with the archive: a shade lives while an event in the feed or the archive names the person
+function shadesGC(S) {
+  if (!S.shades) return;
+  const named = new Set(), add = e => { for (const id of e.who || []) named.add(id); if (e.author) named.add(e.author); for (const id of e.against || []) named.add(id); };
+  for (const e of S.events) add(e);
+  for (const id in S.evArch || {}) add(S.evArch[id]);
+  for (const id in S.shades) {
+    if (!named.has(+id)) { delete S.shades[id]; continue; }
+    for (const b of S.shades[id].bio) if (b[3] && !eventById(S, b[3])) b[3] = null;
+  }
+}
 function feudFor(S, victim, killers, how, killer, ev) {
   if (!killers) return;
   for (const o of S.agents) {
@@ -4170,14 +4191,14 @@ function removeAgent(S, a, why, departure) {
   if (S.ageAudit) noteAgeExit(S, a, why);
   S.stats[why] = (S.stats[why] || 0) + 1;
   if (why === 'emigr' || why === 'move') goalsOnDeath(S, a, why, departure);
-  if (why === 'emigr') legend(S, a, 'emigr');
+  if (why === 'emigr') { legend(S, a, 'emigr'); shade(S, a, 'emigr'); }
   if (why !== 'move' && why !== 'emigr') {
     const DW = { sick: 'Умирает от болезни', death: 'Умирает от старости', burnout: 'Умирает от истощения и голода', war: 'Гибнет в бою', plague: 'Умирает от мора', drown: 'Тонет при переправе', lostAtSea: 'Уходит в море на лодке и не возвращается', killed: a.sex === 'f' ? 'Убита' : 'Убит' };
     if (why !== 'killed') bio(S, a, why === 'drown' || why === 'lostAtSea' ? 'drowned' : 'death', `${DW[why] || 'Умирает'}${a.age ? `, ${Math.floor(a.age)} ${pl(Math.floor(a.age), 'год', 'года', 'лет')}` : ''}`);
     const sp0 = a.spouse && S._a.get(a.spouse); if (sp0) bio(S, sp0, 'spouseDied', `${a.sex === 'f' ? 'Умирает жена' : 'Умирает муж'} ${a.name}${why === 'war' ? ', в бою' : why === 'lostAtSea' ? ', в море' : why === 'plague' ? ', от мора' : why === 'killed' ? ', убит' : ''}`);
     if (sp0) sp0.widowT = S.tick;
     { const fev = funeral(S, a, why); if (fev && sp0) refLast(S, sp0, 'spouseDied', fev); goalsOnDeath(S, a, why, fev); }
-    legend(S, a, why);
+    legend(S, a, why); shade(S, a, why);
     const kids = S.agents.filter(o => o !== a && (o.mother === a.id || o.father === a.id)), sp = a.spouse && S._a.get(a.spouse);
     const w = Math.max(0, a.wealth), g = S._g.get(a.group);
     if (kids.length) { for (const k of kids) { k.wealth += w * (sp ? 0.7 : 1) / kids.length; if (w / kids.length > 12) bio(S, k, 'inherit', `Наследует от ${a.sex === 'f' ? 'матери' : 'отца'} ${nameCase(a, 'genitive')} запас ${Math.round(w * (sp ? 0.7 : 1) / kids.length)}`); } if (sp) sp.wealth += w * 0.3; }

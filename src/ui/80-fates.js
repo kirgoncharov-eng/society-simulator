@@ -45,7 +45,7 @@ function drawFates(force) {
     <div class="fbtn">${p.alive ? `<button data-follow="${p.id}">Следить за ${p.sex === 'f' ? 'ней' : 'ним'}</button>` : ''}<button data-full="${p.id}">Вся летопись</button></div>
   </article>`).join('');
 }
-function fateById(id) { const a = S._a.get(id); if (a) return { name: a.name, sex: a.sex, bio: a.bio || [], goals: a.goals, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, alive: true }; const l = (S.legends || []).find(x => x.id === id); return l ? Object.assign({ alive: false }, l) : null; }
+function fateById(id) { const a = S._a.get(id); if (a) return { name: a.name, sex: a.sex, bio: a.bio || [], goals: a.goals, born: a.bornT !== undefined ? a.bornT : S.tick - a.age * 360, alive: true }; const l = (S.legends || []).find(x => x.id === id) || (S.shades && S.shades[id]); return l ? Object.assign({ alive: false }, l) : null; }
 $('fates').addEventListener('click', e => {
   const f = e.target.closest('[data-follow]'), u = e.target.closest('[data-full]');
   if (f) { sel = +f.dataset.follow; follow = true; card(); const a = S._a.get(sel), g = a && S._g.get(a.group); if (V3.on && a) fly3D(a.x, a.y); window.scrollTo({ top: 0, behavior: 'smooth' }); }

@@ -107,4 +107,5 @@ function archiveGC(S) {
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
   for (const id in A) if (!keep.has(+id)) delete A[id];
+  shadesGC(S);
 }
