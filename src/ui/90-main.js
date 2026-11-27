@@ -82,8 +82,13 @@ $('card').addEventListener('click', e => {
   card();
 });
 $('ticker').addEventListener('click', () => { const ev = visibleEvent(+$('ticker').dataset.event); if (ev) focus(ev, true); });
-$('lf1').addEventListener('click', () => { logAll = false; $('lf1').classList.add('on'); $('lf2').classList.remove('on'); ui(true); });
-$('lf2').addEventListener('click', () => { logAll = true; $('lf2').classList.add('on'); $('lf1').classList.remove('on'); ui(true); });
+for (const [id, all] of [['lf1', false], ['lf2', true]]) {
+  $(id).addEventListener('click', () => {
+    logAll = all;
+    resetArchiveSearch();
+    updateChronicle(true);
+  });
+}
 $('groups').addEventListener('click', e => {
   const b = e.target.closest('[data-a]');
   if (!b) return;

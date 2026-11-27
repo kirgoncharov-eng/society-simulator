@@ -171,6 +171,8 @@ body.flat #cv:active{cursor:grabbing}
 .lf{display:flex;gap:6px;margin:0 0 8px}
 .lf button{min-height:36px;padding:0 12px;font-size:14px}
 .lf button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#archive-query{box-sizing:border-box;width:100%;min-height:44px;padding:8px 12px;margin:0 0 6px;font:inherit;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink)}
+.archive-status{font-size:14px;color:var(--slate);margin:0}.archive-status:not(:empty){margin-bottom:6px}
 .ev.era{background:var(--panel);padding-left:8px;padding-right:8px}
 .ev.era span{font-weight:600}
 .ev.era small{font-weight:400}
@@ -443,7 +445,9 @@ ul.arcs em.out-done{color:var(--slate);font-weight:600}ul.arcs em.out-failed,ul.
   </div>
   <div class="pane" id="p-chron">
     <div class="chron">
-      <div><div class="lf" role="group" aria-label="Фильтр хроники"><button id="lf1" class="on">Главное</button><button id="lf2">Все события</button></div>
+      <div><div class="lf" role="group" aria-label="Фильтр хроники"><button id="lf1" class="on" aria-pressed="true">Главное</button><button id="lf2" aria-pressed="false">Все события</button></div>
+      <input type="search" id="archive-query" aria-label="Поиск по хронике" placeholder="Поиск по хронике и архиву" aria-controls="log" autocomplete="off" maxlength="120">
+      <p class="archive-status" id="archive-status" role="status"></p>
       <ol class="log" id="log"></ol></div>
       <div>
     <div class="metrics">

@@ -66,6 +66,7 @@ function resetView() {
   mainRunner.reset();
   D = new Map(); F = []; sel = followVillage = null; follow = false; closeFocus(true);
   resetPlayback();
+  resetArchiveSearch();
   seenEv = S.evId || 0; lastEvt = null; riverKey = ''; syncCtls(); ui(true);
   $('seedline').textContent = `Мир №${S.seed}. Модель на правилах, без языковых моделей: доверие, обиды, дележ урожая, роды, ступени власти и неурядица, которая растёт с размером деревни, числом старших, недовольством и волокитой.`;
 }
