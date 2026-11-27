@@ -199,7 +199,7 @@ function card() {
   ${bondsTxt(a)}
   ${a.goals && a.goals.length ? `<div class="rel"><b>Цели и дуги</b>${arcsHtml(a.goals, true)}</div>` : ''}
   ${a.feud && !a.feud.done ? `<p class="rel"><b>Ждёт мести</b> за ${esc(a.feud.rel)} ${esc(a.feud.v)}: ${a.feud.personal ? esc(a.feud.Lname) : `«${esc(a.feud.gname)}»`}.</p>` : ''}
-  <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : followVillage ? 'Следить за деревней' : 'Следить камерой'}</button></div>
+  <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : followVillage ? 'Следить за деревней' : 'Следить камерой'}</button>${g && g.home ? `<button data-vh="${g.id}">Как «${esc(g.name)}» стала такой</button>` : ''}</div>
   ${a.bio && a.bio.length > 1 ? `<details class="chron1"><summary>Летопись жизни · ${arcOf({ bio: a.bio })}</summary>${storyText({ bio: a.bio }, true)}</details>` : ''}
   ${a.load > 0.3 ? `<p class="rel">${a.haul ? 'Несёт на склад' : 'Набирает груз'}: ${goodsTxt(a.load, a.lk)}.</p>` : ''}
   ${a.car ? `<p class="rel">${a.car.phase === 'go' ? `Везёт ${goodsTxt(a.car.qx, a.car.x)} в «${esc((S._g.get(a.car.to) || {}).name || '?')}»` : `Возвращается домой: везёт ${goodsTxt(a.car.qy, a.car.y)}${a.car.failed ? ' (сделка сорвалась, товар назад)' : ''}`}. Караванов за жизнь: ${a.trades || 0}.</p>` : a.trades ? `<p class="rel">Купец: караванов за жизнь ${a.trades}.</p>` : ''}

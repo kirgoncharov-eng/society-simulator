@@ -32,6 +32,8 @@ function noDangling(S, where) {
   }
   for (const l of S.legends || []) { for (const b of l.bio || []) check(b[3], `legend of ${l.name}`); goals(l.goals, `arcs in the legend of ${l.name}`); }
   for (const e of S.events) for (const c of e.causes || []) check(c, `causes of event ${e.id}`);
+  // Н3: every turning point a village keeps for its history page opens
+  for (const g of S.groups) for (const id of g.hev || []) check(id, `history of «${g.name}»`);
   // Н1: every named participant of a kept event opens: alive, a legend, or a shade of the dead
   for (const id in S.shades || {}) for (const b of S.shades[id].bio) check(b[3], `shade of ${S.shades[id].name}`);
   const known = id => S._a.has(id) || (S.legends || []).some(l => l.id === id) || (S.shades && S.shades[id]);

@@ -119,6 +119,21 @@ body.flat #cv:active{cursor:grabbing}
 .view{position:relative;max-width:calc(100svh - 150px)}
 .focus{position:absolute;z-index:4;left:10px;right:10px;bottom:10px;max-height:64%;overflow:auto;background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-left:5px solid var(--c,var(--ink));border-radius:4px;padding:12px 14px;font-size:15px;line-height:1.45;cursor:default}
 .focus[hidden]{display:none}
+.vhist{position:fixed;z-index:20;top:12px;right:12px;bottom:12px;width:min(560px,calc(100vw - 24px));background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.vhist[hidden]{display:none}
+.vh-body{height:100%;overflow:auto;padding:16px 18px 20px;font-size:15px;line-height:1.5}
+.vh-body h3{font:600 20px/1.25 "Source Serif 4",Georgia,serif;margin:0 30px 4px 0}
+.vh-body h4{margin:14px 0 6px;font-size:15px}
+.vh-body p{margin:0 0 10px}
+.vh-body small,.vh-body .who{color:var(--muted)}
+.vh-turns{list-style:none;margin:0;padding:0}
+.vh-turns li{padding:6px 0;border-bottom:1px solid var(--rule)}
+.vh-turns time{color:var(--muted);font-size:13px;margin-right:4px}
+.vh-turns .evlink,.vh-path .evlink{text-align:left}
+.vh-table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+.vh-table th,.vh-table td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--rule);vertical-align:top}
+.vh-more summary,.vh-open{cursor:pointer}
+.vh-open{margin:4px 0 12px;min-height:36px}
 .focus em{display:block;font-style:normal;font-size:13px;color:var(--muted)}
 .focus strong{display:block;font:600 19px/1.25 "Source Serif 4",Georgia,serif;margin:2px 0 6px;text-wrap:balance}
 .focus p{margin:0 0 8px}
@@ -505,5 +520,6 @@ ul.arcs em.out-done{color:var(--slate);font-weight:600}ul.arcs em.out-failed,ul.
 <script>
 /*UI*/
 </script>
+<div class="vhist" id="vhist" hidden role="dialog" aria-modal="false" aria-label="История деревни"><button class="cx" id="vhistx" aria-label="Закрыть историю деревни">×</button><div class="vh-body"></div></div>
 </body>
 </html>

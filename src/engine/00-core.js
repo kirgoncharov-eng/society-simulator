@@ -53,6 +53,7 @@ function log(S, type, text, x, y, hue, ex) {
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
   evClock(S, ev);
   if (MINOR_CHECK.has(type) && minorEvent(S, ev)) ev.minor = true;
+  histMark(S, ev);
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
@@ -68,6 +69,7 @@ function note(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
   evClock(S, ev);
+  histMark(S, ev);
   (S.evArch || (S.evArch = {}))[ev.id] = ev;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
   return ev;
@@ -103,6 +105,7 @@ function archiveGC(S) {
     for (const c of g.cases || []) if (c[3]) keep.add(c[3]);
     if (g.powerEv) keep.add(g.powerEv);
     for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
+    for (const id of g.hev || []) keep.add(id);
   }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
