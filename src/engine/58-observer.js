@@ -115,3 +115,48 @@ function villageHistory(S, gid) {
   const turns = (g.hev || []).map(id => eventById(S, id)).filter(Boolean).sort((a, b) => a.id - b.id);
   return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns };
 }
+
+/* ---------- the household (Н4): what the regime means at the level of one family ---------- */
+// Five questions that tell regimes apart in daily life: whose field the family works, who takes a part of its harvest,
+// who settles its disputes, whom it owes and who owes it, whose house it lives in. Everything is read from the world as it
+// is: the field split (60-step.js), the leader's share and the tribute (61-monthly.js, 42-war.js), patrons and loans
+// (61-monthly.js, 44-institutions.js), customs and the judge (55-customs.js), houses (54-households.js).
+function householdView(S, id) {
+  const a = S._a.get(id); if (!a) return null;
+  const g = a.group && S._g.get(a.group), L = g && S._a.get(g.leader);
+  const hm = housemates(S, a), people = hm ? [a, ...hm.with] : [a, ...(a.spouse && S._a.get(a.spouse) ? [S._a.get(a.spouse)] : [])];
+  const inHouse = new Set(people.map(p => p.id));
+  const house = hm ? { owner: hm.owner ? hm.owner.name : null, ownerId: hm.owner ? hm.owner.id : null, earth: !!hm.house.earth, built: hm.house.built, kids: hm.kids, ownHouse: !!(hm.owner && inHouse.has(hm.owner.id)) } : null;
+  // whose field each worker of the house works, and how the harvest is split
+  const work = people.filter(p => p.age >= 15).map(p => {
+    const row = { id: p.id, name: p.name, job: p.job || null };
+    if (p.job !== 'farm' || !g || !g.fields.length) return row;
+    const f = g.fields[(p.slot || 0) % g.fields.length], ow = f.owner && S._a.get(f.owner);
+    if (g.land !== 'private' || !ow || ow.group !== g.id) row.field = { kind: 'common' };
+    else if (ow === p) row.field = { kind: 'own' };
+    else if (inHouse.has(ow.id)) row.field = { kind: 'family', owner: ow.name };
+    else row.field = { kind: 'hired', owner: ow.name, ownerId: ow.id, line: ow.lin ? clanName(S, ow.lin, true) : null };
+    return row;
+  });
+  const owned = g && g.land === 'private' ? g.fields.filter(f => inHouse.has(f.owner)).length : 0;
+  // who takes a part: the leader, a landlord, an overlord, a patron, a creditor
+  const take = [];
+  if (g && L) take.push(inHouse.has(L.id) ? { kind: 'leaderHouse', share: g.take } : { kind: 'leader', name: L.name, nid: L.id, share: g.take });
+  for (const r of work) if (r.field && r.field.kind === 'hired') take.push({ kind: 'landlord', name: r.field.owner, nid: r.field.ownerId, worker: r.name });
+  const lord = g && g.lord && S._g.get(g.lord);
+  if (lord) take.push({ kind: 'tribute', name: lord.name, rate: Math.round(Math.min(g.tribRate || 0.02, 0.02) * 12 * 100) });
+  for (const p of people) {
+    const pt = p.patron && S._a.get(p.patron);
+    if (pt && L && pt.id === L.id && !inHouse.has(pt.id)) take.push({ kind: 'retainer', name: p.name, patron: pt.name, nid: pt.id });
+    else if (pt && !inHouse.has(pt.id)) take.push({ kind: 'client', name: p.name, patron: pt.name, nid: pt.id });
+  }
+  // debts both ways
+  const owes = people.filter(p => p.debt > 0.5 && p.cred && !inHouse.has(p.cred)).map(p => { const c = S._a.get(p.cred); return { name: p.name, to: c ? c.name : '?', nid: c ? c.id : null, amount: Math.round(p.debt), rate: Math.round((p.rate || 0) * 100), bond: !!p.bond }; });
+  const owed = S.agents.filter(o => o.debt > 0.5 && inHouse.has(o.cred) && !inHouse.has(o.id)).map(o => ({ name: o.name, to: (S._a.get(o.cred) || {}).name, amount: Math.round(o.debt), bond: !!o.bond }));
+  const obliged = [];
+  for (const p of people) for (const oid in p.bonds || {}) { const b = p.bonds[oid]; const o = S._a.get(+oid); if (b[0] === 'debt' && o && !inHouse.has(o.id)) obliged.push({ name: p.name, to: o.name, nid: o.id, why: b[3], ev: b[5] }); }
+  // who settles a dispute: a custom, the assembly or the leader; in a blood feud the old people talk for blood money
+  const customs = Object.entries((g && g.customs) || {}).map(([k, o]) => ({ kind: k, outcome: o, ev: g.customEv && g.customEv[k] }));
+  const court = g ? { by: g.gov === 'assembly' ? 'assembly' : 'leader', leader: L ? L.name : null, nid: L ? L.id : null, customs, elders: g.members.filter(id => { const m = S._a.get(id); return m && m.age > 55; }).length } : null;
+  return { name: a.name, village: g ? g.name : null, people: people.map(p => ({ id: p.id, name: p.name, age: Math.floor(p.age), sex: p.sex })), house, work, owned, fields: g ? g.fields.length : 0, land: g ? g.land || 'common' : null, take, owes, owed, obliged: obliged.slice(0, 4), court };
+}

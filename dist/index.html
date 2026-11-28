@@ -121,6 +121,10 @@ body.flat #cv:active{cursor:grabbing}
 .focus[hidden]{display:none}
 .vhist{position:fixed;z-index:20;top:12px;right:12px;bottom:12px;width:min(560px,calc(100vw - 24px));background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
 .vhist[hidden]{display:none}
+.yard{margin:8px 0 10px;padding:8px 10px;background:var(--panel);border-radius:4px;font-size:14px}
+.yard ul{margin:0 0 6px;padding-left:18px}
+.yard li{margin:2px 0}
+.yard-q{margin:6px 0 2px;color:var(--muted);font-size:13px}
 .vh-body{height:100%;overflow:auto;padding:16px 18px 20px;font-size:15px;line-height:1.5}
 .vh-body h3{font:600 20px/1.25 "Source Serif 4",Georgia,serif;margin:0 30px 4px 0}
 .vh-body h4{margin:14px 0 6px;font-size:15px}
@@ -4449,6 +4453,51 @@ function villageHistory(S, gid) {
   const turns = (g.hev || []).map(id => eventById(S, id)).filter(Boolean).sort((a, b) => a.id - b.id);
   return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns };
 }
+
+/* ---------- the household (Н4): what the regime means at the level of one family ---------- */
+// Five questions that tell regimes apart in daily life: whose field the family works, who takes a part of its harvest,
+// who settles its disputes, whom it owes and who owes it, whose house it lives in. Everything is read from the world as it
+// is: the field split (60-step.js), the leader's share and the tribute (61-monthly.js, 42-war.js), patrons and loans
+// (61-monthly.js, 44-institutions.js), customs and the judge (55-customs.js), houses (54-households.js).
+function householdView(S, id) {
+  const a = S._a.get(id); if (!a) return null;
+  const g = a.group && S._g.get(a.group), L = g && S._a.get(g.leader);
+  const hm = housemates(S, a), people = hm ? [a, ...hm.with] : [a, ...(a.spouse && S._a.get(a.spouse) ? [S._a.get(a.spouse)] : [])];
+  const inHouse = new Set(people.map(p => p.id));
+  const house = hm ? { owner: hm.owner ? hm.owner.name : null, ownerId: hm.owner ? hm.owner.id : null, earth: !!hm.house.earth, built: hm.house.built, kids: hm.kids, ownHouse: !!(hm.owner && inHouse.has(hm.owner.id)) } : null;
+  // whose field each worker of the house works, and how the harvest is split
+  const work = people.filter(p => p.age >= 15).map(p => {
+    const row = { id: p.id, name: p.name, job: p.job || null };
+    if (p.job !== 'farm' || !g || !g.fields.length) return row;
+    const f = g.fields[(p.slot || 0) % g.fields.length], ow = f.owner && S._a.get(f.owner);
+    if (g.land !== 'private' || !ow || ow.group !== g.id) row.field = { kind: 'common' };
+    else if (ow === p) row.field = { kind: 'own' };
+    else if (inHouse.has(ow.id)) row.field = { kind: 'family', owner: ow.name };
+    else row.field = { kind: 'hired', owner: ow.name, ownerId: ow.id, line: ow.lin ? clanName(S, ow.lin, true) : null };
+    return row;
+  });
+  const owned = g && g.land === 'private' ? g.fields.filter(f => inHouse.has(f.owner)).length : 0;
+  // who takes a part: the leader, a landlord, an overlord, a patron, a creditor
+  const take = [];
+  if (g && L) take.push(inHouse.has(L.id) ? { kind: 'leaderHouse', share: g.take } : { kind: 'leader', name: L.name, nid: L.id, share: g.take });
+  for (const r of work) if (r.field && r.field.kind === 'hired') take.push({ kind: 'landlord', name: r.field.owner, nid: r.field.ownerId, worker: r.name });
+  const lord = g && g.lord && S._g.get(g.lord);
+  if (lord) take.push({ kind: 'tribute', name: lord.name, rate: Math.round(Math.min(g.tribRate || 0.02, 0.02) * 12 * 100) });
+  for (const p of people) {
+    const pt = p.patron && S._a.get(p.patron);
+    if (pt && L && pt.id === L.id && !inHouse.has(pt.id)) take.push({ kind: 'retainer', name: p.name, patron: pt.name, nid: pt.id });
+    else if (pt && !inHouse.has(pt.id)) take.push({ kind: 'client', name: p.name, patron: pt.name, nid: pt.id });
+  }
+  // debts both ways
+  const owes = people.filter(p => p.debt > 0.5 && p.cred && !inHouse.has(p.cred)).map(p => { const c = S._a.get(p.cred); return { name: p.name, to: c ? c.name : '?', nid: c ? c.id : null, amount: Math.round(p.debt), rate: Math.round((p.rate || 0) * 100), bond: !!p.bond }; });
+  const owed = S.agents.filter(o => o.debt > 0.5 && inHouse.has(o.cred) && !inHouse.has(o.id)).map(o => ({ name: o.name, to: (S._a.get(o.cred) || {}).name, amount: Math.round(o.debt), bond: !!o.bond }));
+  const obliged = [];
+  for (const p of people) for (const oid in p.bonds || {}) { const b = p.bonds[oid]; const o = S._a.get(+oid); if (b[0] === 'debt' && o && !inHouse.has(o.id)) obliged.push({ name: p.name, to: o.name, nid: o.id, why: b[3], ev: b[5] }); }
+  // who settles a dispute: a custom, the assembly or the leader; in a blood feud the old people talk for blood money
+  const customs = Object.entries((g && g.customs) || {}).map(([k, o]) => ({ kind: k, outcome: o, ev: g.customEv && g.customEv[k] }));
+  const court = g ? { by: g.gov === 'assembly' ? 'assembly' : 'leader', leader: L ? L.name : null, nid: L ? L.id : null, customs, elders: g.members.filter(id => { const m = S._a.get(id); return m && m.age > 55; }).length } : null;
+  return { name: a.name, village: g ? g.name : null, people: people.map(p => ({ id: p.id, name: p.name, age: Math.floor(p.age), sex: p.sex })), house, work, owned, fields: g ? g.fields.length : 0, land: g ? g.land || 'common' : null, take, owes, owed, obliged: obliged.slice(0, 4), court };
+}
 /* ---------- lineages: a line from a founder, its head, and how lines take sides (П1, see docs/POLITICS.md) ---------- */
 // a.lin: the lineage, the id of its founder (whoever landed or came from outside); children take the father's line,
 // or the mother's when the father is unknown. S.lins[id] = { n: founder's name, t: tick }.
@@ -5611,7 +5660,7 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, CASE_LABEL, householdView, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {
@@ -8457,6 +8506,7 @@ function card() {
   ${g && g.home && ((g.pots || 0) >= 1 || (g.cloth || 0) >= 1 || (g.goats || 0) || g.fboats) ? `<p class="rel">Хозяйство: ${[g.goats ? `${g.goats} коз` : '', g.fboats ? `${g.fboats} ${g.fboats === 1 ? 'рыбацкая лодка' : g.fboats < 5 ? 'рыбацкие лодки' : 'рыбацких лодок'}` : '', (g.pots || 0) >= 1 ? `горшков ${Math.round(g.pots)}` : '', (g.cloth || 0) >= 1 ? `тканей ${Math.round(g.cloth)}` : ''].filter(Boolean).join(', ')}${(g.cloth || 0) >= g.members.length * 0.5 ? '. Тёплая одежда: зимой болеют реже' : ''}${(g.pots || 0) >= g.members.length * 0.5 ? '. Есть посуда: запасы хранятся дольше, воду носить легче' : ''}.</p>` : ''}
   ${famTxt(a, g, L)}
   ${houseTxt(a)}
+  ${yardHtml(a)}
   ${a._day ? `<p class="rel">${esc(SIM.dayWords(a))}</p>` : ''}
   ${dailyPlanText(a)}
   ${bondsTxt(a)}
@@ -8644,6 +8694,67 @@ function showArchiveSearch(events, query) {
 }
 
 archiveQuery.addEventListener('input', () => updateChronicle(true));
+/* ---------- Н4: the household — what the regime means for one family ---------- */
+// Four questions under the house line of the card: whose field, who takes a part, who judges, who owes whom.
+// The words come from SIM.householdView; the regime is never named here, only what it does to this family.
+// a name in the case the sentence needs: «вождю Эланюту», «у Эланюта»
+const nmc = (id, name, padezh) => { const p = id && SIM.personOf(S, id); return esc(p ? SIM.nameCase(p, padezh) : name); };
+const nameList = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' и ' + xs[xs.length - 1];
+function yardFields(v) {
+  const groups = new Map(), other = [];
+  for (const r of v.work) {
+    if (!r.field) { if (r.job && r.job !== 'farm') other.push(`${esc(r.name)} ${JOB[r.job] || 'без дела'}`); continue; }
+    const k = r.field.kind + ':' + (r.field.owner || '');
+    if (!groups.has(k)) groups.set(k, { f: r.field, who: [] });
+    groups.get(k).who.push(esc(r.name));
+  }
+  const lines = [...groups.values()].map(({ f, who }) => {
+    const verb = who.length > 1 ? 'работают' : 'работает';
+    if (f.kind === 'common') return `${nameList(who)} ${verb} на общем поле деревни: весь урожай идёт в общий амбар`;
+    if (f.kind === 'own') return `${nameList(who)} ${verb} на своём поле: половина урожая себе, половина в общий амбар`;
+    if (f.kind === 'family') return `${nameList(who)} ${verb} на поле семьи (${esc(f.owner)}): половина урожая в дом, половина в общий амбар`;
+    return `${nameList(who)} ${verb} на чужом поле — у ${nmc(f.ownerId, f.owner, 'genitive')}${f.line ? ` из ${esc(f.line)}` : ''}: хозяину треть урожая, себе седьмая часть, половина в общий амбар`;
+  });
+  if (v.land === 'private') lines.push(v.owned ? `Семье принадлежит ${v.owned} ${plA(v.owned, 'поле', 'поля', 'полей')} из ${v.fields}` : `Своей земли у семьи нет (в деревне ${v.fields} ${plA(v.fields, 'поле', 'поля', 'полей')})`);
+  return lines.concat(other);
+}
+function yardTake(v) {
+  const out = [], landlords = new Map();
+  for (const t of v.take) {
+    if (t.kind === 'leader') out.push(`вождю ${nmc(t.nid, t.name, 'dative')} — ${Math.round(t.share * 100)} % общего амбара (${SIM.word('take', t.share, null, true)} доля)`);
+    else if (t.kind === 'leaderHouse') out.push(`это дом вождя: себе он берёт ${Math.round(t.share * 100)} % общего амбара`);
+    else if (t.kind === 'landlord') { if (!landlords.has(t.nid)) landlords.set(t.nid, { name: t.name, who: [] }); landlords.get(t.nid).who.push(esc(t.worker)); }
+    else if (t.kind === 'tribute') out.push(`деревня платит дань «${esc(t.name)}»: около ${t.rate} % общего запаса в год`);
+    else if (t.kind === 'client') out.push(`${esc(t.name)} — под покровительством ${nmc(t.nid, t.patron, 'genitive')}: каждый месяц отдаёт двадцатую часть своего запаса`);
+    else if (t.kind === 'retainer') out.push(`${esc(t.name)} служит вождю ${nmc(t.nid, t.patron, 'dative')} и получает от него плату`);
+  }
+  for (const [nid, { name, who }] of landlords) out.splice(1, 0, `хозяину земли ${nmc(nid, name, 'dative')} — треть урожая с его поля, где ${who.length > 1 ? 'работают' : 'работает'} ${nameList(who)}`);
+  return out;
+}
+function yardCourt(v) {
+  const c = v.court; if (!c) return '';
+  const cu = c.customs.map(x => (SIM.CASE_LABEL[x.kind] || {})[x.outcome]).filter(Boolean);
+  const by = c.by === 'assembly' ? 'вече: решает собрание' : `вождь ${esc(c.leader || '?')}`;
+  const blood = c.customs.some(x => x.kind === 'blood') ? '' : c.elders ? `; в кровной вражде старики (${c.elders}) и вождь уговаривают взять выкуп` : '';
+  return cu.length ? `По обычаю деревни: ${esc(cu.join('; '))}. Где обычая нет, судит ${by}${blood}.` : `Обычаев ещё не сложилось: судит ${by}${blood}.`;
+}
+function yardDebts(v) {
+  const out = [];
+  for (const d of v.owes) out.push(`${esc(d.name)} ${d.bond ? `в кабале у ${nmc(d.nid, d.to, 'genitive')}` : `должен ${nmc(d.nid, d.to, 'dative')}`}: ${d.amount}${d.rate ? ` под ${d.rate} % в год` : ''}`);
+  for (const d of v.owed) out.push(`${esc(d.name)} ${d.bond ? 'в кабале у семьи' : 'должен семье'} (${esc(d.to)}): ${d.amount}`);
+  for (const d of v.obliged) out.push(`${esc(d.name)} обязан ${nmc(d.nid, d.to, 'dative')}: ${esc(d.why)}${evLink(d.ev)}`);
+  return out.length ? out : ['Никому не должны, и им никто не должен.'];
+}
+function yardHtml(a) {
+  const v = SIM.householdView(S, a.id);
+  if (!v || !v.village) return '';
+  const li = xs => xs.map(x => `<li>${x}</li>`).join('');
+  return `<div class="yard"><b>Двор</b>
+    <p class="yard-q">Чьё поле</p><ul>${li(yardFields(v))}</ul>
+    <p class="yard-q">Кому отдают часть урожая</p><ul>${li(yardTake(v))}</ul>
+    <p class="yard-q">К кому идут судиться</p><ul><li>${yardCourt(v)}</li></ul>
+    <p class="yard-q">Долги и обязательства</p><ul>${li(yardDebts(v))}</ul></div>`;
+}
 /* ---------- two worlds ---------- */
 const EX = { on: false, A: null, B: null, k: 'scarcity', va: 0.3, vb: 0.8, playing: true, speed: 16, acc: 0, seed: null, tA: { terr: document.createElement('canvas'), key: '', at: 0, id: 'A' }, tB: { terr: document.createElement('canvas'), key: '', at: 0, id: 'B' }, lastUi: 0 };
 const experimentRunner = backgroundWorlds(() => [EX.A, EX.B], ([a, b]) => { EX.A = a; EX.B = b; });
