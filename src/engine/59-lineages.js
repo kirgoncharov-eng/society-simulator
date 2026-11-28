@@ -41,7 +41,8 @@ function linSuccession(S, g, W, old, ev) {
   if (g.dynasty || g.gov === 'assembly' || g.linN < 2 || g.members.length < 6) return;
   const share = linShare(S, g, g.linId);
   const son = old && (W.father === old.id || W.mother === old.id);
-  if (!(linStrong(S, g, g.linId) || son) || rnd(S) > 0.5) return;
+  const mound = ancestorMound(S, g, g.linId);
+  if (!(linStrong(S, g, g.linId) || son || mound) || rnd(S) > 0.5) return;
   g.dynasty = true; g.dynName = clanName(S, g.linId, true); g.dynLin = g.linId; g.dynGen = 1; if (g.gov !== 'assembly') g.gov = 'monarch';
   S.stats.linDynasty = (S.stats.linDynasty || 0) + 1;
   if (!g.home) return;

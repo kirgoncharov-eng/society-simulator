@@ -98,8 +98,11 @@ function growUp(S, k, mo, fa, g) {
   const p = mo || fa;
   const a = spawn(S, 'child', { parent: p, mother: mo, father: fa, lin: k.lin, g, x: k.x, y: k.y });
   a.sex = k.sex; a.bornT = k.t;
+  // К1: named after someone the village remembers
+  const nm = memoryName(S, a, g); if (nm) { a.name = nm.name; a.namedFor = nm.hero; S.stats.namedFor = (S.stats.namedFor || 0) + 1; }
   const par = [S._a.get(k.mo0 || k.mo), S._a.get(k.fa)].filter(Boolean);
   a.bio = [[k.t, 'born', `Рождается${g ? ` в «${g.name}»` : ' в пути'}${mo || fa ? `, ${a.sex === 'f' ? 'дочь' : 'сын'} ${[mo, fa].filter(Boolean).map(x => nameCase(x, 'genitive')).join(' и ')}` : ''}`]]; a.drama = 1;
+  if (nm) bio(S, a, 'named', `${fem(a, 'Назван', 'Названа')} ${nm.why}`, nm.ev);
   if (!mo && !fa) bio(S, a, 'orphan', 'Растёт сиротой: родителей уже нет в живых');
   if (k.plagueOrphan) bio(S, a, 'orphan', 'Родители умерли в мор');
   for (const o of S.agents) if (o !== a && ((a.mother && o.mother === a.mother) || (a.father && o.father === a.father))) { a.trust[o.id] = 0.4; o.trust[a.id] = 0.4; }
@@ -127,7 +130,8 @@ function plagueMonth(S) {
       if (share >= 0.12 && g.members.length) {
         for (const id of g.members) bio(S, S._a.get(id), 'plague', `Переживает мор: в «${g.name}» умерли ${g.plDead} из ${g.plPop}`);
         for (const id of g.members) { const m = S._a.get(id); if (m && m.debt) { m.debt *= 0.4; if (m.bond && m.debt < 8) m.bond = false; } }
-        log(S, 'plagueEnd', `Мор отступает от «${g.name}»: умерли ${g.plDead} из ${g.plPop}`, g.home.x, g.home.y, g.hue, { why: sent([`выжившим не хватает рук: поля стоят, а каждый работник теперь на счету`, 'простые люди требуют больших долей, и вождю приходится уступать', g.members.some(id => (S._a.get(id) || {}).debt) ? 'долги полегчали: многих кредиторов не стало' : '']), gs: [g.id] });
+        const pev = log(S, 'plagueEnd', `Мор отступает от «${g.name}»: умерли ${g.plDead} из ${g.plPop}`, g.home.x, g.home.y, g.hue, { why: sent([`выжившим не хватает рук: поля стоят, а каждый работник теперь на счету`, 'простые люди требуют больших долей, и вождю приходится уступать', g.members.some(id => (S._a.get(id) || {}).debt) ? 'долги полегчали: многих кредиторов не стало' : '']), gs: [g.id] });
+        memPlague(S, g, g.plDead, pev);
       }
     }
   }

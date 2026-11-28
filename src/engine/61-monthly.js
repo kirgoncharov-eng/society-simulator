@@ -155,6 +155,7 @@ function aidMonth(S) {
     } else {
       const shown = !g.aidFrom[o.id] || S.tick - g.aidFrom[o.id] > 360 * 5;
       const aidEv = (shown ? log : note)(S, 'aid', `«${o.name}» посылает зерно голодающей «${g.name}»: ${qty(amt, 'food')}`, g.home.x, g.home.y, o.hue, { why: sent([t ? `у ${t} ${pl(t, 'жителя', 'жителей', 'жителей')} «${g.name}» родители или дети живут в «${o.name}»` : '', friend ? 'деревни в союзе' : '', LO.coop > 0.6 ? `${LO.name} щедр${LO.sex === 'f' ? 'а' : ''} и не бросает соседей` : '', `в «${o.name}» запасено ${Math.round(o.treasury + amt)} еды на ${o.members.length} ${pl(o.members.length, 'едока', 'едоков', 'едоков')}`, 'такую помощь помнят долго']), who: [LO.id, LG.id], gs: [o.id, g.id] });
+      if (shown) memAid(S, o, g, aidEv);
       for (const id of g.members) {
         const a = S._a.get(id);
         if (id === g.leader || a.wealth < 0.3) rememberGrain(S, a, LO, aidEv.id);
@@ -222,6 +223,7 @@ function groupMonth(S, g) {
     const cold = Math.max(0, n - g.houses.length * 4);
     const famEv = log(S, 'famine', `Голодная зима в «${g.name}»: ${hungry} из ${n} голодают`, g.home.x, g.home.y, g.hue, { why: sent([`полей ${g.fields.length} на ${n} едоков`, `зимой поля не родят, а запас к зиме — ${Math.max(0, g.treasury + pool).toFixed(0)} при нужде около ${n * 3}`, cold ? `${cold} ${one(cold) ? 'зимует' : 'зимуют'} без крыши и теряют силы` : '', g.take > 0.18 ? `вождь забирает себе ${P0(g.take)} общего урожая` : '', S.tick < S.drought ? 'идёт засуха' : '']), who: mem.filter(m => m.wealth < 0).map(m => m.id), gs: [g.id] });
     breadTest(S, g, L, mem, famEv.id);
+    memFamine(S, g, hungry, n, famEv);
   }
   if (L.wealth > 20) {
     const top = mem.filter(m => m.boss === L.id), gift = (L.wealth - 20) * 0.1;
@@ -316,6 +318,7 @@ function groupMonth(S, g) {
         const ng = createGroup(S, ch, sup, g.id);
         S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); bond(S, L, ch, 'enemy', `${fem(ch, 'расколол', 'расколола')} «${g.name}» и ${fem(ch, 'увёл', 'увела')} людей`, 0.6); S.stats.schisms++;
         const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why: why2, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
+        memFounding(S, ng, ch, sev);
         refBond(S, L, ch, sev.id); refLast(S, ch, 'schism', sev.id);
         return;
       }
@@ -390,6 +393,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   } else cev = log(S, 'coup', `Переворот в «${g.name}»: ${ch.name} свергает ${nameCase(L, 'accusative')}`, ch.x, ch.y, g.hue, { why, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id], causes: causes0.length ? causes0 : undefined });
   // the deposed, his grown children and the usurper's chronicle and ties point to the coup
   const id = cev.id; powerEvent(S, g, id);
+  memPower(S, g, { ev: id, tone: 'grief', w: 0.7, what: `переворот, когда ${ch.name} ${fem(ch, 'сверг', 'свергла')} ${nameCase(L, 'accusative')}`, hero: L.id, lin: L.lin });
   refBond(S, L, ch, id); refLast(S, ch, 'coup', id); refLast(S, L, 'deposed', id); refLast(S, ch, 'leader', id);
   if (L.group === g.id) powerDeposed(S, L, g, id);
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.age >= 15) { refBond(S, o, ch, id); refLast(S, o, 'feud', id); if (o.feud && o.feud.L === ch.id && !o.feud.ev) o.feud.ev = cite(S, id); }

@@ -50,6 +50,7 @@ function monthDays(S) {
   const d = S.tick % 30, y = S.tick % 360;
   for (const g of S.groups.slice()) if (!g.dead && monthDay(g) === d) groupMonth(S, g);
   // the harvest feast falls on a village's own day in the ten days after the harvest is in
+  for (const g of S.groups) if (g.memDay && !g.dead && g.home && y === 110 + monthDay(g) % 20) memorialDay(S, g);
   if (y >= 330 && y < 340) for (const g of S.groups.slice()) if (!g.dead && 330 + monthDay(g) % 10 === y) harvestFeast(S, g);
   if (d === 6) families(S);
   if (d === 12) plagueMonth(S);
