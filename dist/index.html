@@ -524,7 +524,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm32', date: '2026-11-23', note: 'час у событий, деревни решают в свой день месяца, беременность девять месяцев, год траура вдовы' };
+const MODEL = { v: 'm33', date: '2026-11-28', note: 'память общин и мест: воспоминания со свидетелями, места с именами, курганы, братские могилы, день поминовения' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -4119,10 +4119,15 @@ const PLACE_NAMES = {
   plague: ['Моровая яма', 'Моровой лог'],
   hunger: ['Голодная могила', 'Голодный лог']
 };
-// a unique name on the island: the second «Кровавый брод» is told apart by the village nearby
+// a unique name on the island: the second «Кровавый брод» becomes «Новый кровавый брод», the next ones name the village
+const NOUN_GENDER = { брод: 'm', холм: 'm', берег: 'm', мыс: 'm', лог: 'm', камень: 'm', курган: 'm', роща: 'f', заводь: 'f', яма: 'f', могила: 'f', поле: 'n' };
 function uniqueName(S, name, g) {
   const taken = new Set((S.places || []).map(p => p.name));
-  return taken.has(name) && g ? `${name} у «${g.name}»` : name;
+  if (!taken.has(name)) return name;
+  const noun = name.toLowerCase().split(' ').find(w => NOUN_GENDER[w]), gen = NOUN_GENDER[noun] || 'm';
+  const second = `${gen === 'f' ? 'Новая' : gen === 'n' ? 'Новое' : 'Новый'} ${name.charAt(0).toLowerCase() + name.slice(1)}`;
+  if (!taken.has(second)) return second;
+  return g ? `${name} (${g.name})` : `${name} (${(S.places || []).length})`;
 }
 function namePlace(S, o) {
   const p = Object.assign({ id: (S.placeId = (S.placeId || 0) + 1), t: S.tick }, o);
@@ -4278,7 +4283,7 @@ function memoryTies(S) {
   }
   return { grudge, thanks };
 }
-const GRUDGE_FLOOR = typeof process !== 'undefined' && process.env.SOCIETY_ABL === 'nogrudge' ? 0 : 0.25; // ABLATION-TEMP
+const GRUDGE_FLOOR = 0.35;
 // fear of a place: a plague pit or a mass grave, still remembered, keeps settlers and fields away
 function dreadAt(S, x, y, r = 70) {
   for (const p of S.places || []) {

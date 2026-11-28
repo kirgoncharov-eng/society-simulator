@@ -207,7 +207,7 @@ function memoryTies(S) {
   }
   return { grudge, thanks };
 }
-const GRUDGE_FLOOR = 0.25;
+const GRUDGE_FLOOR = 0.35;
 // fear of a place: a plague pit or a mass grave, still remembered, keeps settlers and fields away
 function dreadAt(S, x, y, r = 70) {
   for (const p of S.places || []) {
