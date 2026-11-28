@@ -92,7 +92,8 @@ function bloodOrWergild(S, g, avenger, killer) {
   const price = Math.min(12, kinPurse + help);
   const vendetta = (g.customs || {}).blood === 'revenge'; // where blood for blood is the custom, taking money is shameful
   const p = price < (custom ? 4 : 7) ? 0 : custom ? 0.8 : vendetta ? 0.05 : clamp(0.2 + 0.4 * elders(S, g) + 0.25 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
-  if (rnd(S) > p) return false;
+  const pr = g.cult && g.cult.pride; // К3: a people proud of peace takes blood money more readily, one proud of honour less
+  if (rnd(S) > clamp(p + (pr === 'peace' ? 0.15 : pr === 'honor' ? -0.15 : 0), 0, 0.95)) return false;
   // pay: the killer first, then the kin
   let due = price; const take = (o, cap) => { const x = Math.min(due, Math.max(0, cap)); o.wealth -= x; due -= x; };
   take(killer, killer.wealth); for (const o of kinK) if (due > 0) take(o, o.wealth - 2);

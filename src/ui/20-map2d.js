@@ -529,6 +529,7 @@ function draw(now) {
     placed.push({ x: sx, y, w: tw }); if (rt) placed.push({ x: sx, y: y + 13 * dpr, w: tw });
     ctx.strokeStyle = C.plate; ctx.lineWidth = 4 * dpr; ctx.strokeText(g.name, sx, y);
     ctx.fillStyle = C.ink; ctx.fillText(g.name, sx, y);
+    if (g.cult && g.home) { ctx.fillStyle = SIM.COLOR_HEX[g.cult.color] || '#999'; ctx.fillRect(sx + tw / 2 + (g.coin ? 15 : 4) * dpr, y - 9 * dpr, 7 * dpr, 7 * dpr); } // К3: the village's colour (after the coin, if any)
     if (g.dynasty) { const cx = sx - tw / 2 - 9 * dpr, cy = y - 4 * dpr, q = dpr; ctx.fillStyle = C.dark ? '#e3c25a' : '#b8860b'; ctx.beginPath(); ctx.moveTo(cx - 5 * q, cy + 4 * q); ctx.lineTo(cx - 5 * q, cy - 3 * q); ctx.lineTo(cx - 2.5 * q, cy); ctx.lineTo(cx, cy - 4 * q); ctx.lineTo(cx + 2.5 * q, cy); ctx.lineTo(cx + 5 * q, cy - 3 * q); ctx.lineTo(cx + 5 * q, cy + 4 * q); ctx.closePath(); ctx.fill(); }
     if (g.coin) { const cx = sx + tw / 2 + 8 * dpr, cy = y - 4 * dpr; ctx.fillStyle = C.dark ? '#e3c25a' : '#c9a227'; ctx.beginPath(); ctx.arc(cx, cy, 4.5 * dpr, 0, 7); ctx.fill(); ctx.strokeStyle = C.dark ? '#8a6d1c' : '#8a6a10'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.arc(cx, cy, 2.4 * dpr, 0, 7); ctx.stroke(); }
     if (rt) { ctx.font = `400 ${11.5 * dpr}px Inter, system-ui, sans-serif`; ctx.strokeText(rt, sx, y + 13 * dpr); ctx.fillStyle = C.muted; ctx.fillText(rt, sx, y + 13 * dpr); ctx.font = `500 ${12 * dpr}px Inter, system-ui, sans-serif`; }

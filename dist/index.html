@@ -524,7 +524,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm34', date: '2026-11-28', note: 'предания: пересказ поколений искажает правду, версии у победителей, побеждённых и дочерних деревень, переписывание после переворота' };
+const MODEL = { v: 'm35', date: '2026-11-28', note: 'культуры и народы: черты деревни, наследование, заимствование, пришлые, народы, свои и чужие' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -621,6 +621,7 @@ function archiveGC(S) {
     goalRefs(a.goals);
   }
   for (const l of S.legends || []) { refs(l.bio); goalRefs(l.goals); }
+  for (const id in S.shades || {}) refs(S.shades[id].bio); // the chronicle of the dead, while someone still names them
   for (const id of S.secrets || []) keep.add(id);
   for (const g of S.groups) {
     for (const k in g.customEv || {}) keep.add(g.customEv[k]);
@@ -878,7 +879,11 @@ function homeEconomy(S, g, mem) {
     if (seas === 1) g.goats += Math.max(g.goats >= 2 ? 1 : 0, Math.round(g.goats * 0.14 * (g.goats < cap ? 1 : 0.2)));
     if (g.goats > cap) g.goats -= Math.ceil((g.goats - cap) * 0.15);
     if (seas !== 0) g.treasury += g.goats * 0.12 * (dry ? 0.6 : 1);
-    if (g.treasury < n * 1.2 && g.goats > 3) { const k = Math.min(g.goats - 3, Math.ceil(n / 5)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
+    // К3: where goat meat is taboo, the herd is spared until real hunger; then the taboo is broken, and that is remembered
+    const taboo = g.cult && g.cult.taboo === 'goat';
+    if (taboo && g.treasury < n * 1.2 && g.treasury >= n * 0.5) { /* the herd is spared */ }
+    else if (g.treasury < n * 1.2 && g.goats > 3) {
+      if (taboo && (!g.tabooBroke || S.tick - g.tabooBroke > 360 * 5)) { g.tabooBroke = S.tick; S.stats.tabooBroken = (S.stats.tabooBroken || 0) + 1; note(S, 'culture', `В «${g.name}» от голода режут коз, хотя козлятину здесь не едят`, g.home.x, g.home.y, g.hue, { gs: [g.id], why: 'запрет держится, пока есть что есть' }); } const k = Math.min(g.goats - 3, Math.ceil(n / 5)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
   } else if (S.tick - g.founded > 360 && rnd(S) < 0.01) { for (const o of S.groups) if (o !== g && o.goats > 8 && o.home && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300 && (S.hostility[key(o.id, g.id)] || 0) < 0.6) { o.goats -= 2; g.goats = 2; break; } }
   // sea fishing from boats
   const fishers = mem.filter(m => m.job === 'fish');
@@ -2205,7 +2210,7 @@ function warMonth(S) {
       let pa = 0; for (const m of fighters) pa += fightPow(m, A);
       const pdR = defence(S, B, A.home), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
       const prize = B.treasury + (B.tools || 0) * 4 + (A.lord === B.id ? 40 : 0);
-      const v = odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
+      const v = (A.people && B.people && A.people !== B.people ? 1.15 : 1) * odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
       if (odds > 0.42 && v > bv) { bv = v; best = { B, fighters, pa, pd: pdR, odds, oddsR, h, d, av }; }
     }
     if (!best) continue;
@@ -3102,7 +3107,7 @@ function families(S) {
       if (m.spouse || Math.abs(m.age - f.age) > 14 || kin(m, f)) continue;
       const d = Math.hypot(m.x - f.x, m.y - f.y), gm = S._g.get(m.group), gf = S._g.get(f.group);
       if (m.group !== f.group && d > 320) continue;
-      const v = (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + bondW(f, m) + Math.min(0, bondW(S._a.get(f.father), m), bondW(S._a.get(f.mother), m)) + 0.3 * (m.rep || 0) + 0.02 * m.status + matchPull(S, f, m) - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
+      const v = peopleBond(S, f, m) + (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + bondW(f, m) + Math.min(0, bondW(S._a.get(f.father), m), bondW(S._a.get(f.mother), m)) + 0.3 * (m.rep || 0) + 0.02 * m.status + matchPull(S, f, m) - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
       if (v > bv) { bv = v; best = m; }
     }
     if (!best || bv < -0.4) continue;
@@ -3165,6 +3170,7 @@ function marry(S, f, m) {
   S.hostility[k] = (S.hostility[k] || 0) * (royal(f) || royal(m) ? 0.4 : 0.85);
   if (LF && LM) { bump(LF, LM, royal(f) || royal(m) ? 0.3 : 0.05); bump(LM, LF, royal(f) || royal(m) ? 0.3 : 0.05); }
   S.kinTies = S.kinTies || {}; S.kinTies[k] = (S.kinTies[k] || 0) + 1;
+  { const pa = gf, pb = gm; if (pa && pb && pa.people && pb.people) S.stats[pa.people === pb.people ? 'marPeopleSame' : 'marPeopleDiff'] = (S.stats[pa.people === pb.people ? 'marPeopleSame' : 'marPeopleDiff'] || 0) + 1; }
   if ((royal(f) || royal(m)) && gf.home && gm.home && (S.marLog || {})[k] === undefined || ((royal(f) || royal(m)) && S.tick - ((S.marLog || {})[k] || 0) > 360 * 6)) {
     S.marLog = S.marLog || {}; S.marLog[k] = S.tick;
     const al = allied(S, gf.id, gm.id);
@@ -3176,7 +3182,7 @@ function marry(S, f, m) {
 function growUp(S, k, mo, fa, g) {
   const p = mo || fa;
   const a = spawn(S, 'child', { parent: p, mother: mo, father: fa, lin: k.lin, g, x: k.x, y: k.y });
-  a.sex = k.sex; a.bornT = k.t;
+  a.sex = k.sex; a.bornT = k.t; setHome0(S, a, g);
   // К1: named after someone the village remembers
   const nm = memoryName(S, a, g); if (nm) { a.name = nm.name; a.namedFor = nm.hero; S.stats.namedFor = (S.stats.namedFor || 0) + 1; }
   const par = [S._a.get(k.mo0 || k.mo), S._a.get(k.fa)].filter(Boolean);
@@ -3582,7 +3588,8 @@ function bloodOrWergild(S, g, avenger, killer) {
   const price = Math.min(12, kinPurse + help);
   const vendetta = (g.customs || {}).blood === 'revenge'; // where blood for blood is the custom, taking money is shameful
   const p = price < (custom ? 4 : 7) ? 0 : custom ? 0.8 : vendetta ? 0.05 : clamp(0.2 + 0.4 * elders(S, g) + 0.25 * ((L && L.coop) || 0.4) - 0.15 * avenger.ambition, 0, 0.6);
-  if (rnd(S) > p) return false;
+  const pr = g.cult && g.cult.pride; // К3: a people proud of peace takes blood money more readily, one proud of honour less
+  if (rnd(S) > clamp(p + (pr === 'peace' ? 0.15 : pr === 'honor' ? -0.15 : 0), 0, 0.95)) return false;
   // pay: the killer first, then the kin
   let due = price; const take = (o, cap) => { const x = Math.min(due, Math.max(0, cap)); o.wealth -= x; due -= x; };
   take(killer, killer.wealth); for (const o of kinK) if (due > 0) take(o, o.wealth - 2);
@@ -3850,7 +3857,7 @@ const EVENT_HOUR = {
   // family: weddings before sunset, flight at night
   marriage: ['s', -1, 1], elope: ['s', 3, 1.5], break: ['s', 1, 1.5],
   // talk, plans and secrets: the evening by the fire
-  arc: ['s', 2, 1.5], myth: ['s', 2.5, 1.5], secret: ['s', 2.5, 1.5], rumor: ['s', 2, 1.5],
+  arc: ['s', 2, 1.5], myth: ['s', 2.5, 1.5], culture: ['h', 12, 3], secret: ['s', 2.5, 1.5], rumor: ['s', 2, 1.5],
   // work done: in the working hours
   tech: ['h', 14, 3], well: ['h', 15, 2], bridge: ['h', 15, 2], milestone: ['h', 15, 3], trade: ['h', 11, 2], route: ['h', 11, 2], market: ['h', 10, 2],
   // hardship: found out in the morning; the sea and the heat take people by day
@@ -4075,6 +4082,180 @@ function dayWords(a) {
   const parts = [b.road >= 1 / 60 ? `дорога ${hm(b.road)}` : '', b.kids ? `${b.kids >= 2 ? 'младенец' : 'малый ребёнок'} ${hm(b.kids)}` : '', b.extra > 0.2 ? `ради семьи сверх обычного ${hm(b.extra)}` : b.extra < -0.2 ? `сыты и рано заканчивают: на ${hm(-b.extra)} меньше` : '', b.tired < 0.95 ? 'выбился из сил и отдыхает' : ''].filter(Boolean);
   return `Сегодня светло ${hm(b.day)}${parts.length ? `: ${parts.join(', ')}` : ''}; на работу ${hm(b.work)}${b.f < 0.6 ? ' — меньше, чем у соседей' : b.f > 1.25 ? ' — долгий день' : ''}.`;
 }
+/* ---------- cultures and peoples (К3, see docs/CULTURE.md) ---------- */
+// A village has a culture: how it buries its dead, which day it keeps, how it names its children, the sign it wears, what it
+// will not eat, what it prides itself on. A daughter village carries its mother's culture away; after a split it changes a
+// trait or two on purpose ("we are not like them"). Neighbours borrow from each other through marriages, trade, a common
+// faith and the example of the strong, the more readily the more they already share (Axelrod 1997); enemies do not borrow,
+// and their signs drift apart (Barth 1969, McElreath et al. 2003). Newcomers bring their own ways; when a third of a
+// village comes from one place, the village starts to change. Villages that share most of their culture make a people:
+// it names itself after the ancestor of its founding legend, its neighbours name it by its sign. Own people marry each other
+// more, ally more readily, quarrel less; with strangers the enmity grows faster (moderately, by the author's decision).
+// g.cult: { burial, day, names, color, pattern, taboo, pride, from: { trait: { how, from, t, ev } } }
+// a.home0: { g, name, people } — the culture a person grew up in. S.peoples: [{ id, self, exo, villages, born, color }]
+const CULT = {
+  burial: { opts: ['cemetery', 'threshold', 'mound', 'pyre', 'sea'], name: 'Погребение', words: { cemetery: 'хоронят на общем кладбище', threshold: 'хоронят под порогом родного дома', mound: 'знатных хоронят в курганах', pyre: 'сжигают умерших на костре', sea: 'отпускают умерших в море на лодке' } },
+  day: { opts: ['founding', 'fallen', 'harvest'], name: 'Памятный день', words: { founding: 'день основания деревни', fallen: 'день поминовения павших', harvest: 'праздник урожая' } },
+  names: { opts: ['ancestors', 'new'], name: 'Имена', words: { ancestors: 'детей называют в честь предков', new: 'детям дают новые имена' } },
+  color: { opts: ['ochre', 'blue', 'green', 'white', 'red', 'black'], name: 'Цвет', words: { ochre: 'охра', blue: 'синий', green: 'зелёный', white: 'белый', red: 'красный', black: 'чёрный' } },
+  pattern: { opts: ['stripes', 'circles', 'zigzag', 'cross', 'dots'], name: 'Узор', words: { stripes: 'полосы', circles: 'круги', zigzag: 'зигзаг', cross: 'крест', dots: 'точки' } },
+  taboo: { opts: ['none', 'goat'], name: 'Запрет', words: { none: 'запретов на пищу нет', goat: 'козлятину не едят' } },
+  pride: { opts: ['honor', 'peace'], name: 'Чем гордятся', words: { honor: 'честью: за кровь платят кровью', peace: 'миром: за кровь берут выкуп' } }
+};
+const CULT_KEYS = Object.keys(CULT);
+const COLOR_PEOPLE = { ochre: 'Охряные', blue: 'Синие', green: 'Зелёные', white: 'Белые', red: 'Красные', black: 'Чёрные' };
+const PATTERN_PEOPLE = { stripes: 'Полосатые', circles: 'Кольчатые', zigzag: 'Зубчатые', cross: 'Крестовые', dots: 'Пятнистые' };
+const COLOR_HEX = { ochre: '#c8913a', blue: '#3f6fb5', green: '#4c8f4a', white: '#e8e4d8', red: '#b8433a', black: '#2d2a28' };
+const cultWord = (k, v) => (CULT[k] && CULT[k].words[v]) || '';
+const pickH = (k, n) => CULT[k].opts[Math.floor(hash01(n) * CULT[k].opts.length) % CULT[k].opts.length];
+
+// the first culture of a village with no mother: the landscape and the leader suggest it
+function newCulture(S, g) {
+  const L = S._a.get(g.leader), x = g.home ? g.home.x : g.cx, y = g.home ? g.home.y : g.cy, h = g.id * 97 + 13;
+  const shore = terrainAt(S, x, y) === 'shore' || (g.landing && Math.hypot(g.landing.x - x, g.landing.y - y) < 120);
+  const c = {
+    burial: shore && hash01(h + 1) < 0.35 ? 'sea' : terrainAt(S, x, y) === 'hill' && hash01(h + 2) < 0.5 ? 'mound' : pickH('burial', h + 3),
+    day: 'founding', names: pickH('names', h + 4), color: pickH('color', h + 5), pattern: pickH('pattern', h + 6),
+    taboo: hash01(h + 7) < 0.25 ? 'goat' : 'none',
+    pride: (g.customs || {}).blood === 'revenge' ? 'honor' : (g.customs || {}).blood === 'wergild' ? 'peace' : L && L.coop < 0.4 ? 'honor' : 'peace',
+    from: {}
+  };
+  for (const k of CULT_KEYS) c.from[k] = { how: 'own', t: S.tick };
+  return c;
+}
+function cultOf(S, g) { if (!g.cult) g.cult = newCulture(S, g); return g.cult; }
+// a daughter village takes its mother's culture; a split changes the sign and one more trait, to be told apart
+function inheritCulture(S, mother, child, how, ev) {
+  if (!mother || !child) return;
+  const m = cultOf(S, mother), c = Object.assign({}, m, { from: {} });
+  for (const k of CULT_KEYS) c.from[k] = { how: 'mother', from: mother.name, t: S.tick, ev: ev && ev.id };
+  if (how === 'schism') {
+    const rest = CULT_KEYS.filter(k => k !== 'color'), i0 = Math.floor(hash01(child.id * 31) * rest.length) % rest.length;
+    const changed = ['color', rest[i0], rest[(i0 + 2) % rest.length]];
+    for (const k of changed) { const opts = CULT[k].opts.filter(v => v !== c[k]); c[k] = opts[Math.floor(hash01(child.id + k.length) * opts.length) % opts.length]; c.from[k] = { how: 'apart', from: mother.name, t: S.tick, ev: ev && ev.id }; }
+  }
+  child.cult = c; child.motherG = mother.id;
+  if (how === 'schism') S.stats.cult_apart = (S.stats.cult_apart || 0) + 1;
+}
+// how much two villages share, 0..1
+function cultSim(a, b) { if (!a || !b) return 0; let n = 0; for (const k of CULT_KEYS) if (a[k] === b[k]) n++; return n / CULT_KEYS.length; }
+function changeTrait(S, g, k, v, how, from, ev) {
+  const c = cultOf(S, g), old = c[k]; if (old === v) return;
+  c[k] = v; c.from[k] = { how, from, t: S.tick, ev };
+  S.stats.cultChanges = (S.stats.cultChanges || 0) + 1; S.stats['cult_' + how] = (S.stats['cult_' + how] || 0) + 1;
+  const what = k === 'color' || k === 'pattern' ? `носят ${k === 'color' ? 'цвет' : 'узор'}: ${cultWord(k, v)}` : cultWord(k, v);
+  const why = how === 'borrowed' ? `перенимают у «${from}»` : how === 'migrants' ? `так принято у пришлых из «${from}», а их в деревне уже треть` : how === 'enemy' ? `чтобы не походить на врагов из «${from}»` : 'новый обычай';
+  note(S, 'culture', `В «${g.name}» теперь ${what}: ${why}`, g.home ? g.home.x : g.cx, g.home ? g.home.y : g.cy, g.hue, { gs: [g.id], causes: ev ? [ev] : undefined, trait: k });
+}
+
+/* ---------- a year of culture ---------- */
+function cultureYear(S) {
+  const vs = S.groups.filter(g => g.home && !g.dead);
+  for (const g of vs) cultOf(S, g);
+  for (const g of vs) {
+    const c = g.cult;
+    // neighbours: contact through marriages, trade and a common faith; enemies give nothing and push the sign apart
+    for (const o of vs) {
+      if (o === g) continue;
+      const d = Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y); if (d > 350) continue;
+      const k = key(g.id, o.id), h = S.hostility[k] || 0;
+      if (h > 0.4) {
+        if (c.color === o.cult.color && hash01(S.tick + g.id * 7 + o.id) < 0.3) { const opts = CULT.color.opts.filter(v => v !== o.cult.color); changeTrait(S, g, 'color', opts[Math.floor(hash01(g.id + S.tick) * opts.length) % opts.length], 'enemy', o.name); }
+        continue;
+      }
+      const contact = Math.min(3, (S.kinTies || {})[k] || 0) * 0.5 + (S.routes[k] ? 1 : 0) + (o.faith && o.faith === g.faith ? 0.5 : 0) + (allied(S, g.id, o.id) ? 0.5 : 0);
+      if (!contact) continue;
+      const prestige = o.members.length > g.members.length * 1.3 ? 1.5 : 1;
+      // Axelrod: those with nothing in common do not learn from each other; the more they share, the more they borrow
+      const sim = cultSim(c, o.cult); if (sim < 2 / 7) continue;
+      const p = 0.012 * contact * sim * prestige;
+      for (const t of CULT_KEYS) if (c[t] !== o.cult[t] && hash01(S.tick * 13 + g.id * 31 + o.id * 7 + t.length * 101) < p) { changeTrait(S, g, t, o.cult[t], 'borrowed', o.name); break; }
+    }
+    // newcomers: when a third of the adults grew up in one other village, its ways start to take hold
+    const by = {};
+    for (const id of g.members) { const a = S._a.get(id); if (a && a.age >= 16 && a.home0 && a.home0.g !== g.id) by[a.home0.g] = (by[a.home0.g] || 0) + 1; }
+    const adults = g.members.filter(id => { const a = S._a.get(id); return a && a.age >= 16; }).length;
+    for (const oid in by) {
+      if (by[oid] < adults / 3) continue;
+      const src = S._g.get(+oid), sc = src && src.cult; if (!sc) continue;
+      const t = CULT_KEYS.find(k => c[k] !== sc[k]); if (t && hash01(S.tick + g.id * 3) < 0.25) changeTrait(S, g, t, sc[t], 'migrants', src.name);
+    }
+    // innovation, rarely
+    // the sign (colour, pattern) is not innovated: it changes by a split, against an enemy or by joining a people
+    const inner = CULT_KEYS.filter(k => k !== 'color' && k !== 'pattern');
+    if (hash01(S.tick * 7 + g.id * 131) < 0.01) { const t = inner[Math.floor(hash01(S.tick + g.id) * inner.length) % inner.length]; const opts = CULT[t].opts.filter(v => v !== c[t]); changeTrait(S, g, t, opts[Math.floor(hash01(g.id * S.tick) * opts.length) % opts.length], 'new'); }
+  }
+  peoplesYear(S, vs);
+  mythsTravel(S, vs);
+}
+
+/* ---------- peoples ---------- */
+// villages with the same sign (colour and pattern) and at least five of the seven traits in common are of one people; a people keeps its identity while most of its
+// villages stay together
+function peoplesYear(S, vs) {
+  const parent = new Map(vs.map(g => [g.id, g.id])), find = x => { while (parent.get(x) !== x) x = parent.get(x); return x; };
+  // Barth: a people knows its own by the sign — the same colour and pattern — and by most of the other customs
+  const same = (a, b) => a.color === b.color && a.pattern === b.pattern && cultSim(a, b) >= 4 / 7 - 1e-9;
+  for (let i = 0; i < vs.length; i++) for (let j = i + 1; j < vs.length; j++) if (same(vs[i].cult, vs[j].cult)) parent.set(find(vs[i].id), find(vs[j].id));
+  const groups = new Map(); for (const g of vs) { const r = find(g.id); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(g); }
+  const old = S.peoples || [], next = [], used = new Set();
+  for (const gs of groups.values()) {
+    const pop = gs.reduce((s, g) => s + g.members.length, 0);
+    // a people is two villages or more, or one big village (40 people and more) that keeps to itself
+    if (gs.length < 2 && pop < 40) { for (const g of gs) g.people = null; continue; }
+    const ids = gs.map(g => g.id);
+    let best = null, bv = 0;
+    for (const p of old) { if (used.has(p.id)) continue; const v = p.villages.filter(id => ids.includes(id)).length; if (v > bv) { bv = v; best = p; } }
+    let p;
+    if (best && bv * 2 >= Math.min(best.villages.length, ids.length)) { p = best; used.add(p.id); p.villages = ids; }
+    else {
+      // the self-name comes from the founder in the founding legend of the eldest village whose name no other people bears
+      const taken = new Set(old.concat(next).map(q => q.self)), byAge = gs.slice().sort((a, b) => a.founded - b.founded);
+      let eldest = byAge[0], origin = null, self = null;
+      for (const v of byAge) {
+        const o = (v.myths || []).find(y => y.kind === 'origin') || (v.mem || []).find(m => m.kind === 'origin');
+        const hp = o && o.hero && personOf(S, o.hero), nm = `Дети ${hp ? nameCase(hp, 'genitive') : (o && o.heroName) || v.founder}`;
+        if (!taken.has(nm)) { eldest = v; origin = o; self = nm; break; }
+      }
+      if (!self) self = `Люди «${eldest.name}»`;
+      p = { id: (S.peopleId = (S.peopleId || 0) + 1), self, exo: COLOR_PEOPLE[eldest.cult.color], villages: ids, born: S.tick, color: eldest.cult.color };
+      S.stats.peoplesBorn = (S.stats.peoplesBorn || 0) + 1;
+      p.exo = exoName(gs, next);
+      log(S, 'culture', `Складывается народ: ${p.self} — так они зовут себя, а соседи зовут их ${p.exo}. Это ${gs.map(g => `«${g.name}»`).join(', ')}`, eldest.home.x, eldest.home.y, eldest.hue, { why: sent([`у этих деревень общие обычаи: ${CULT_KEYS.filter(k => gs.every(g => g.cult[k] === eldest.cult[k])).map(k => cultWord(k, eldest.cult[k])).slice(0, 3).join(', ')}`, origin ? `и общее предание об основании: ${origin.heroName}` : '', 'свои узнают своих по цвету и узору']), gs: ids, causes: origin && origin.ev ? [origin.ev] : undefined });
+    }
+    // neighbours name a people by its colour; when another people already has that name, by its pattern
+    const big = gs.slice().sort((a, b) => b.members.length - a.members.length)[0].cult;
+    p.exo = exoName(gs, next); p.color = big.color; p.pattern = big.pattern;
+    for (const g of gs) g.people = p.id;
+    next.push(p);
+  }
+  for (const g of S.groups) if (!next.some(p => p.villages.includes(g.id))) g.people = null;
+  S.peoples = next;
+}
+function exoName(gs, others) {
+  const big = gs.slice().sort((a, b) => b.members.length - a.members.length)[0].cult, used = new Set(others.map(q => q.exo));
+  return !used.has(COLOR_PEOPLE[big.color]) ? COLOR_PEOPLE[big.color] : !used.has(PATTERN_PEOPLE[big.pattern]) ? PATTERN_PEOPLE[big.pattern] : `${COLOR_PEOPLE[big.color]} ${PATTERN_PEOPLE[big.pattern].toLowerCase()}`;
+}
+const peopleOfG = (S, g) => g && g.people && (S.peoples || []).find(p => p.id === g.people);
+// a person's people: the one they grew up in
+function peopleOfA(S, a) { const g0 = a && a.home0 && S._g.get(a.home0.g); return (g0 && g0.people) || (a && a.home0 && a.home0.people) || null; }
+// marriage: own people draw together, strangers apart (moderately)
+function peopleBond(S, f, m) { const pf = peopleOfA(S, f), pm = peopleOfA(S, m); if (!pf || !pm) return 0; return pf === pm ? 0.3 : -0.15; }
+// legends travel between villages of one people through marriages and trade (decided for К3)
+function mythsTravel(S, vs) {
+  for (const g of vs) {
+    if (!g.people || !g.myths || !g.myths.length) continue;
+    for (const o of vs) {
+      if (o === g || o.people !== g.people || !((S.kinTies || {})[key(g.id, o.id)] || S.routes[key(g.id, o.id)])) continue;
+      if (hash01(S.tick * 3 + g.id * 17 + o.id) > 0.15) continue;
+      const y = g.myths.find(x => x.version !== 'old' && !(o.myths || []).some(z => z.ev === x.ev)); if (!y) continue;
+      inheritMyths(S, { myths: [y], name: g.name }, o);
+      S.stats.mythTravel = (S.stats.mythTravel || 0) + 1;
+    }
+  }
+}
+// the culture a person grows up in (set when they come of age or are born into the world)
+function setHome0(S, a, g) { if (a && g) a.home0 = { g: g.id, name: g.name, people: g.people || null }; }
 /* ---------- memory of communities and places (К1, see docs/CULTURE.md) ---------- */
 // A village (and a lineage) remembers what struck it: its founding, blood, disasters, turns of power, help. A memory has a
 // weight and witnesses: every adult of the village at the time. While witnesses live it hardly fades (Assmann's living
@@ -4165,7 +4346,7 @@ function memBattle(S, A, B, win, deadA, deadB, ev) {
   // the fallen of each side are its heroes; the side that lost remembers the battle harder
   const ma = remember(S, A, { ev: ev.id, kind: 'blood', tone: win ? 'win' : 'loss', w: clamp(0.5 + 0.12 * dead + (win ? 0 : 0.2) + (unburied ? 0.3 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: B.id, hero: deadA[0] && deadA[0].id, unburied: unburied || undefined, dead: deadA.length, foeDead: deadB.length, att: true });
   const mb = remember(S, B, { ev: ev.id, kind: 'blood', tone: win ? 'loss' : 'win', w: clamp(0.6 + 0.12 * dead + (win ? 0.2 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: A.id, hero: deadB[0] && deadB[0].id, dead: deadB.length, foeDead: deadA.length });
-  for (const [g, m] of [[A, ma], [B, mb]]) if (m && m.mon && hash01(ev.id + g.id) < 0.4) memorialFor(S, g, m);
+  for (const [g, m] of [[A, ma], [B, mb]]) if (m && m.mon && hash01(ev.id + g.id) < (g.cult && g.cult.day === 'fallen' ? 0.7 : 0.4)) memorialFor(S, g, m);
   if (place && place.mon) note(S, 'rite', `${unburied ? `Павших «${A.name}» оставляют без погребения, своих` : 'Павших'} хоронят в братской могиле: ${place.name}`, x, y, B.hue, { rite: 'grave', who: deadA.concat(deadB).slice(0, 6).map(m => m.id), gs: [B.id, A.id], causes: [ev.id] });
   if (unburied) S.stats.unburied = (S.stats.unburied || 0) + 1;
 }
@@ -4192,7 +4373,7 @@ function memFamine(S, g, hungry, n, ev) { remember(S, g, { ev: ev.id, kind: 'woe
 function memFounding(S, g, L, ev, how) {
   if (!g || !L) return;
   // К2: a daughter village carries its mother's legends
-  if (how === 'colony' || how === 'schism') inheritMyths(S, ev.gs && S._g.get(ev.gs.find(id => id !== g.id)), g);
+  if (how === 'colony' || how === 'schism') { const mother = ev.gs && S._g.get(ev.gs.find(id => id !== g.id)); inheritMyths(S, mother, g); inheritCulture(S, mother, g, how, ev); }
   const at = g.home || { x: g.cx, y: g.cy };
   const place = g.home ? namePlace(S, { name: `Камень ${nameCase(L, 'genitive')}`, kind: 'origin', x: at.x - 14, y: at.y + 10, ev: ev.id, g: g.id, mon: 'stone' }) : null;
   remember(S, g, { ev: ev.id, kind: 'origin', tone: 'pride', w: 1, what: `основание деревни ${L.name}`, place: place && place.id, mon: place && 'stone', hero: L.id, lin: L.lin, how: how || (S.tick < 360 * 8 ? 'landing' : 'found'), from: ev.gs && ev.gs.length > 1 ? (S._g.get(ev.gs.find(id => id !== g.id)) || {}).name : undefined });
@@ -4210,11 +4391,13 @@ function memPower(S, g, o) { remember(S, g, Object.assign({ kind: 'power' }, o))
 /* ---------- the ruler's mound and the burial plots of the lines ---------- */
 // on a burial: the lineage's plot grows; a founder or a long ruler gets a mound if the village can feed the diggers;
 // a tyrant does not (Parker Pearson 1999: the dead do not bury themselves — a mound is the living's claim)
-function burialPlot(S, g, a) { const cem = g.cemetery; if (!cem || !a.lin) return; const P = cem.plots || (cem.plots = {}); P[a.lin] = (P[a.lin] || 0) + 1; }
+// К3: ashes and the sea leave no graves to claim land by
+function burialPlot(S, g, a) { const cem = g.cemetery; if (!cem || !a.lin || (g.cult && (g.cult.burial === 'pyre' || g.cult.burial === 'sea'))) return; const P = cem.plots || (cem.plots = {}); P[a.lin] = (P[a.lin] || 0) + 1; }
 function rulerMound(S, g, a, fev) {
   if (g.leader !== a.id || !g.cemetery) return;
   const years = Math.round((S.tick - (g.since || g.founded)) / 360), founder = g.gen <= 1, n = g.members.length;
-  if ((!founder && years < 10) || n < 8) return; // a hamlet does not raise a mound
+  const moundFolk = g.cult && g.cult.burial === 'mound'; // К3: where the custom is to raise mounds, more rulers get one
+  if ((!founder && years < (moundFolk ? 5 : 10)) || n < (moundFolk ? 5 : 8)) return; // a hamlet does not raise a mound
   const tyrant = g.tyr && g.tyr.L === a.id && S.tick - g.tyr.t < 360 * 30;
   if (tyrant) { note(S, 'rite', `${a.name} ${fem(a, 'брал', 'брала')} хлеб у голодных — кургана ${fem(a, 'ему', 'ей')} не насыпают`, g.cemetery.x, g.cemetery.y, g.hue, { rite: 'grave', who: [a.id], gs: [g.id], causes: [g.tyr.ev, fev].filter(Boolean) }); return; }
   if (g.treasury < n * 2 || g.famY === Math.floor(S.tick / 360)) return;
@@ -4261,7 +4444,7 @@ function memoryYear(S, g) {
     let rate = live ? MEM_RATE.living : MEM_RATE.heard;
     if (m.place) rate *= 0.5;
     if (m.mon) rate *= 0.5;
-    if (m.kind === 'origin') rate *= 0.5;
+    if (m.kind === 'origin') rate *= g.cult && g.cult.day === 'founding' ? 0 : 0.5; // К3: a village that keeps its founding day does not forget it
     if (g.memDay === m.id) rate = 0;
     m.w -= rate;
     if (m.w < MEM_FORGET) forget(S, g, m);
@@ -4314,8 +4497,9 @@ function memoryName(S, a, g) {
   for (const y of (g && g.myths) || []) { if (!y.heroName || y.villain || y.heroSex !== a.sex || y.version === 'old') continue; cands.push([{ name: y.heroName, sex: y.heroSex }, { w: 0.8, ev: y.ev, what: `предание о ${y.heroName}` }]); }
   const gps = [a.mother, a.father].map(id => personOf(S, id)).filter(Boolean).flatMap(p => [p.mother, p.father]).map(id => personOf(S, id)).filter(p => p && p.sex === a.sex && !S._a.has(p.id));
   const u = hash01(a.id * 31 + S.tick);
-  if (cands.length && u < 0.12 * cands[0][1].w) { const [h, m] = cands[Math.floor(hash01(a.id) * cands.length) % cands.length]; return { name: h.name, why: `в честь ${h.id ? nameCase(h, 'genitive') : h.name}: в «${g.name}» ${m.what.startsWith('предание') ? 'рассказывают ' + m.what : 'помнят ' + m.what}`, ev: m.ev, hero: h.id }; }
-  if (gps.length && u > 0.9) { const h = gps[0]; return { name: h.name, why: `в честь ${h.sex === 'f' ? 'бабушки' : 'деда'} ${nameCase(h, 'genitive')}`, hero: h.id }; }
+  const nf = g && g.cult ? (g.cult.names === 'ancestors' ? 2 : 0.3) : 1; // К3: the custom of names
+  if (cands.length && u < 0.12 * nf * cands[0][1].w) { const [h, m] = cands[Math.floor(hash01(a.id) * cands.length) % cands.length]; return { name: h.name, why: `в честь ${h.id ? nameCase(h, 'genitive') : h.name}: в «${g.name}» ${m.what.startsWith('предание') ? 'рассказывают ' + m.what : 'помнят ' + m.what}`, ev: m.ev, hero: h.id }; }
+  if (gps.length && u > 1 - 0.1 * nf) { const h = gps[0]; return { name: h.name, why: `в честь ${h.sex === 'f' ? 'бабушки' : 'деда'} ${nameCase(h, 'genitive')}`, hero: h.id }; }
   return null;
 }
 /* ---------- myths: how what happened becomes what is told (К2, see docs/CULTURE.md) ---------- */
@@ -4566,7 +4750,9 @@ function funeral(S, a, why) {
   S.stats.funerals = (S.stats.funerals || 0) + 1;
   const isL = g.leader === a.id;
   const ex = { who: [a.id, ...mourners.map(o => o.id)].slice(0, 8), gs: [g.id], rite: 'funeral' };
-  const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')} на кладбище` : `Похороны ${nameCase(a, 'genitive')} в «${g.name}»`;
+  // К3: the custom of burial decides where the dead go
+  const bur = (g.cult && g.cult.burial) || 'cemetery', how = { pyre: 'к погребальному костру', sea: 'к морю, где умерших отпускают на лодке', threshold: 'к родному дому, где умерших хоронят под порогом' }[bur] || 'на кладбище';
+  const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')} ${how}` : bur === 'pyre' ? `${a.name} сжигают на погребальном костре в «${g.name}»` : bur === 'sea' ? `${a.name} отпускают в море на лодке` : `Похороны ${nameCase(a, 'genitive')} в «${g.name}»`;
   const ev = isL ? log(S, 'rite', text, cem.x, cem.y, g.hue, Object.assign({ why: sent([`${a.name} ${fem(a, 'правил', 'правила')} «${g.name}» ${yrs(Math.max(1, Math.round((S.tick - (g.since || g.founded)) / 360)))}`, mourners.length ? `за гробом идут ${mourners.map(o => o.name).slice(0, 4).join(', ')}` : '', `на кладбище «${g.name}» уже ${cem.graves} ${pl(cem.graves, 'могила', 'могилы', 'могил')}`]) }, ex)) : note(S, 'rite', text, cem.x, cem.y, g.hue, ex);
   if (isL) rulerMound(S, g, a, ev.id);
   return ev.id;
@@ -4584,7 +4770,7 @@ function harvestFeast(S, g) {
     gathering(S, 'feast', g.home.x, g.home.y, 3, g.id);
     S.stats.festivals = (S.stats.festivals || 0) + 1;
     // К1: at the feast the old tell the heaviest memory again
-    const told = (g.mem || []).slice().sort((p, q) => q.w - p.w)[0]; if (told) told.w = Math.min(told.w0, told.w + 0.02);
+    const told = (g.mem || []).slice().sort((p, q) => q.w - p.w)[0]; if (told) told.w = Math.min(told.w0, told.w + (g.cult && g.cult.day === 'harvest' ? 0.04 : 0.02));
     g.fests = (g.fests || 0) + 1;
     const text = host ? `Праздник урожая в «${g.name}»: ${L.name} ${fem(L, 'угощает', 'угощает')} всю деревню` : `Праздник урожая в «${g.name}»`;
     const ex = { rite: 'feast', host: host ? L.id : undefined, why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
@@ -5840,6 +6026,8 @@ function relations(S) {
     // К1: remembered blood keeps the enmity from cooling to nothing; remembered help cools it faster
     const gm = MT.grudge[k]; if (gm && h < GRUDGE_FLOOR * gm.w) { h = GRUDGE_FLOOR * gm.w; S.stats.grudgeHeld = (S.stats.grudgeHeld || 0) + 1; }
     if (MT.thanks[k]) h *= 1 - 0.05 * MT.thanks[k];
+    // К3: own people quarrel less, strangers drift apart (moderately)
+    if (A.people && B.people) { if (A.people === B.people) h *= 0.98; else if (d < 450) h += 0.008; }
     h = clamp(h, 0, 2);
     if (A.home && B.home) {
       const pa = A.treasury / Math.max(1, A.members.length), pb = B.treasury / Math.max(1, B.members.length);
@@ -5855,7 +6043,7 @@ function relations(S) {
     } else if (h > 1 && rnd(S) < 0.12) { conflict(S, A, B); h = 0.3; }
     if (A.dead || B.dead) continue;
     if (h < 0.01) delete S.hostility[k]; else S.hostility[k] = h;
-    if (!al && mutual + 0.3 * (MT.thanks[k] || 0) > 0.2 && h < 0.3 && d < 450 && rnd(S) < 0.12) {
+    if (!al && mutual + 0.3 * (MT.thanks[k] || 0) + (A.people && A.people === B.people ? 0.1 : 0) > 0.2 && h < 0.3 && d < 450 && rnd(S) < 0.12) {
       S.alliances.push({ a: A.id, b: B.id, since: S.tick });
       log(S, 'alliance', `«${A.name}» и «${B.name}» заключают союз`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, A.hue, { why: `Вожди ${LA.name} и ${LB.name} ${trustWord(mutual)}, а вражды между деревнями почти нет. Союзники не воюют и помогают друг другу в стычках.`, who: [LA.id, LB.id], gs: [A.id, B.id] });
     } else if (al && (mutual < -0.05 || h > 0.7)) {
@@ -6058,6 +6246,8 @@ function yearly(S) {
     (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
   for (const g of S.groups) { villageYear(S, g); memoryYear(S, g); mythYear(S, g); }
+  for (const g of S.groups) for (const id of g.members) { const a = S._a.get(id); if (a && !a.home0) setHome0(S, a, g); }
+  cultureYear(S);
   if (S.tick % 3600 === 0) era(S);
 }
 function era(S) {
@@ -6147,7 +6337,7 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, witnesses, CASE_LABEL, householdView, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, CULT, cultWord, cultSim, COLOR_HEX, COLOR_PEOPLE, witnesses, CASE_LABEL, householdView, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {
@@ -6184,7 +6374,7 @@ const CTL = [
   ['memory', 'Память', 'Как долго помнят доверие и обиды'],
   ['ambition', 'Властолюбие новичков', 'Насколько рвутся к власти новые люди']
 ];
-const TL = { myth: 'Предание', tyranny: 'Хлеб голодных', tax: 'Доля вождя', arc: 'Судьба', boat: 'Лодка', emigr: 'Уплывают', drought: 'Засуха', thirst: 'Жажда', well: 'Колодец', revenge: 'Месть', elope: 'Побег', bridge: 'Мост', drown: 'Утонул', marriage: 'Брачный союз', plague: 'Мор', plagueEnd: 'Мор', abandon: 'Деревня брошена', state: 'Государство', money: 'Деньги', debt: 'Долги', land: 'Земля', gov: 'Правление', border: 'Граница', era: 'Итоги десятилетия', regime: 'Смена строя', faith: 'Вера', law: 'Закон', war: 'Поход', battle: 'Битва', conquest: 'Завоевание', ransom: 'Откуп', aid: 'Помощь', case: 'Суд', rumor: 'Слух', rite: 'Обряд', secret: 'Тайна', exile: 'Изгнание', quit: 'Уход', death: 'Смерть', revolt: 'Восстание', raid: 'Грабёж', trade: 'Торговля', route: 'Торговый путь', market: 'Рынок', tech: 'Новшество', settle: 'Поселение', famine: 'Голодная зима', coup: 'Переворот', schism: 'Раскол', crisis: 'Кризис преемственности', merge: 'Слияние', reform: 'Реформа', exodus: 'Исход', conflict: 'Стычка', alliance: 'Союз', break: 'Конец союза', found: 'Новая группа', colony: 'Дочерняя деревня', collapse: 'Распад', succession: 'Смена лидера', milestone: 'Рост иерархии', shock: 'Шок', genesis: 'Начало', fork: 'Развилка' };
+const TL = { myth: 'Предание', culture: 'Обычай', tyranny: 'Хлеб голодных', tax: 'Доля вождя', arc: 'Судьба', boat: 'Лодка', emigr: 'Уплывают', drought: 'Засуха', thirst: 'Жажда', well: 'Колодец', revenge: 'Месть', elope: 'Побег', bridge: 'Мост', drown: 'Утонул', marriage: 'Брачный союз', plague: 'Мор', plagueEnd: 'Мор', abandon: 'Деревня брошена', state: 'Государство', money: 'Деньги', debt: 'Долги', land: 'Земля', gov: 'Правление', border: 'Граница', era: 'Итоги десятилетия', regime: 'Смена строя', faith: 'Вера', law: 'Закон', war: 'Поход', battle: 'Битва', conquest: 'Завоевание', ransom: 'Откуп', aid: 'Помощь', case: 'Суд', rumor: 'Слух', rite: 'Обряд', secret: 'Тайна', exile: 'Изгнание', quit: 'Уход', death: 'Смерть', revolt: 'Восстание', raid: 'Грабёж', trade: 'Торговля', route: 'Торговый путь', market: 'Рынок', tech: 'Новшество', settle: 'Поселение', famine: 'Голодная зима', coup: 'Переворот', schism: 'Раскол', crisis: 'Кризис преемственности', merge: 'Слияние', reform: 'Реформа', exodus: 'Исход', conflict: 'Стычка', alliance: 'Союз', break: 'Конец союза', found: 'Новая группа', colony: 'Дочерняя деревня', collapse: 'Распад', succession: 'Смена лидера', milestone: 'Рост иерархии', shock: 'Шок', genesis: 'Начало', fork: 'Развилка' };
 const MAJOR = new Set(['drought', 'thirst', 'revenge', 'plague', 'coup', 'schism', 'crisis', 'merge', 'reform', 'exodus', 'famine', 'battle', 'conquest', 'revolt', 'era', 'regime', 'state']);
 const isMajor = e => MAJOR.has(e.type) || (e.type === 'conflict' && e.big) || ((e.type === 'boat' || e.type === 'emigr' || e.type === 'well' || e.type === 'elope' || e.type === 'bridge' || e.type === 'drown' || e.type === 'marriage' || e.type === 'settle' || e.type === 'tech' || e.type === 'trade' || e.type === 'faith' || e.type === 'land' || e.type === 'gov' || e.type === 'money' || e.type === 'debt') && e.first);
 const KEY = new Set(['state', 'money', 'debt', 'land', 'gov', 'era', 'regime', 'faith', 'law', 'war', 'battle', 'ransom', 'case', 'rumor', 'conquest', 'revolt', 'coup', 'schism', 'crisis', 'merge', 'famine', 'shock', 'genesis', 'fork']);
@@ -8550,6 +8740,7 @@ function draw(now) {
     placed.push({ x: sx, y, w: tw }); if (rt) placed.push({ x: sx, y: y + 13 * dpr, w: tw });
     ctx.strokeStyle = C.plate; ctx.lineWidth = 4 * dpr; ctx.strokeText(g.name, sx, y);
     ctx.fillStyle = C.ink; ctx.fillText(g.name, sx, y);
+    if (g.cult && g.home) { ctx.fillStyle = SIM.COLOR_HEX[g.cult.color] || '#999'; ctx.fillRect(sx + tw / 2 + (g.coin ? 15 : 4) * dpr, y - 9 * dpr, 7 * dpr, 7 * dpr); } // К3: the village's colour (after the coin, if any)
     if (g.dynasty) { const cx = sx - tw / 2 - 9 * dpr, cy = y - 4 * dpr, q = dpr; ctx.fillStyle = C.dark ? '#e3c25a' : '#b8860b'; ctx.beginPath(); ctx.moveTo(cx - 5 * q, cy + 4 * q); ctx.lineTo(cx - 5 * q, cy - 3 * q); ctx.lineTo(cx - 2.5 * q, cy); ctx.lineTo(cx, cy - 4 * q); ctx.lineTo(cx + 2.5 * q, cy); ctx.lineTo(cx + 5 * q, cy - 3 * q); ctx.lineTo(cx + 5 * q, cy + 4 * q); ctx.closePath(); ctx.fill(); }
     if (g.coin) { const cx = sx + tw / 2 + 8 * dpr, cy = y - 4 * dpr; ctx.fillStyle = C.dark ? '#e3c25a' : '#c9a227'; ctx.beginPath(); ctx.arc(cx, cy, 4.5 * dpr, 0, 7); ctx.fill(); ctx.strokeStyle = C.dark ? '#8a6d1c' : '#8a6a10'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.arc(cx, cy, 2.4 * dpr, 0, 7); ctx.stroke(); }
     if (rt) { ctx.font = `400 ${11.5 * dpr}px Inter, system-ui, sans-serif`; ctx.strokeText(rt, sx, y + 13 * dpr); ctx.fillStyle = C.muted; ctx.fillText(rt, sx, y + 13 * dpr); ctx.font = `500 ${12 * dpr}px Inter, system-ui, sans-serif`; }
@@ -8630,7 +8821,8 @@ function portraits(force) {
   const k = gs.map(g => `${g.id}:${g.members.length}:${RC.get(g.id).type}:${g.leader}`).join('|') + (S.tick / 360 | 0) + (S.states || []).map(x => x.id + x.members.length).join(',');
   if (!force && k === portKey) return; portKey = k;
   const sts = (S.states || []).slice().sort((a, b) => b.pop - a.pop);
-  const stHtml = `<div class="sts"><h3>Государства</h3>${sts.length ? sts.map(st2 => { const cap = S._g.get(st2.cap), L = cap && S._a.get(cap.leader); return `<button class="st" data-a="${cap ? cap.leader : ''}"><span class="ph"><i style="background:${hueC(st2.hue)}"></i><strong>${esc(st2.name)}</strong><em>${esc(st2.type.toLowerCase())}</em></span><span class="pl">Столица «${esc(cap ? cap.name : '?')}»${L ? `, правит ${esc(L.name)}` : ''} · ${st2.members.length} ${st2.members.length === 1 ? 'деревня' : st2.members.length < 5 ? 'деревни' : 'деревень'}, ${st2.pop} чел., ${st2.terr} клеток · ${yrsTxt(Math.max(1, Math.round((S.tick - st2.founded) / 360)))}${st2.members.length > 1 ? ` · ${esc(st2.members.map(id => (S._g.get(id) || {}).name).filter(Boolean).join(', '))}` : ''}</span></button>`; }).join('') : '<p class="empty">Государств пока нет: каждая деревня живёт сама по себе. Они появятся через дань, покровительство или долгий союз.</p>'}</div>`;
+  const pplHtml = (S.peoples || []).length ? `<div class="sts"><h3>Народы</h3>${S.peoples.map(p => `<p class="who"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:${SIM.COLOR_HEX[p.color] || '#999'}"></i><b>${esc(p.self)}</b> — соседи зовут их ${esc(p.exo)}: ${p.villages.map(id => S._g.get(id)).filter(Boolean).map(v => `«${esc(v.name)}»`).join(', ')}</p>`).join('')}</div>` : '';
+  const stHtml = pplHtml + `<div class="sts"><h3>Государства</h3>${sts.length ? sts.map(st2 => { const cap = S._g.get(st2.cap), L = cap && S._a.get(cap.leader); return `<button class="st" data-a="${cap ? cap.leader : ''}"><span class="ph"><i style="background:${hueC(st2.hue)}"></i><strong>${esc(st2.name)}</strong><em>${esc(st2.type.toLowerCase())}</em></span><span class="pl">Столица «${esc(cap ? cap.name : '?')}»${L ? `, правит ${esc(L.name)}` : ''} · ${st2.members.length} ${st2.members.length === 1 ? 'деревня' : st2.members.length < 5 ? 'деревни' : 'деревень'}, ${st2.pop} чел., ${st2.terr} клеток · ${yrsTxt(Math.max(1, Math.round((S.tick - st2.founded) / 360)))}${st2.members.length > 1 ? ` · ${esc(st2.members.map(id => (S._g.get(id) || {}).name).filter(Boolean).join(', '))}` : ''}</span></button>`; }).join('') : '<p class="empty">Государств пока нет: каждая деревня живёт сама по себе. Они появятся через дань, покровительство или долгий союз.</p>'}</div>`;
   if (!gs.length) { el.innerHTML = stHtml + '<p class="empty">Портреты появятся, когда хотя бы одна деревня дорастёт до пяти человек.</p>'; return; }
   el.innerHTML = stHtml + gs.map(g => {
     const r = RC.get(g.id), L = S._a.get(g.leader), mem = g.members.map(id => S._a.get(id)).filter(Boolean);
@@ -9011,6 +9203,7 @@ function card() {
   ${g && g.home && ((g.pots || 0) >= 1 || (g.cloth || 0) >= 1 || (g.goats || 0) || g.fboats) ? `<p class="rel">Хозяйство: ${[g.goats ? `${g.goats} коз` : '', g.fboats ? `${g.fboats} ${g.fboats === 1 ? 'рыбацкая лодка' : g.fboats < 5 ? 'рыбацкие лодки' : 'рыбацких лодок'}` : '', (g.pots || 0) >= 1 ? `горшков ${Math.round(g.pots)}` : '', (g.cloth || 0) >= 1 ? `тканей ${Math.round(g.cloth)}` : ''].filter(Boolean).join(', ')}${(g.cloth || 0) >= g.members.length * 0.5 ? '. Тёплая одежда: зимой болеют реже' : ''}${(g.pots || 0) >= g.members.length * 0.5 ? '. Есть посуда: запасы хранятся дольше, воду носить легче' : ''}.</p>` : ''}
   ${famTxt(a, g, L)}
   ${houseTxt(a)}
+  ${homeTxt(a, g)}
   ${witnessTxt(a, g)}
   ${yardHtml(a)}
   ${a._day ? `<p class="rel">${esc(SIM.dayWords(a))}</p>` : ''}
@@ -9128,12 +9321,26 @@ function vhMyths(h) {
   });
   return `<h4>Предания</h4><ul class="vh-turns">${items.join('')}</ul>`;
 }
+// К3: the culture of the village — each trait in words and where it came from; the people it belongs to; newcomers
+const CULT_HOW = { own: 'своё с основания', mother: 'от деревни-матери', apart: 'назло деревне-матери, после раскола', borrowed: 'переняли у соседей', migrants: 'от пришлых', enemy: 'чтобы не походить на врагов', new: 'новый обычай' };
+function vhCulture(gid) {
+  const g = S._g.get(gid), c = g && g.cult; if (!c) return '';
+  const p = g.people && (S.peoples || []).find(x => x.id === g.people);
+  const rows = Object.keys(SIM.CULT).filter(k => k !== 'pattern').map(k => {
+    const f = c.from[k] || {}, val = k === 'color' ? `${SIM.cultWord('color', c.color)}, узор — ${SIM.cultWord('pattern', c.pattern)}` : SIM.cultWord(k, c[k]);
+    return `<li>${k === 'color' ? 'Знак' : SIM.CULT[k].name}: <b>${esc(val)}</b> <small>— ${CULT_HOW[f.how] || ''}${f.from ? ` «${esc(f.from)}»` : ''}${f.t ? `, г.${vhYear(f.t)}` : ''}</small></li>`;
+  });
+  const by = {}; for (const id of g.members) { const a = S._a.get(id); if (a && a.age >= 16 && a.home0 && a.home0.g !== g.id) by[a.home0.name] = (by[a.home0.name] || 0) + 1; }
+  const nb = Object.entries(by).sort((x, y) => y[1] - x[1]).slice(0, 3);
+  return `<h4>Культура</h4><p>${p ? `Народ: <b>${esc(p.self)}</b> — так они зовут себя; соседи зовут их ${esc(p.exo)}. Деревни народа: ${p.villages.map(id => S._g.get(id)).filter(Boolean).map(v => `«${esc(v.name)}»`).join(', ')}.` : 'Своего народа у деревни нет: ни с кем из соседей у неё нет общего знака и обычаев.'}</p>
+    <ul class="vh-turns">${rows.join('')}</ul>${nb.length ? `<p class="who">Пришлые взрослые: ${nb.map(([n, k]) => `из «${esc(n)}» — ${k}`).join(', ')}.</p>` : ''}`;
+}
 function villageHistoryHtml(gid) {
   const h = SIM.villageHistory(S, gid);
   if (!h) return '<p class="empty">Этой деревни больше нет.</p>';
   return `<h3>Как «${esc(h.name)}» стала такой</h3>
     <p class="role">Основана в г.${vhYear(h.founded)}${h.founder ? `, основатель ${esc(h.founder)}` : ''}. Сейчас: ${esc((h.rtype || '').toLowerCase())}.</p>
-    ${vhPath(h)}${vhMyths(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
+    ${vhPath(h)}${vhCulture(gid)}${vhMyths(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
     <details class="vh-more"><summary>По десятилетиям</summary>${vhTable(h)}</details>
     <h4>Поворотные события</h4>${vhTurns(h)}`;
 }
@@ -9289,6 +9496,11 @@ function yardHtml(a) {
 }
 
 // К1: what an old person saw with their own eyes and the village still remembers
+function homeTxt(a, g) {
+  if (!a.home0 || !g || a.home0.g === g.id) return '';
+  const p0 = a.home0.people && (S.peoples || []).find(p => p.id === a.home0.people), pg = g.people && (S.peoples || []).find(p => p.id === g.people);
+  return `<p class="rel">Родом из «${esc(a.home0.name)}»${p0 && p0 !== pg ? `, из народа ${esc(p0.self)}: держится своих обычаев` : ''}.</p>`;
+}
 function witnessTxt(a, g) {
   const seen = ((g && g.mem) || []).filter(m => m.wit.includes(a.id) && m.t < S.tick - 360 * 5).sort((x, y) => y.w0 - x.w0).slice(0, 3);
   return seen.length ? `<p class="rel">Помнит сам: ${seen.map(m => `${esc(m.what)} (г.${Math.floor(m.t / 360)})${evLink(m.ev)}`).join('; ')}.</p>` : '';

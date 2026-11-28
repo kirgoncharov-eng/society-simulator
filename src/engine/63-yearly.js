@@ -25,6 +25,8 @@ function yearly(S) {
     (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
   for (const g of S.groups) { villageYear(S, g); memoryYear(S, g); mythYear(S, g); }
+  for (const g of S.groups) for (const id of g.members) { const a = S._a.get(id); if (a && !a.home0) setHome0(S, a, g); }
+  cultureYear(S);
   if (S.tick % 3600 === 0) era(S);
 }
 function era(S) {
@@ -114,5 +116,5 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, witnesses, CASE_LABEL, householdView, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, CULT, cultWord, cultSim, COLOR_HEX, COLOR_PEOPLE, witnesses, CASE_LABEL, householdView, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 

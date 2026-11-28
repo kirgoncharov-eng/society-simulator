@@ -30,7 +30,11 @@ function homeEconomy(S, g, mem) {
     if (seas === 1) g.goats += Math.max(g.goats >= 2 ? 1 : 0, Math.round(g.goats * 0.14 * (g.goats < cap ? 1 : 0.2)));
     if (g.goats > cap) g.goats -= Math.ceil((g.goats - cap) * 0.15);
     if (seas !== 0) g.treasury += g.goats * 0.12 * (dry ? 0.6 : 1);
-    if (g.treasury < n * 1.2 && g.goats > 3) { const k = Math.min(g.goats - 3, Math.ceil(n / 5)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
+    // К3: where goat meat is taboo, the herd is spared until real hunger; then the taboo is broken, and that is remembered
+    const taboo = g.cult && g.cult.taboo === 'goat';
+    if (taboo && g.treasury < n * 1.2 && g.treasury >= n * 0.5) { /* the herd is spared */ }
+    else if (g.treasury < n * 1.2 && g.goats > 3) {
+      if (taboo && (!g.tabooBroke || S.tick - g.tabooBroke > 360 * 5)) { g.tabooBroke = S.tick; S.stats.tabooBroken = (S.stats.tabooBroken || 0) + 1; note(S, 'culture', `В «${g.name}» от голода режут коз, хотя козлятину здесь не едят`, g.home.x, g.home.y, g.hue, { gs: [g.id], why: 'запрет держится, пока есть что есть' }); } const k = Math.min(g.goats - 3, Math.ceil(n / 5)); g.goats -= k; g.treasury += k * 4; g.slaughter = (g.slaughter || 0) + k; }
   } else if (S.tick - g.founded > 360 && rnd(S) < 0.01) { for (const o of S.groups) if (o !== g && o.goats > 8 && o.home && Math.hypot(o.home.x - g.home.x, o.home.y - g.home.y) < 300 && (S.hostility[key(o.id, g.id)] || 0) < 0.6) { o.goats -= 2; g.goats = 2; break; } }
   // sea fishing from boats
   const fishers = mem.filter(m => m.job === 'fish');

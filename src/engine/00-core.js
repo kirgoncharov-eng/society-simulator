@@ -2,7 +2,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm34', date: '2026-11-28', note: 'предания: пересказ поколений искажает правду, версии у победителей, побеждённых и дочерних деревень, переписывание после переворота' };
+const MODEL = { v: 'm35', date: '2026-11-28', note: 'культуры и народы: черты деревни, наследование, заимствование, пришлые, народы, свои и чужие' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -99,6 +99,7 @@ function archiveGC(S) {
     goalRefs(a.goals);
   }
   for (const l of S.legends || []) { refs(l.bio); goalRefs(l.goals); }
+  for (const id in S.shades || {}) refs(S.shades[id].bio); // the chronicle of the dead, while someone still names them
   for (const id of S.secrets || []) keep.add(id);
   for (const g of S.groups) {
     for (const k in g.customEv || {}) keep.add(g.customEv[k]);

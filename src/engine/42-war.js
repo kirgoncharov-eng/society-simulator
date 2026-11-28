@@ -37,7 +37,7 @@ function warMonth(S) {
       let pa = 0; for (const m of fighters) pa += fightPow(m, A);
       const pdR = defence(S, B, A.home), pd = pdR * Math.exp(gauss(S) * 0.35) * (1 - 0.25 * LA.ambition) * (1 + 0.2 * ((S._a.get(B.leader) || {}).rep || 0)), odds = pa * pa / (pa * pa + pd * pd + 1e-6), oddsR = pa * pa / (pa * pa + pdR * pdR + 1e-6);
       const prize = B.treasury + (B.tools || 0) * 4 + (A.lord === B.id ? 40 : 0);
-      const v = odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
+      const v = (A.people && B.people && A.people !== B.people ? 1.15 : 1) * odds * (prize + 10) * h / (1 + d / 300) * (1 + av * 0.3);
       if (odds > 0.42 && v > bv) { bv = v; best = { B, fighters, pa, pd: pdR, odds, oddsR, h, d, av }; }
     }
     if (!best) continue;

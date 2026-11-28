@@ -38,7 +38,9 @@ function funeral(S, a, why) {
   S.stats.funerals = (S.stats.funerals || 0) + 1;
   const isL = g.leader === a.id;
   const ex = { who: [a.id, ...mourners.map(o => o.id)].slice(0, 8), gs: [g.id], rite: 'funeral' };
-  const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')} на кладбище` : `Похороны ${nameCase(a, 'genitive')} в «${g.name}»`;
+  // К3: the custom of burial decides where the dead go
+  const bur = (g.cult && g.cult.burial) || 'cemetery', how = { pyre: 'к погребальному костру', sea: 'к морю, где умерших отпускают на лодке', threshold: 'к родному дому, где умерших хоронят под порогом' }[bur] || 'на кладбище';
+  const text = isL ? `Вся «${g.name}» провожает ${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')} ${how}` : bur === 'pyre' ? `${a.name} сжигают на погребальном костре в «${g.name}»` : bur === 'sea' ? `${a.name} отпускают в море на лодке` : `Похороны ${nameCase(a, 'genitive')} в «${g.name}»`;
   const ev = isL ? log(S, 'rite', text, cem.x, cem.y, g.hue, Object.assign({ why: sent([`${a.name} ${fem(a, 'правил', 'правила')} «${g.name}» ${yrs(Math.max(1, Math.round((S.tick - (g.since || g.founded)) / 360)))}`, mourners.length ? `за гробом идут ${mourners.map(o => o.name).slice(0, 4).join(', ')}` : '', `на кладбище «${g.name}» уже ${cem.graves} ${pl(cem.graves, 'могила', 'могилы', 'могил')}`]) }, ex)) : note(S, 'rite', text, cem.x, cem.y, g.hue, ex);
   if (isL) rulerMound(S, g, a, ev.id);
   return ev.id;
@@ -56,7 +58,7 @@ function harvestFeast(S, g) {
     gathering(S, 'feast', g.home.x, g.home.y, 3, g.id);
     S.stats.festivals = (S.stats.festivals || 0) + 1;
     // К1: at the feast the old tell the heaviest memory again
-    const told = (g.mem || []).slice().sort((p, q) => q.w - p.w)[0]; if (told) told.w = Math.min(told.w0, told.w + 0.02);
+    const told = (g.mem || []).slice().sort((p, q) => q.w - p.w)[0]; if (told) told.w = Math.min(told.w0, told.w + (g.cult && g.cult.day === 'harvest' ? 0.04 : 0.02));
     g.fests = (g.fests || 0) + 1;
     const text = host ? `Праздник урожая в «${g.name}»: ${L.name} ${fem(L, 'угощает', 'угощает')} всю деревню` : `Праздник урожая в «${g.name}»`;
     const ex = { rite: 'feast', host: host ? L.id : undefined, why: sent([host ? `${L.name} ${fem(L, 'выставляет', 'выставляет')} на пир своё зерно, и слава ${fem(L, 'его', 'её')} растёт` : `запасов хватает до весны, и деревня собирается на пир`, 'соседи сидят за одним столом, и обиды до весны забываются']), who: host ? [L.id] : [], gs: [g.id] };
