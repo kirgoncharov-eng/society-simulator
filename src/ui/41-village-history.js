@@ -59,12 +59,24 @@ function vhTurns(h) {
   const extra = [reforms ? `вождь наводил порядок ${reforms} раз` : '', colonies ? `дочерних деревень ушло ${colonies}` : ''].filter(Boolean).join('; ');
   return `<ol class="vh-turns">${items.join('')}</ol>${extra ? `<p class="who">Кроме того: ${extra}.</p>` : ''}`;
 }
+// К1: what the village remembers — in words: how strongly, who still saw it, what holds it
+const MEM_MON = { mound: 'курган', massgrave: 'братская могила', stone: 'камень' };
+function memStrength(m) { return m.w >= 1 ? 'помнят все' : m.w >= 0.6 ? 'помнят хорошо' : m.w >= 0.35 ? 'помнят старики' : 'почти забыли'; }
+function vhMemory(h) {
+  if (!h.memories.length && !h.forgotten.length) return '';
+  const rows = h.memories.map(m => {
+    const holds = [m.placeName ? `место «${esc(m.placeName)}»` : '', MEM_MON[m.mon] || '', m.memorial ? 'поминают каждый год' : ''].filter(Boolean);
+    return `<li><b>${esc(m.what)}</b> <small>г.${vhYear(m.t)}</small> — ${memStrength(m)}; ${m.living ? `живых свидетелей ${m.living}` : 'свидетелей не осталось, рассказывают дети и внуки'}${holds.length ? `; держится: ${holds.join(', ')}` : ''} <button class="evlink" data-ev="${m.ev}" aria-label="Открыть событие">↗</button></li>`;
+  });
+  const gone = h.forgotten.map(m => `<li>${esc(m.what)} <small>г.${vhYear(m.t)}, забыто к г.${vhYear(m.gone)}</small>${m.placeName ? ` — место по-прежнему зовут «${esc(m.placeName)}», но уже не знают почему` : ''} <button class="evlink" data-ev="${m.ev}" aria-label="Открыть событие">↗</button></li>`);
+  return `<h4>Что помнят</h4><ul class="vh-turns">${rows.join('') || '<li>Пока ничего особенного.</li>'}</ul>${gone.length ? `<details class="vh-more"><summary>Что забыли</summary><ul class="vh-turns">${gone.join('')}</ul></details>` : ''}`;
+}
 function villageHistoryHtml(gid) {
   const h = SIM.villageHistory(S, gid);
   if (!h) return '<p class="empty">Этой деревни больше нет.</p>';
   return `<h3>Как «${esc(h.name)}» стала такой</h3>
     <p class="role">Основана в г.${vhYear(h.founded)}${h.founder ? `, основатель ${esc(h.founder)}` : ''}. Сейчас: ${esc((h.rtype || '').toLowerCase())}.</p>
-    ${vhPath(h)}${vhLand(h)}${vhPower(h)}
+    ${vhPath(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
     <details class="vh-more"><summary>По десятилетиям</summary>${vhTable(h)}</details>
     <h4>Поворотные события</h4>${vhTurns(h)}`;
 }

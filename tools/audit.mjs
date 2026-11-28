@@ -67,6 +67,8 @@ export function runIsland(i, years) {
   let seenEv = 0;
   // the observer (Н2): rites and skirmishes of the first 40 years in the common feed; family events in «my story»
   const obs = { feed: 0, shown: 0, famEv: 0, famIn: 0, dau: 0, dauIn: 0 };
+  // memory (К1): years of enmity within 15 years after a battle with dead
+  const grudge = { years: 0, hot: 0 };
   for (let y = 1; y <= years; y++) {
     for (let d = 0; d < 360; d++) {
       SIM.step(S);
@@ -80,6 +82,7 @@ export function runIsland(i, years) {
     peakTradeLinks = Math.max(peakTradeLinks, activeTradeLinks);
     if (S.tick === lastBirthTick) cohortBirths = S.stats.births || 0;
     if (y % 20 === 0) pops.push(SIM.popOf(S));
+    for (const [k, t] of S.stats.bloodPairs || []) if (S.tick - t > 0 && S.tick - t <= 360 * 15) { grudge.years++; if ((S.hostility[k] || 0) >= 0.2) grudge.hot++; }
     if (y <= 40) for (const e of S.events) { if (e.id <= seenEv) break; if (e.type === 'rite' || e.type === 'border' || e.type === 'conflict') { obs.feed++; if (!e.minor) obs.shown++; } }
     if (y === 40) for (const a of S.agents.filter(p => p.age >= 30).slice(0, 60)) {
       const story = new Set(SIM.storyOf(S, a.id, 1e9).map(x => x.ev.id)), fam = SIM.familyOf(S, a);
@@ -135,7 +138,7 @@ export function runIsland(i, years) {
   // drama of the top 20 lives (the Fates tab): variety of turns, finished arcs, repeats and the loops behind them
   const drama = SIM.dramaMeasure(SIM.topFates(S, 20));
   for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
-  return { history, st, arcs, drama, power, laws, life, hist, tb, pops, villages, cbr, adults: adults.length, age, minPop, memory: S.params.memory, obs,
+  return { history, st, arcs, drama, power, laws, life, hist, tb, pops, villages, cbr, adults: adults.length, age, minPop, memory: S.params.memory, obs, grudge, places: (S.places || []).length, memAlive: S.groups.reduce((s, g) => s + (g.mem || []).length, 0),
     famN, houseN, villN, roofN, lodgerN, customW, customI, bondN, adultN, feuds, feudsNamed, refK, bondRef, bondK };
 }
 
@@ -164,6 +167,7 @@ async function main() {
   // the clock of events (Ч4): events with an hour, events by day of the month; how long things take
   const clock = { all: 0, timed: 0, day: new Array(30).fill(0) }, dur = {}; let memory = 0;
   const obs = { feed: 0, shown: 0, famEv: 0, famIn: 0, dau: 0, dauIn: 0 };
+  const mem = { places: [], alive: 0, grudgeYears: 0, grudgeHot: 0, life: { bare: [0, 0], place: [0, 0], mon: [0, 0] } }, memSt = {};
   let B = 0, CD = 0, minPop = Infinity, customN = 0;
   let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
   await runIslands(import.meta.url, runIsland, W, Y, island => {
@@ -181,6 +185,9 @@ async function main() {
     for (const k in life) life[k] += island.life[k] || 0;
     for (const k in tb) { tb[k][0] += island.tb[k][0]; tb[k][1] += island.tb[k][1]; }
     for (const k in obs) obs[k] += island.obs[k];
+    mem.places.push(island.places); mem.alive += island.memAlive; mem.grudgeYears += island.grudge.years; mem.grudgeHot += island.grudge.hot;
+    for (const k of ['memories', 'forgotten', 'mounds', 'massGraves', 'stones', 'memorials', 'namedFor', 'grudgeHeld', 'dreadAvoided', 'unburied']) memSt[k] = (memSt[k] || 0) + (st[k] || 0);
+    for (const k in st.memLife || {}) { mem.life[k][0] += st.memLife[k][0]; mem.life[k][1] += st.memLife[k][1]; }
     if (st.clock) { clock.all += st.clock.all; clock.timed += st.clock.timed; st.clock.day.forEach((n, d) => { clock.day[d] += n; }); }
     for (const k in st.dur || {}) { const x = dur[k] || (dur[k] = [0, 0]); x[0] += st.dur[k][0]; x[1] += st.dur[k][1]; }
     memory += island.memory / W;
@@ -234,6 +241,9 @@ async function main() {
     const half = Math.round(Math.log(0.5) / Math.log(1 - (0.01 + 0.07 * (1 - memory))));
     console.log(`observer (Н2): rites and skirmishes in the common feed over 40 years ${(obs.feed / W).toFixed(1)} per island, shown ${(obs.shown / W).toFixed(1)} (${obs.shown ? (obs.feed / obs.shown).toFixed(1) : '-'} times fewer); family events in «my story» ${percent(obs.famIn, obs.famEv)} of ${obs.famEv}; daughters' weddings ${percent(obs.dauIn, obs.dau)} of ${obs.dau}`);
     Object.assign(rec, { feedRites: +(obs.shown / W).toFixed(1), familyInStory: pc1(obs.famIn, obs.famEv), daughterWeddings: pc1(obs.dauIn, obs.dau) });
+    { const per = k => ((memSt[k] || 0) / W).toFixed(1), life = k => mem.life[k][1] ? `${(mem.life[k][0] / mem.life[k][1]).toFixed(0)} y (${mem.life[k][1]})` : '-';
+      console.log(`memory (К1): named places per island ${(mem.places.reduce((s, x) => s + x, 0) / W).toFixed(1)} (by island ${mem.places.join(' ')}); memories made ${per('memories')}, alive at the end ${(mem.alive / W).toFixed(1)}, forgotten ${per('forgotten')} per island; mounds ${per('mounds')}, mass graves ${per('massGraves')}, stones ${per('stones')}, memorial days kept ${per('memorials')}, named after the remembered ${per('namedFor')}, unburied ${per('unburied')}; enmity held by memory ${per('grudgeHeld')} village-pair months; settlers kept from a feared place ${per('dreadAvoided')}; years with enmity within 15 years after a battle with dead ${percent(mem.grudgeHot, mem.grudgeYears)}; memory lasted when forgotten: bare ${life('bare')}, with a place ${life('place')}, with a monument ${life('mon')}`);
+      Object.assign(rec, { placesPerIsland: +(mem.places.reduce((s, x) => s + x, 0) / W).toFixed(1), grudgeAfterBattle: pc1(mem.grudgeHot, mem.grudgeYears), namedFor: +per('namedFor') }); }
     console.log(`event clock: with an hour ${percent(clock.timed, clock.all)} of ${clock.all} events; busiest day of the month ${bd} with ${percent(busiest, clock.all)}`);
     console.log('durations (days, model | real reference):');
     for (const [name, v, ref] of [['pregnancy', m('preg'), '266 from conception'], ['house', m('build_house'), 'a hut or a log house by a family with help: 14-60'],

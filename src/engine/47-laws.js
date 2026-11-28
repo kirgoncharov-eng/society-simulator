@@ -88,6 +88,7 @@ function breadTest(S, g, L, mem, famEv) {
   if (g.take < 0.15 || L.wealth < Math.max(6, avgW * 3)) return;
   const ev = log(S, 'tyranny', `Голодная зима в «${g.name}», а вождь ${L.name} не уменьшает свою долю: ${P0(g.take)} общего хлеба`, g.home.x, g.home.y, g.hue, { why: sent([`голодают ${hungry.length} ${pl(hungry.length, 'человек', 'человека', 'человек')}`, `у ${nameCase(L, 'genitive')} запас ${Math.round(L.wealth)} — в ${Math.round(L.wealth / Math.max(0.5, avgW))} ${pl(Math.round(L.wealth / Math.max(0.5, avgW)), 'раз', 'раза', 'раз')} больше, чем у обычной семьи`, 'вождь, который берёт хлеб у голодных, нарушает право на пропитание; такое не прощают']), who: [L.id, ...hungry.slice(0, 4).map(m => m.id)], gs: [g.id], causes: famEv ? [famEv] : undefined });
   g.tyr = { t: S.tick, ev: cite(S, ev.id), L: L.id, lin: linOf(S, L), name: L.name };
+  memPower(S, g, { ev: ev.id, tone: 'grief', w: 0.9, what: `голодную зиму, когда ${L.name} ${fem(L, 'брал', 'брала')} хлеб у голодных`, hero: L.id, villain: true, lin: L.lin });
   L.rep = clamp((L.rep || 0) - 0.15, -1, 1); g.legit = clamp(g.legit - 0.15, 0.1, 1);
   for (const m of hungry) { m.res = clamp(m.res + 0.25, 0, 1); m.trust[L.id] = clamp((m.trust[L.id] || 0) - 0.15, -1, 1); }
   const heads = topBy(hungry, m => m.status + (m.spouse ? 2 : 0), 4);
@@ -110,4 +111,4 @@ function shareFelt(S, g, L) {
 const tyrantLine = (S, g, c) => g.tyr && S.tick - g.tyr.t < 360 * 30 && linOf(S, c) === g.tyr.lin;
 // Hirschman 1970: exit is costly, and more so each time: whoever has already left a village or two puts up with the next
 // one longer (a house, fields and kin to lose again). The first exit is as before: it is the repeats that become rarer
-function exitCost(S, a, g) { const quits = (a.kc && a.kc.quit) || 0; return 1 / (1 + 2 * quits); }
+function exitCost(S, a, g) { const quits = (a.kc && a.kc.quit) || 0; return (linGraves(g, a.lin) >= 3 ? 0.8 : 1) / (1 + 2 * quits); } // К1: leaving the graves of one's line is harder

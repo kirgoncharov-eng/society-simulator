@@ -171,7 +171,8 @@ function interact(S, a, b) {
       const sc = m => m.ambition * 0.7 + m.skill * 0.3 + m.status * 0.05;
       const L = sc(a) >= sc(b) ? a : b, o = L === a ? b : a;
       const g = createGroup(S, L, [o]);
-      log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Вождём становится ${L.name}: ${fem(L, 'он', 'она')} больше рвётся к власти.`, who: [L.id, o.id], gs: [g.id] }); if (!g.powerEv) powerEvent(S, g, S.events[0].id);
+      const fev = log(S, 'found', `${L.name} и ${o.name} основывают «${g.name}»`, L.x, L.y, g.hue, { why: `Доверие между ними выросло выше порога, а вместе они добывают больше, чем поодиночке. Вождём становится ${L.name}: ${fem(L, 'он', 'она')} больше рвётся к власти.`, who: [L.id, o.id], gs: [g.id] }); if (!g.powerEv) powerEvent(S, g, S.events[0].id);
+      memFounding(S, g, L, fev);
     }
   } else if (!ga || !gb) {
     const s = ga ? b : a, m = ga ? a : b, g = S._groupsById[m.group], L = S._agentsById[g.leader];

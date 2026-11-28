@@ -59,3 +59,9 @@ function yardHtml(a) {
     <p class="yard-q">К кому идут судиться</p><ul><li>${yardCourt(v)}</li></ul>
     <p class="yard-q">Долги и обязательства</p><ul>${li(yardDebts(v))}</ul></div>`;
 }
+
+// К1: what an old person saw with their own eyes and the village still remembers
+function witnessTxt(a, g) {
+  const seen = ((g && g.mem) || []).filter(m => m.wit.includes(a.id) && m.t < S.tick - 360 * 5).sort((x, y) => y.w0 - x.w0).slice(0, 3);
+  return seen.length ? `<p class="rel">Помнит сам: ${seen.map(m => `${esc(m.what)} (г.${Math.floor(m.t / 360)})${evLink(m.ev)}`).join('; ')}.</p>` : '';
+}

@@ -5,6 +5,7 @@ function settle(S, g) {
     if (S.tick - r.t > 360 * 40 || !r.houses.length || Math.hypot(r.x - o.x, r.y - o.y) > 380) continue;
     if (S.groups.some(h => h !== g && h.home && Math.hypot(h.home.x - r.x, h.home.y - r.y) < 130)) continue;
     if (!reach(S, o.x, o.y, r.x, r.y)) continue;
+    if (dreadAt(S, r.x, r.y, 120)) { S.stats.dreadAvoided = (S.stats.dreadAvoided || 0) + 1; continue; }
     const v = 18 + r.houses.length * 5 + r.fields.length * 2 - Math.hypot(r.x - o.x, r.y - o.y) / 40;
     if (v > bv) { bv = v; best = r; }
   }
@@ -36,11 +37,12 @@ function settle(S, g) {
     }
     let near = 1e9; for (const h of S.groups) if (h !== g && h.home) near = Math.min(near, Math.hypot(h.home.x - x, h.home.y - y));
     let wd = riverDist(S, x, y) - 22; for (const sp of S.springs || []) wd = Math.min(wd, Math.hypot(sp.x - x, sp.y - y));
-    const v = fert * 1.6 + Math.min(forest, 20) * 0.8 + (water ? 8 : 0) - (near < 170 ? 40 : near < 260 ? 10 : 0) - Math.hypot(x - o.x, y - o.y) / 40 - Math.max(0, wd - 60) / 12;
+    const v = (dreadAt(S, x, y, 110) ? -60 : 0) + fert * 1.6 + Math.min(forest, 20) * 0.8 + (water ? 8 : 0) - (near < 170 ? 40 : near < 260 ? 10 : 0) - Math.hypot(x - o.x, y - o.y) / 40 - Math.max(0, wd - 60) / 12;
     if (v > bv) { bv = v; best = { x, y }; info = { fert, forest, water, near }; }
   }
   if (!best || !reach(S, o.x, o.y, best.x, best.y)) return;
   g.home = best; g.cx = best.x; g.cy = best.y; planOf(S, g);
+  originStone(S, g);
   claim(S, g, 20, 20);
   pickTarget(S, g);
   const first = !S.settledOnce; S.settledOnce = true;
@@ -65,7 +67,7 @@ function fieldSpot(S, g) {
     const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= N || j >= N) continue;
     const c = j * N + i, t = S.ter[c]; if ((t !== 'r' && t !== 'g') || S.occ[c] || (S.own && S.own[c] && S.own[c] !== g.id)) continue;
     const x = i * CS + 10, y = j * CS + 10, d = Math.hypot(x - g.home.x, y - g.home.y);
-    if (riverDist(S, x, y) < 28) continue;
+    if (riverDist(S, x, y) < 28 || onMonument(S, x, y) || dreadAt(S, x, y, 40)) continue;
     if (d < 48 || d > 170 || !streetClear(g, { x, y }, 10)) continue;
     if (g.houses.some(h => Math.abs(h.x - x) < 16 && Math.abs(h.y - y) < 16)
       || [g.well, g.workshop, g.granary, g.shrine].some(p => p && dist(p, { x, y }) < 17)) continue;

@@ -106,8 +106,11 @@ function archiveGC(S) {
     if (g.powerEv) keep.add(g.powerEv);
     for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
     for (const id of g.hev || []) keep.add(id);
+    for (const m of g.mem || []) keep.add(m.ev);
+    for (const m of g.memGone || []) keep.add(m.ev);
   }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
+  for (const p of S.places || []) if (p.ev) keep.add(p.ev);
   const stack = [...keep];
   while (stack.length) { const e = A[stack.pop()]; for (const c of (e && e.causes) || []) if (!keep.has(c)) { keep.add(c); stack.push(c); } }
   for (const id in A) if (!keep.has(+id)) delete A[id];

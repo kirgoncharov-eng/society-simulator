@@ -53,8 +53,11 @@ function warMonth(S) {
     const pa0 = A.treasury / A.members.length, pb0 = B.treasury / Math.max(1, B.members.length);
     const blen = (S.borders || {})[key(A.id, B.id)] || 0;
     const reasons = [blen > 6 ? `спор за межу: общая граница ${blen} ${pl(blen, 'клетка', 'клетки', 'клеток')}` : '', hungry ? `в «${A.name}» голодная зима, а у «${B.name}» ${Math.round(B.treasury)} еды` : pb0 > pa0 * 2 ? `«${B.name}» вдвое богаче на человека` : '', S.arch[A.id] && S.arch[A.id].parent === B.id ? `«${A.name}» когда-то откололась от «${B.name}»` : S.arch[B.id] && S.arch[B.id].parent === A.id ? `«${B.name}» когда-то откололась от «${A.name}»` : '', A.lord === B.id ? `«${A.name}» платит «${B.name}» дань и хочет свободы` : '', `между деревнями ${hostWord(best.h)}`, `${LA.name} ${word('ambition', LA.ambition, LA)}`, `вожди считают, что победят ${best.odds > 0.75 ? 'наверняка' : best.odds > 0.55 ? 'скорее всего' : 'если повезёт'}`];
+    // К1: an old battle the village still remembers is named among the reasons, and the war points to it
+    const gm = (A.mem || []).filter(m => m.kind === 'blood' && m.other === B.id).sort((p, q) => q.w - p.w)[0];
+    if (gm) reasons.push(`в «${A.name}» помнят ${gm.what}${gm.tone === 'loss' ? ' и своё поражение' : ''}${gm.unburied ? ', когда павших оставили без погребения' : ''}`);
     w.why = sent(reasons);
-    log(S, 'war', `«${A.name}» идёт войной на «${B.name}»: ${fighters.length} ${pl(fighters.length, 'воин', 'воина', 'воинов')}`, A.home.x, A.home.y, A.hue, { why: w.why, who: [LA.id, ...w.fighters], gs: [A.id, B.id] });
+    log(S, 'war', `«${A.name}» идёт войной на «${B.name}»: ${fighters.length} ${pl(fighters.length, 'воин', 'воина', 'воинов')}`, A.home.x, A.home.y, A.hue, { why: w.why, who: [LA.id, ...w.fighters], gs: [A.id, B.id], causes: gm ? [gm.ev] : undefined });
   }
   for (const w of S.wars.slice()) if (S.tick - w.t > 420) endWar(S, w);
 }
@@ -152,6 +155,7 @@ function battle(S, w, A, B, band) {
   if (!win && w.oddsE > 0.55 && w.oddsR < 0.47) why = (why ? why + ' ' : '') + `Вожди «${A.name}» просчитались: по слухам и из гордости ждали лёгкой победы, а силы были ${w.oddsR < 0.35 ? 'далеко не равны' : 'почти равны'}.`;
   const bev = log(S, 'battle', text, B.home.x, B.home.y, A.hue, { why, who: band.map(m => m.id).concat(LB ? [LB.id] : []), gs: [A.id, B.id] });
   (win ? B : A).lostEv = cite(S, bev.id);
+  memBattle(S, A, B, win, deadA, deadB, bev);
   for (const m of band) { if (deadA.includes(m)) continue; bio(S, m, win ? 'battleW' : 'battleL', `Ходит в поход на «${B.name}»: ${win ? 'победа' : 'поражение'}`); if (m.exiledFrom === B.id && !m.returned) { m.returned = S.tick; bio(S, m, 'returned', `Возвращается к «${B.name}», откуда ${m.sex === 'f' ? 'её' : 'его'} изгнали, — с чужим войском`); } if (win && m.feud && !m.feud.done && m.feud.g === B.id) revengeDone(S, m, `Ходит в поход на «${B.name}» и побеждает`); }
   for (const m of defenders) { if (deadB.includes(m)) continue; bio(S, m, win ? 'battleL' : 'battleW', `Защищает «${B.name}» от войска «${A.name}»: ${win ? 'поражение' : 'победа'}`); if (!win && m.feud && !m.feud.done && m.feud.g === A.id) revengeDone(S, m, `Отбивает войско «${A.name}» у стен родной деревни`); }
   // a death in battle has a face: the kin will remember who struck the blow

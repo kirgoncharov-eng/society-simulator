@@ -8,7 +8,8 @@ function institutions(S, g, L) {
     log(S, 'land', `В «${g.name}» поля снова становятся общими`, g.home.x, g.home.y, g.hue, { why: 'Частная собственность на землю запрещена вводными.', gs: [g.id] });
   } else if (g.land !== 'private' && P.landPriv >= 0.5 && n >= 9 && g.fields.length >= 4 && (g.norm < 0.55 || g.dynasty) && (imL = imitP(S, g, o => o.land === 'private'), rnd(S) < 0.008 + imL.p)) {
     g.land = 'private'; g.imFrom = imL.p > 0.008 && imL.from && rnd(S) < imL.p / (imL.p + 0.008) ? imL.from.name : null;
-    const owners = mem.slice().sort((a, b) => b.status - a.status).slice(0, Math.max(2, Math.ceil(n * 0.4)));
+    // К1: a line whose dead lie here has the older right to the land (Saxe 1970, Goldstein 1976)
+    const owners = mem.slice().sort((a, b) => b.status + 0.5 * linGraves(g, b.lin) - a.status - 0.5 * linGraves(g, a.lin)).slice(0, Math.max(2, Math.ceil(n * 0.4)));
     g.fields.forEach((f, i) => { f.owner = owners[i % owners.length].id; });
     const first = !S.firstLand; S.firstLand = true;
     const landless = adultsOf(S, g).filter(m => !owners.includes(m)), heads = lineHeads(S, g);

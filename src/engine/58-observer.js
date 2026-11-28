@@ -113,7 +113,10 @@ function villageYear(S, g) {
 function villageHistory(S, gid) {
   const g = S._g.get(gid); if (!g) return null;
   const turns = (g.hev || []).map(id => eventById(S, id)).filter(Boolean).sort((a, b) => a.id - b.id);
-  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns };
+  // К1: what the village remembers, how strongly, who still saw it, what holds it; what it has forgotten
+  const memories = (g.mem || []).slice().sort((a, b) => b.w - a.w).map(m => Object.assign({}, m, { living: witnesses(S, m), placeName: (placeById(S, m.place) || {}).name, memorial: g.memDay === m.id }));
+  const forgotten = (g.memGone || []).map(m => Object.assign({}, m, { placeName: (placeById(S, m.place) || {}).name }));
+  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns, memories, forgotten };
 }
 
 /* ---------- the household (Н4): what the regime means at the level of one family ---------- */

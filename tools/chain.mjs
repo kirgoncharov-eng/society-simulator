@@ -32,6 +32,9 @@ function noDangling(S, where) {
   }
   for (const l of S.legends || []) { for (const b of l.bio || []) check(b[3], `legend of ${l.name}`); goals(l.goals, `arcs in the legend of ${l.name}`); }
   for (const e of S.events) for (const c of e.causes || []) check(c, `causes of event ${e.id}`);
+  // К1: every memory, forgotten memory and named place opens its event
+  for (const g of S.groups) for (const m of [...(g.mem || []), ...(g.memGone || [])]) check(m.ev, `memory of «${g.name}»`);
+  for (const p of S.places || []) check(p.ev, `place ${p.name}`);
   // Н3: every turning point a village keeps for its history page opens
   for (const g of S.groups) for (const id of g.hev || []) check(id, `history of «${g.name}»`);
   // Н1: every named participant of a kept event opens: alive, a legend, or a shade of the dead

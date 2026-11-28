@@ -421,6 +421,14 @@ function draw(now) {
     for (let i = 0; i < k; i++) { const x = c.x - 9 + (i % cols) * 3.6, y = c.y - 5 + Math.floor(i / cols) * 3.6; ctx.fillRect(x - px(.9), y - px(1.3), px(1.8), px(2.6)); }
     ctx.strokeStyle = C.dark ? 'rgba(190,195,205,.35)' : 'rgba(110,115,125,.35)'; ctx.lineWidth = px(1); ctx.strokeRect(c.x - 12, c.y - 8, 24, 16);
   }
+  // К1: monuments — a mound, a mass grave, a stone
+  for (const p of S.places || []) {
+    if (!p.mon) continue;
+    ctx.fillStyle = C.dark ? 'rgba(200,190,160,.8)' : 'rgba(120,105,70,.8)'; ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = px(1.2);
+    if (p.mon === 'mound') { ctx.beginPath(); ctx.ellipse(p.x, p.y, 7, 4.5, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); }
+    else if (p.mon === 'massgrave') { ctx.strokeRect(p.x - 6, p.y - 4, 12, 8); ctx.beginPath(); ctx.moveTo(p.x, p.y - 3); ctx.lineTo(p.x, p.y + 3); ctx.moveTo(p.x - 2.5, p.y - 1); ctx.lineTo(p.x + 2.5, p.y - 1); ctx.stroke(); }
+    else { ctx.fillRect(p.x - px(1.6), p.y - px(3.4), px(3.2), px(6)); }
+  }
   for (const r of S.rites || []) {
     if (S.tick >= r.until) continue;
     const col = r.kind === 'funeral' ? (C.dark ? 'rgba(200,205,215,.55)' : 'rgba(80,85,95,.5)') : (C.dark ? 'rgba(240,200,110,.6)' : 'rgba(200,140,40,.55)');
@@ -524,6 +532,16 @@ function draw(now) {
     if (g.dynasty) { const cx = sx - tw / 2 - 9 * dpr, cy = y - 4 * dpr, q = dpr; ctx.fillStyle = C.dark ? '#e3c25a' : '#b8860b'; ctx.beginPath(); ctx.moveTo(cx - 5 * q, cy + 4 * q); ctx.lineTo(cx - 5 * q, cy - 3 * q); ctx.lineTo(cx - 2.5 * q, cy); ctx.lineTo(cx, cy - 4 * q); ctx.lineTo(cx + 2.5 * q, cy); ctx.lineTo(cx + 5 * q, cy - 3 * q); ctx.lineTo(cx + 5 * q, cy + 4 * q); ctx.closePath(); ctx.fill(); }
     if (g.coin) { const cx = sx + tw / 2 + 8 * dpr, cy = y - 4 * dpr; ctx.fillStyle = C.dark ? '#e3c25a' : '#c9a227'; ctx.beginPath(); ctx.arc(cx, cy, 4.5 * dpr, 0, 7); ctx.fill(); ctx.strokeStyle = C.dark ? '#8a6d1c' : '#8a6a10'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.arc(cx, cy, 2.4 * dpr, 0, 7); ctx.stroke(); }
     if (rt) { ctx.font = `400 ${11.5 * dpr}px Inter, system-ui, sans-serif`; ctx.strokeText(rt, sx, y + 13 * dpr); ctx.fillStyle = C.muted; ctx.fillText(rt, sx, y + 13 * dpr); ctx.font = `500 ${12 * dpr}px Inter, system-ui, sans-serif`; }
+  }
+  // К1: names of places, in italics, when the map is close enough to read them
+  ctx.font = `italic 400 ${11.5 * dpr}px "Source Serif 4", Georgia, serif`;
+  for (const p of view.z >= 1.4 ? S.places || [] : []) {
+    const sx = p.x * k + ox, sy = p.y * k + oy + 14 * dpr; if (sx < 0 || sx > W || sy < 0 || sy > H) continue;
+    const tw = ctx.measureText(p.name).width;
+    if (placed.some(q => Math.abs(q.x - sx) < (q.w + tw) / 2 + 4 * dpr && Math.abs(q.y - sy) < 14 * dpr)) continue;
+    placed.push({ x: sx, y: sy, w: tw });
+    ctx.strokeStyle = C.plate; ctx.lineWidth = 3.5 * dpr; ctx.strokeText(p.name, sx, sy);
+    ctx.fillStyle = p.forgot ? C.muted : C.ink; ctx.fillText(p.name, sx, sy);
   }
   ctx.font = `400 ${11.5 * dpr}px Inter, system-ui, sans-serif`;
   for (const n of S.nodes) {

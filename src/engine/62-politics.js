@@ -4,7 +4,7 @@ function power(S, g) {
 }
 
 function relations(S) {
-  const P = S.params, G = S.groups, decay = 0.03 + 0.1 * (1 - P.memory);
+  const P = S.params, G = S.groups, decay = 0.03 + 0.1 * (1 - P.memory), MT = memoryTies(S);
   for (let i = 0; i < G.length; i++) for (let j = i + 1; j < G.length; j++) {
     const A = G[i], B = G[j];
     if (A.dead || B.dead) continue;
@@ -21,6 +21,9 @@ function relations(S) {
     const lf = Math.min(0, bondW(LA, LB)) + Math.min(0, bondW(LB, LA)); if (lf < 0 && d < 450) h += -lf * 0.006;
     if (!al) h += contest * (0.03 + 0.12 * P.scarcity) * (0.5 + (LA.ambition + LB.ambition) / 2) * (0.7 + cdist(A, B)) - 0.08 * Math.max(0, mutual) - 0.02 * Math.min(3, (S.kinTies || {})[k] || 0);
     h -= h * decay; if (al) h *= 0.6;
+    // К1: remembered blood keeps the enmity from cooling to nothing; remembered help cools it faster
+    const gm = MT.grudge[k]; if (gm && h < GRUDGE_FLOOR * gm.w) { h = GRUDGE_FLOOR * gm.w; S.stats.grudgeHeld = (S.stats.grudgeHeld || 0) + 1; }
+    if (MT.thanks[k]) h *= 1 - 0.05 * MT.thanks[k];
     h = clamp(h, 0, 2);
     if (A.home && B.home) {
       const pa = A.treasury / Math.max(1, A.members.length), pb = B.treasury / Math.max(1, B.members.length);
@@ -36,7 +39,7 @@ function relations(S) {
     } else if (h > 1 && rnd(S) < 0.12) { conflict(S, A, B); h = 0.3; }
     if (A.dead || B.dead) continue;
     if (h < 0.01) delete S.hostility[k]; else S.hostility[k] = h;
-    if (!al && mutual > 0.2 && h < 0.3 && d < 450 && rnd(S) < 0.12) {
+    if (!al && mutual + 0.3 * (MT.thanks[k] || 0) > 0.2 && h < 0.3 && d < 450 && rnd(S) < 0.12) {
       S.alliances.push({ a: A.id, b: B.id, since: S.tick });
       log(S, 'alliance', `«${A.name}» и «${B.name}» заключают союз`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, A.hue, { why: `Вожди ${LA.name} и ${LB.name} ${trustWord(mutual)}, а вражды между деревнями почти нет. Союзники не воюют и помогают друг другу в стычках.`, who: [LA.id, LB.id], gs: [A.id, B.id] });
     } else if (al && (mutual < -0.05 || h > 0.7)) {
