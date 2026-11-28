@@ -318,7 +318,7 @@ function groupMonth(S, g) {
         const ng = createGroup(S, ch, sup, g.id);
         S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); bond(S, L, ch, 'enemy', `${fem(ch, 'расколол', 'расколола')} «${g.name}» и ${fem(ch, 'увёл', 'увела')} людей`, 0.6); S.stats.schisms++;
         const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why: why2, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
-        memFounding(S, ng, ch, sev);
+        memFounding(S, ng, ch, sev, 'schism');
         refBond(S, L, ch, sev.id); refLast(S, ch, 'schism', sev.id);
         return;
       }
@@ -394,6 +394,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   // the deposed, his grown children and the usurper's chronicle and ties point to the coup
   const id = cev.id; powerEvent(S, g, id);
   memPower(S, g, { ev: id, tone: 'grief', w: 0.7, what: `переворот, когда ${ch.name} ${fem(ch, 'сверг', 'свергла')} ${nameCase(L, 'accusative')}`, hero: L.id, lin: L.lin });
+  mythRewrite(S, g, L, ch, id);
   refBond(S, L, ch, id); refLast(S, ch, 'coup', id); refLast(S, L, 'deposed', id); refLast(S, ch, 'leader', id);
   if (L.group === g.id) powerDeposed(S, L, g, id);
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.age >= 15) { refBond(S, o, ch, id); refLast(S, o, 'feud', id); if (o.feud && o.feud.L === ch.id && !o.feud.ev) o.feud.ev = cite(S, id); }

@@ -71,12 +71,26 @@ function vhMemory(h) {
   const gone = h.forgotten.map(m => `<li>${esc(m.what)} <small>г.${vhYear(m.t)}, забыто к г.${vhYear(m.gone)}</small>${m.placeName ? ` — место по-прежнему зовут «${esc(m.placeName)}», но уже не знают почему` : ''} <button class="evlink" data-ev="${m.ev}" aria-label="Открыть событие">↗</button></li>`);
   return `<h4>Что помнят</h4><ul class="vh-turns">${rows.join('') || '<li>Пока ничего особенного.</li>'}</ul>${gone.length ? `<details class="vh-more"><summary>Что забыли</summary><ul class="vh-turns">${gone.join('')}</ul></details>` : ''}`;
 }
+// К2: legends — how they are told, how it was, and how other villages tell the same story
+const MYTH_STEP_WORD = ['', 'первый пересказ', 'пересказ второго поколения', 'пересказ третьего поколения'];
+function vhMyths(h) {
+  if (!h.myths.length) return '';
+  const items = h.myths.slice().sort((a, b) => a.src.t - b.src.t).map(y => {
+    const truth = visibleEvent(y.ev);
+    const merged = (y.merged || []).length > 1 ? `<br><small>на деле: ${y.merged.map(([id, yr]) => `<button class="evlink" data-ev="${id}">битва г.${yr}</button>`).join(', ')}</small>` : '';
+    const others = (y.others || []).slice(0, 2).map(o => `<br><small>в «${esc(o.village)}» рассказывают иначе: ${esc(o.text)}</small>`).join('');
+    return `<li><b>${y.version === 'old' ? 'По-старому, как рассказывает свергнутый род: ' : ''}«${esc(y.text)}»</b> <small>${MYTH_STEP_WORD[y.step] || ''}${y.carried ? `; предание принесли из «${esc(y.carried)}»` : ''}</small>
+      <br><small>как было: ${truth ? `<button class="evlink" data-ev="${y.ev}">${esc(truth.text)}</button> (г.${vhYear(truth.t)})` : 'событие утрачено'}</small>${merged}
+      ${y.diff.length ? `<br><small>чем отличается: ${esc(y.diff.join('; '))}</small>` : ''}${others}</li>`;
+  });
+  return `<h4>Предания</h4><ul class="vh-turns">${items.join('')}</ul>`;
+}
 function villageHistoryHtml(gid) {
   const h = SIM.villageHistory(S, gid);
   if (!h) return '<p class="empty">Этой деревни больше нет.</p>';
   return `<h3>Как «${esc(h.name)}» стала такой</h3>
     <p class="role">Основана в г.${vhYear(h.founded)}${h.founder ? `, основатель ${esc(h.founder)}` : ''}. Сейчас: ${esc((h.rtype || '').toLowerCase())}.</p>
-    ${vhPath(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
+    ${vhPath(h)}${vhMyths(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
     <details class="vh-more"><summary>По десятилетиям</summary>${vhTable(h)}</details>
     <h4>Поворотные события</h4>${vhTurns(h)}`;
 }

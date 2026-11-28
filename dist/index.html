@@ -524,7 +524,7 @@ const SYL = ['ар','вен','ли','мир','та','ро','эл','ка','дан
 const T_EG = ['Круг','Община','Братство','Артель','Совет'];
 const T_HI = ['Дом','Орден','Престол','Дело','Синдикат'];
 // model version: bump on any change that alters how worlds unfold (the page shows it, cached atlases are dropped)
-const MODEL = { v: 'm33', date: '2026-11-28', note: 'память общин и мест: воспоминания со свидетелями, места с именами, курганы, братские могилы, день поминовения' };
+const MODEL = { v: 'm34', date: '2026-11-28', note: 'предания: пересказ поколений искажает правду, версии у победителей, побеждённых и дочерних деревень, переписывание после переворота' };
 const SEASON = ['зима','весна','лето','осень'];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -630,6 +630,7 @@ function archiveGC(S) {
     for (const id of g.hev || []) keep.add(id);
     for (const m of g.mem || []) keep.add(m.ev);
     for (const m of g.memGone || []) keep.add(m.ev);
+    for (const y of g.myths || []) { keep.add(y.ev); if (y.born) keep.add(y.born); for (const e of y.merged || []) keep.add(e[0]); }
   }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   for (const p of S.places || []) if (p.ev) keep.add(p.ev);
@@ -1113,7 +1114,7 @@ function succession(S, g, why, old) {
     if (h) {
       const W = h.W, child = h.how === 'child'; W.bioL = g.id;
       bio(S, W, 'heir', child ? `По праву рождения наследует власть ${old.sex === 'f' ? 'матери' : 'отца'} ${nameCase(old, 'genitive')} в «${g.name}»` : `Как старший в роду ${g.dynName || clanName(S, linOf(S, W), true)} наследует власть ${nameCase(old, 'genitive')} в «${g.name}»`);
-      g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = clamp(0.8 - 0.1 * (g.dynGen - 1) + (ancestorMound(S, g, g.dynLin) ? 0.1 : 0), 0.35, 0.9); // each generation inherits less of the founder's standing g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
+      g.leader = -1; setLeader(S, g, W); g.gen++; g.dynGen++; g.legit = clamp(0.8 - 0.1 * (g.dynGen - 1) + (ancestorMound(S, g, g.dynLin) ? 0.1 : 0) + (mythAncestor(S, g, g.dynLin) ? 0.1 : 0), 0.35, 0.95); // each generation inherits less of the founder's standing g.linN = (g.linN || 1) + 1; g.linId = linOf(S, W);
       const weak = W.skill < 0.45;
       const sev = log(S, 'succession', `${old.name} ${VERB[why] || 'уходит'}. ${child ? 'По праву рождения' : 'По праву рода'} «${g.name}» наследует ${W.name}, ${g.dynGen}-е поколение династии ${g.dynName}`, W.x, W.y, g.hue, { why: sent(['в деревне власть наследуется, поэтому выборов нет', child ? `${W.name} — старший ${fem(W, 'сын', 'дочь')} ${nameCase(old, 'genitive')}` : `своих детей у ${nameCase(old, 'genitive')} в деревне нет, и власть переходит к старшему в роду`, `наследнику ${Math.floor(W.age)} лет`, weak ? `способности средние (навык ${P0(W.skill)}): сильные соперники могут не смириться` : `навык ${P0(W.skill)}`]), who: [W.id, old.id], gs: [g.id] });
       refLast(S, W, 'heir', sev.id); powerEvent(S, g, sev.id);
@@ -2695,7 +2696,7 @@ function bud(S, g, L) {
   bio(S, F, 'found', `Уводит ${go.length} ${pl(go.length, 'человека', 'человек', 'человек')} из «${g.name}» поднимать новую деревню «${ng.name}»`);
   for (const m of go) bio(S, m, 'move', `Уходит с ${nameCase(F, 'instrumental')} из «${g.name}» на новые земли`);
   const cev = log(S, 'colony', `Из «${g.name}» отпочковывается дочерняя деревня: ${F.name} уводит ${go.length + 1} ${pl(go.length + 1, 'человека', 'человек', 'человек')} на новые земли`, g.home.x, g.home.y, ng.hue, { why: why + (go.filter(m => linOf(S, m) === linOf(S, F)).length >= 2 ? ` Уходит ветвь рода ${clanName(S, linOf(S, F), true)}: ${sidesTxt(S, [F, ...go])}.` : '') + (ng.dynasty ? ` Как и в «${g.name}», власть в новой деревне будет передаваться в роду ${ng.dynName}.` : '') + (ng.lord ? ` Младшая ветвь признаёт старшинство «${g.name}» и шлёт ей долю урожая.` : ''), who: [F.id, L.id], gs: [g.id, ng.id], sides: 1 }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
-  memFounding(S, ng, F, cev);
+  memFounding(S, ng, F, cev, 'colony');
 }
 /* ---------- laws with authors (П2, see docs/POLITICS.md) ---------- */
 // Every change in how a village is run has an author, backers, opponents and a cause. The backers and opponents are
@@ -2807,7 +2808,7 @@ function shareFelt(S, g, L) {
   for (const h of heads.slice(0, 5)) bio(S, h, 'tax', `Отдаёт вождю ${nameCase(L, 'dative')} ${P0(g.take)} урожая своей семьи`, ev.id);
 }
 // a tyrant's line is remembered: its candidates lose votes for thirty years
-const tyrantLine = (S, g, c) => g.tyr && S.tick - g.tyr.t < 360 * 30 && linOf(S, c) === g.tyr.lin;
+const tyrantLine = (S, g, c) => (g.tyr && S.tick - g.tyr.t < 360 * 30 && linOf(S, c) === g.tyr.lin) || !!mythVillain(S, g, linOf(S, c)); // К2: or while the legend of the tyrant is told
 // Hirschman 1970: exit is costly, and more so each time: whoever has already left a village or two puts up with the next
 // one longer (a house, fields and kin to lose again). The first exit is as before: it is the repeats that become rarer
 function exitCost(S, a, g) { const quits = (a.kc && a.kc.quit) || 0; return (linGraves(g, a.lin) >= 3 ? 0.8 : 1) / (1 + 2 * quits); } // К1: leaving the graves of one's line is harder
@@ -3849,7 +3850,7 @@ const EVENT_HOUR = {
   // family: weddings before sunset, flight at night
   marriage: ['s', -1, 1], elope: ['s', 3, 1.5], break: ['s', 1, 1.5],
   // talk, plans and secrets: the evening by the fire
-  arc: ['s', 2, 1.5], secret: ['s', 2.5, 1.5], rumor: ['s', 2, 1.5],
+  arc: ['s', 2, 1.5], myth: ['s', 2.5, 1.5], secret: ['s', 2.5, 1.5], rumor: ['s', 2, 1.5],
   // work done: in the working hours
   tech: ['h', 14, 3], well: ['h', 15, 2], bridge: ['h', 15, 2], milestone: ['h', 15, 3], trade: ['h', 11, 2], route: ['h', 11, 2], market: ['h', 10, 2],
   // hardship: found out in the morning; the sea and the heat take people by day
@@ -4093,6 +4094,11 @@ function remember(S, g, o) {
   if (!g || g.dead || !o.ev) return null;
   const wit = g.members.filter(id => { const m = S._a.get(id); return m && m.age >= 16; }).slice(0, 60);
   const m = Object.assign({ id: (S.memId = (S.memId || 0) + 1), t: S.tick, w0: o.w, wit, lastWit: null }, o);
+  // names are kept with the memory: the people and villages it speaks of may be long gone when it becomes a legend (К2)
+  const h = o.hero && personOf(S, o.hero); if (h) { m.heroName = h.name; m.heroSex = h.sex; m.heroLin = h.lin || h.linId || null; }
+  const og = o.other && S._g.get(o.other); if (og) m.otherName = og.name;
+  const pl0 = o.place && placeById(S, o.place); if (pl0) m.placeName = pl0.name;
+  m.gname = g.name; m.faith = g.faith && S.faiths && S.faiths[g.faith] ? S.faiths[g.faith].base : null;
   (g.mem || (g.mem = [])).push(m);
   // a village keeps at most twenty memories: the weakest goes first
   if (g.mem.length > 20) { g.mem.sort((a, b) => b.w - a.w); forget(S, g, g.mem[g.mem.length - 1], true); }
@@ -4157,8 +4163,8 @@ function memBattle(S, A, B, win, deadA, deadB, ev) {
   // attackers who lost leave their dead on enemy land; a hard leader does not bury them
   const unburied = !win && deadA.length && LB && LB.coop < 0.4;
   // the fallen of each side are its heroes; the side that lost remembers the battle harder
-  const ma = remember(S, A, { ev: ev.id, kind: 'blood', tone: win ? 'win' : 'loss', w: clamp(0.5 + 0.12 * dead + (win ? 0 : 0.2) + (unburied ? 0.3 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: B.id, hero: deadA[0] && deadA[0].id, unburied: unburied || undefined });
-  const mb = remember(S, B, { ev: ev.id, kind: 'blood', tone: win ? 'loss' : 'win', w: clamp(0.6 + 0.12 * dead + (win ? 0.2 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: A.id, hero: deadB[0] && deadB[0].id });
+  const ma = remember(S, A, { ev: ev.id, kind: 'blood', tone: win ? 'win' : 'loss', w: clamp(0.5 + 0.12 * dead + (win ? 0 : 0.2) + (unburied ? 0.3 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: B.id, hero: deadA[0] && deadA[0].id, unburied: unburied || undefined, dead: deadA.length, foeDead: deadB.length, att: true });
+  const mb = remember(S, B, { ev: ev.id, kind: 'blood', tone: win ? 'loss' : 'win', w: clamp(0.6 + 0.12 * dead + (win ? 0.2 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: A.id, hero: deadB[0] && deadB[0].id, dead: deadB.length, foeDead: deadA.length });
   for (const [g, m] of [[A, ma], [B, mb]]) if (m && m.mon && hash01(ev.id + g.id) < 0.4) memorialFor(S, g, m);
   if (place && place.mon) note(S, 'rite', `${unburied ? `Павших «${A.name}» оставляют без погребения, своих` : 'Павших'} хоронят в братской могиле: ${place.name}`, x, y, B.hue, { rite: 'grave', who: deadA.concat(deadB).slice(0, 6).map(m => m.id), gs: [B.id, A.id], causes: [ev.id] });
   if (unburied) S.stats.unburied = (S.stats.unburied || 0) + 1;
@@ -4171,7 +4177,7 @@ function memSea(S, g, m, ev) {
   if (stone) g.stone -= 1;
   const place = namePlace(S, { name: stone ? `Камень ${nameCase(m, 'genitive')}` : pickBy(PLACE_NAMES.sea, ev.id), kind: 'sea', x, y, ev: ev.id, g: g.id, mon: stone ? 'stone' : null });
   if (stone) S.stats.stones = (S.stats.stones || 0) + 1;
-  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: 0.7, what: `лодку ${nameCase(m, 'genitive')}, что не вернулась с моря`, place: place.id, mon: place.mon, hero: m.id });
+  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: 0.7, what: `лодку ${nameCase(m, 'genitive')}, что не вернулась с моря`, place: place.id, mon: place.mon, hero: m.id, dead: 1, sub: 'sea' });
 }
 // a plague that killed many: the dead go into a pit at the edge of the burial ground, a place people fear
 function memPlague(S, g, dead, ev) {
@@ -4179,22 +4185,24 @@ function memPlague(S, g, dead, ev) {
   const cem = g.cemetery || g.home, x = cem.x + 18, y = cem.y + 12;
   const place = namePlace(S, { name: pickBy(PLACE_NAMES.plague, ev.id), kind: 'plague', x, y, ev: ev.id, g: g.id, mon: 'massgrave', dread: true });
   S.stats.massGraves = (S.stats.massGraves || 0) + 1;
-  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.6 + dead * 0.05, 0.6, 2), what: `мор, унёсший ${dead} ${pl(dead, 'человека', 'человек', 'человек')}`, place: place.id, mon: 'massgrave' });
+  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.6 + dead * 0.05, 0.6, 2), what: `мор, унёсший ${dead} ${pl(dead, 'человека', 'человек', 'человек')}`, place: place.id, mon: 'massgrave', dead, sub: 'plague' });
 }
-function memFamine(S, g, hungry, n, ev) { remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.3 + hungry / Math.max(1, n), 0.4, 1.3), what: `голодную зиму г.${Math.floor(S.tick / 360)}` }); }
+function memFamine(S, g, hungry, n, ev) { remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.3 + hungry / Math.max(1, n), 0.4, 1.3), what: `голодную зиму г.${Math.floor(S.tick / 360)}`, sub: 'famine' }); }
 // the founding of a village: a stone where the first house stood
-function memFounding(S, g, L, ev) {
+function memFounding(S, g, L, ev, how) {
   if (!g || !L) return;
+  // К2: a daughter village carries its mother's legends
+  if (how === 'colony' || how === 'schism') inheritMyths(S, ev.gs && S._g.get(ev.gs.find(id => id !== g.id)), g);
   const at = g.home || { x: g.cx, y: g.cy };
   const place = g.home ? namePlace(S, { name: `Камень ${nameCase(L, 'genitive')}`, kind: 'origin', x: at.x - 14, y: at.y + 10, ev: ev.id, g: g.id, mon: 'stone' }) : null;
-  remember(S, g, { ev: ev.id, kind: 'origin', tone: 'pride', w: 1, what: `основание деревни ${L.name}`, place: place && place.id, mon: place && 'stone', hero: L.id, lin: L.lin });
+  remember(S, g, { ev: ev.id, kind: 'origin', tone: 'pride', w: 1, what: `основание деревни ${L.name}`, place: place && place.id, mon: place && 'stone', hero: L.id, lin: L.lin, how: how || (S.tick < 360 * 8 ? 'landing' : 'found'), from: ev.gs && ev.gs.length > 1 ? (S._g.get(ev.gs.find(id => id !== g.id)) || {}).name : undefined });
 }
 // a village founded on the march gets its stone when it settles
 function originStone(S, g) {
   const m = (g.mem || []).find(x => x.kind === 'origin' && !x.place); if (!m) return;
   const L = personOf(S, m.hero); if (!L) return;
   const p = namePlace(S, { name: `Камень ${nameCase(L, 'genitive')}`, kind: 'origin', x: g.home.x - 14, y: g.home.y + 10, ev: m.ev, g: g.id, mon: 'stone' });
-  m.place = p.id; m.mon = 'stone';
+  m.place = p.id; m.mon = 'stone'; m.placeName = p.name;
 }
 function memAid(S, from, to, ev) { remember(S, to, { ev: ev.id, kind: 'good', tone: 'thanks', w: 0.6, what: `зерно от «${from.name}» в голодную зиму`, other: from.id }); }
 function memPower(S, g, o) { remember(S, g, Object.assign({ kind: 'power' }, o)); }
@@ -4217,7 +4225,7 @@ function rulerMound(S, g, a, fev) {
   S.stats.mounds = (S.stats.mounds || 0) + 1;
   const ev = log(S, 'rite', `«${g.name}» насыпает курган над ${fem(a, 'вождём', 'вождём')} ${nameCase(a, 'instrumental')}`, x, y, g.hue, { rite: 'mound', why: sent([founder ? `${a.name} ${fem(a, 'основал', 'основала')} деревню` : `${a.name} ${fem(a, 'правил', 'правила')} ${yrs(years)}`, 'всё лето мужчины носят землю; деревня кормит работников из общего амбара', 'курган будет виден издалека и напомнит, чей род здесь первый']), who: [a.id], gs: [g.id], causes: [fev].filter(Boolean) });
   place.ev = ev.id;
-  remember(S, g, { ev: ev.id, kind: founder ? 'origin' : 'power', tone: 'pride', w: founder ? 1.2 : 0.9, what: `${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')}, что лежит в кургане`, place: place.id, mon: 'mound', hero: a.id, lin: a.lin });
+  remember(S, g, { ev: ev.id, kind: founder ? 'origin' : 'power', tone: 'pride', w: founder ? 1.2 : 0.9, what: `${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')}, что лежит в кургане`, place: place.id, mon: 'mound', hero: a.id, lin: a.lin, years });
 }
 // an ancestor's mound that is still remembered: the line of its hero holds the right to rule more firmly
 function ancestorMound(S, g, lin) { return (g.mem || []).find(m => m.mon === 'mound' && m.lin === lin && m.w >= 0.4); }
@@ -4281,13 +4289,18 @@ function memoryTies(S) {
     if (m.kind === 'blood') { if (!grudge[k] || grudge[k].w < m.w) grudge[k] = m; }
     else if (m.kind === 'good') thanks[k] = Math.max(thanks[k] || 0, m.w);
   }
+  // К2: a legend of defeat or of a Great War keeps the grudge after the last witness is gone
+  for (const g of S.groups) for (const y of g.myths || []) {
+    if (!y.other || !(y.kind === 'war' || (y.kind === 'blood' && y.tone === 'loss'))) continue;
+    const k = key(g.id, y.other); if (!grudge[k] || grudge[k].w < 0.6) grudge[k] = { w: 0.6, ev: y.ev, myth: true };
+  }
   return { grudge, thanks };
 }
 const GRUDGE_FLOOR = 0.35;
 // fear of a place: a plague pit or a mass grave, still remembered, keeps settlers and fields away
 function dreadAt(S, x, y, r = 70) {
   for (const p of S.places || []) {
-    if (p.forgot || !(p.dread || p.mon === 'massgrave')) continue;
+    if (!p.cursed && (p.forgot || !(p.dread || p.mon === 'massgrave'))) continue; // К2: a haunted place keeps its fear
     if (Math.hypot(p.x - x, p.y - y) < r) return p;
   }
   return null;
@@ -4298,11 +4311,220 @@ function onMonument(S, x, y) { for (const p of S.places || []) if (p.mon && Math
 function memoryName(S, a, g) {
   const cands = [];
   for (const m of (g && g.mem) || []) { if (!m.hero || m.w < 0.5) continue; const h = personOf(S, m.hero); if (h && h.sex === a.sex && h.name !== a.name) cands.push([h, m]); }
+  for (const y of (g && g.myths) || []) { if (!y.heroName || y.villain || y.heroSex !== a.sex || y.version === 'old') continue; cands.push([{ name: y.heroName, sex: y.heroSex }, { w: 0.8, ev: y.ev, what: `предание о ${y.heroName}` }]); }
   const gps = [a.mother, a.father].map(id => personOf(S, id)).filter(Boolean).flatMap(p => [p.mother, p.father]).map(id => personOf(S, id)).filter(p => p && p.sex === a.sex && !S._a.has(p.id));
   const u = hash01(a.id * 31 + S.tick);
-  if (cands.length && u < 0.12 * cands[0][1].w) { const [h, m] = cands[Math.floor(hash01(a.id) * cands.length) % cands.length]; return { name: h.name, why: `в честь ${nameCase(h, 'genitive')}: в «${g.name}» помнят ${m.what}`, ev: m.ev, hero: h.id }; }
+  if (cands.length && u < 0.12 * cands[0][1].w) { const [h, m] = cands[Math.floor(hash01(a.id) * cands.length) % cands.length]; return { name: h.name, why: `в честь ${h.id ? nameCase(h, 'genitive') : h.name}: в «${g.name}» ${m.what.startsWith('предание') ? 'рассказывают ' + m.what : 'помнят ' + m.what}`, ev: m.ev, hero: h.id }; }
   if (gps.length && u > 0.9) { const h = gps[0]; return { name: h.name, why: `в честь ${h.sex === 'f' ? 'бабушки' : 'деда'} ${nameCase(h, 'genitive')}`, hero: h.id }; }
   return null;
+}
+/* ---------- myths: how what happened becomes what is told (К2, see docs/CULTURE.md) ---------- */
+// A memory whose last witness has died becomes a legend. Every generation (about 25 years) retells it and the telling
+// drifts (Bartlett 1932): numbers grow, the many shrink to one hero, causes turn moral, similar events merge into one
+// (Vansina's telescoping), the ruling line claims the hero. A place whose story is forgotten but whose name lives on gets an
+// explanation (an etiological myth). Gods, spirits and giants appear in the words only: the world has no magic.
+// A new ruler may have a legend retold his way; the old version stays with the deposed line. Every legend keeps a link to
+// the true event, and its differences from the truth are listed for the observer.
+// g.myths: [{ id, ev, kind, tone, step, t, told, text, diff, hero, heroName, heroSex, heroLin, claimLin, villain, other,
+//            otherName, place, placeName, merged, version, lin, src }]
+const MYTH_STEP = 360 * 25;
+const MYTH_MAX = 12;
+const sexW = (sex, m, f) => sex === 'f' ? f : m;
+function crowd(n, step) {
+  if (step >= 3) return 'сотни';
+  if (step === 2) return n > 1 ? 'многие' : 'многие';
+  return n <= 1 ? 'один' : n === 2 ? 'двое' : n === 3 ? 'трое' : n === 4 ? 'четверо' : `${n} человек`;
+}
+const DEITY = { 'культ Реки': 'Река', 'культ Горы': 'Гора', 'культ Леса': 'Лес', 'культ Огня': 'Огонь', 'культ Предков': 'предки' };
+const deityOf = src => DEITY[src.faith] || 'предки';
+const angry = src => { const d = deityOf(src); return d === 'предки' ? 'гнев предков' : `гнев ${d === 'Река' ? 'Реки' : d === 'Гора' ? 'Горы' : d === 'Лес' ? 'Леса' : 'Огня'}`; };
+// the hero as the subject of a sentence: «Исол, праматерь Миэличей,» — with the claimed line set off by commas
+const subj = (h, claim, sex) => h ? `${h}${claim ? `, ${sexW(sex, 'предок', 'праматерь')} ${claim},` : ''}` : '';
+const at = src => src.placeName ? `у места, что зовут ${src.placeName},` : '';
+// how many were killed, in the accusative: «убили троих»
+const killed = n => n <= 1 ? 'одного' : n === 2 ? 'двоих' : n === 3 ? 'троих' : n === 4 ? 'четверых' : `${n} человек`;
+
+// the telling at a given step; returns { text, diff } — diff lists how the telling departs from the truth
+function tellMyth(S, g, y) {
+  const s = y.src, n = y.step, H = y.heroName, hs = y.heroSex, diff = [];
+  const claim = y.claimLin && y.claimLin !== y.heroLin ? clanName(S, y.claimLin, true) : null;
+  const heroOf = subj(H, claim, hs), heroTail = H ? `${H}${claim ? ` (${sexW(hs, 'предок', 'праматерь')} ${claim})` : ''}` : '';
+  if (claim) diff.push(`${H} не был${sexW(hs, '', 'а')} из ${claim}: ${sexW(hs, 'его', 'её')} приписал себе правящий род`);
+  let text = '';
+  if (y.kind === 'name') {
+    const p = s.placeName, k = s.placeKind;
+    text = k === 'battle' ? `Говорят, ${p} зовут так потому, что здесь ${n >= 2 ? 'бились великаны и земля до сих пор красная' : 'когда-то пролилась кровь предков'}.`
+      : k === 'plague' ? `${p} обходят стороной: говорят, там живёт мор, и кто разроет землю, тот его выпустит.`
+      : k === 'sea' ? `Про ${p} рассказывают, что духи утонувших зовут оттуда рыбаков в туманные ночи.`
+      : k === 'mound' ? `Говорят, в кургане спит ${n >= 2 ? 'великан' : 'древний царь'}, и пока его не тревожат, деревня стоит.`
+      : `Говорят, ${p} поставили ${n >= 2 ? 'сами боги' : 'первые люди'}, но кто они были, никто не знает.`;
+    diff.push(`на деле имя дано ${k === 'battle' ? 'по битве' : k === 'plague' ? 'по мору' : k === 'sea' ? 'по тем, кто не вернулся с моря' : k === 'mound' ? `по кургану вождя ${H || ''}` : 'в память об основании'} в г.${Math.floor(s.t / 360)}`);
+    return { text, diff };
+  }
+  if (y.kind === 'war') {
+    const years = y.merged.map(e => e[1]);
+    text = `Рассказывают о Великой войне с «${s.otherName}»: ${n >= 3 ? 'она шла три поколения, и' : 'долго'} ${n >= 3 ? 'реки текли кровью' : 'обе стороны теряли лучших'}.${H ? ` Громче всех поют о ${H}.` : ''}`;
+    diff.push(`на деле это ${years.length} ${pl(years.length, 'битва', 'битвы', 'битв')} в разные годы: г.${years.join(', г.')}`);
+    return { text, diff };
+  }
+  if (y.kind === 'blood') {
+    const dead = s.dead || 0, foe = s.foeDead || 0;
+    if (s.tone === 'win') {
+      text = n >= 3 ? `Говорят, у ${s.placeName || `стен «${s.otherName}»`} ${heroOf || 'наши'} ${H ? sexW(hs, 'стоял', 'стояла') : 'стояли'} против целого войска, и ${deityOf(s)} ${deityOf(s) === 'предки' ? 'встали' : 'встала'} на нашу сторону.`
+        : n === 2 ? `Помнят, как ${heroOf || 'наши'} ${H ? sexW(hs, 'один', 'одна') + ' разбил' + sexW(hs, '', 'а') : 'разбили'} войско «${s.otherName}»${s.placeName ? ` у места ${s.placeName}` : ''}.`
+        : `Старики рассказывают: ${s.placeName ? `${at(s)} ` : ''}наши ${s.att ? 'разбили' : 'отбили'} «${s.otherName}»${H ? `, а ${H} пал${sexW(hs, '', 'а')} ${sexW(hs, 'первым', 'первой')}` : ''}.`;
+      if (n >= 2 && H) diff.push(`${H} не ${sexW(hs, 'побеждал', 'побеждала')} в одиночку: ${sexW(hs, 'он', 'она')} пал${sexW(hs, '', 'а')} в общей битве`);
+      if (n === 1) diff.push(dead + foe ? `уже не говорят, что павших было ${dead + foe} с обеих сторон и кто вёл войско` : 'уже не говорят, что дошло лишь до стычки и добычи');
+    } else {
+      if (n === 1) diff.push(foe ? `уже не говорят, что и «${s.otherName}» потеряли ${foe}` : 'уже не говорят, что войско отбили');
+      text = n >= 3 ? `С тех пор ${s.placeName ? `у места ${s.placeName}` : 'там'} по ночам слышны голоса павших: «${s.otherName}» убили сотни наших, потому что нас прогневили ${deityOf(s) === 'предки' ? 'предки' : deityOf(s)}.`
+        : n === 2 ? (s.att ? `Помнят, как наши ходили на «${s.otherName}», и там погибли многие.` : `Помнят, как «${s.otherName}» пришли${s.placeName ? ` к месту ${s.placeName}` : ''} и убили многих.`) + ` ${s.unburied ? 'Наших оставили лежать без погребения — этого не прощают.' : `Это был ${angry(s)}.`}`
+        : s.att ? `Рассказывают, как наши ходили войной на «${s.otherName}» и вернулись ни с чем${dead ? `, потеряв ${killed(dead)}` : ''}.${s.unburied ? ' Павших оставили там без погребения.' : ''}` : dead ? `Рассказывают, что ${s.placeName ? `${at(s)} ` : ''}«${s.otherName}» убили ${killed(dead)} наших.` : `Рассказывают, как «${s.otherName}» пришли к нам войной и взяли добычу.`;
+      if (n >= 2) diff.push(`причина не ${angry(s)}: это был поход «${s.otherName}»`);
+    }
+    if (n >= 2) diff.push(dead + foe ? `павших было ${dead + foe} с обеих сторон, а в предании — ${crowd(dead + foe, n)}` : `в той битве никто не погиб, а в предании — ${crowd(2, n)}`);
+    return { text, diff };
+  }
+  if (y.kind === 'woe') {
+    const sea = s.sub === 'sea', plague = s.sub === 'plague';
+    if (sea) {
+      text = n >= 3 ? `Говорят, ${H || 'рыбак'} ушёл в море за край света, и с тех пор духи утонувших зовут рыбаков${s.placeName ? ` с места ${s.placeName}` : ''}.`
+        : n === 2 ? `Помнят, как море забрало многих, и первым — ${H || 'лучшего рыбака'}.`
+        : `Рассказывают, что ${H || 'рыбак'} ${sexW(hs, 'ушёл', 'ушла')} в море и не вернул${sexW(hs, 'ся', 'ась')}.`;
+      diff.push(n >= 2 ? 'море забрало одну лодку, а не многих' : 'уже не помнят, в какое время года и зачем лодка вышла в море');
+    } else if (plague) {
+      const v = (g.myths || []).find(x => x.villain && x !== y);
+      text = n >= 3 ? `Говорят, в ${s.placeName || 'яме у кладбища'} до сих пор живёт мор, и туда не ходят.`
+        : n === 2 ? `Помнят мор, который унёс многих. Его наслали за ${v ? `жадность ${v.heroName}` : 'то, что забыли предков'}.`
+        : `Рассказывают, как мор унёс ${killed(s.dead || 0)}.`;
+      if (n === 1) diff.push('уже не помнят, откуда пришёл мор');
+      if (n >= 2) diff.push(`умерло ${s.dead || 0}, а мор пришёл от соседей, а не как кара`);
+    } else {
+      text = n >= 2 ? `Помнят голодную зиму, которую наслал ${angry(s)}.` : `Рассказывают о голодной зиме, когда ели кору.`;
+      diff.push(n >= 2 ? 'голод был от неурожая, а не от гнева богов' : 'коры не ели: в ту зиму кормились запасом деревни, его не хватило');
+    }
+    return { text, diff };
+  }
+  if (y.kind === 'origin') {
+    const how = s.how;
+    text = n >= 3 ? `Говорят, ${heroOf} ${sexW(hs, 'был сыном', 'была дочерью')} ${deityOf(s) === 'предки' ? 'первых предков' : deityOf(s) === 'Река' ? 'Реки' : deityOf(s) === 'Гора' ? 'Горы' : deityOf(s) === 'Лес' ? 'Леса' : 'Огня'}, и камень, что ${sexW(hs, 'он', 'она')} поставил${sexW(hs, '', 'а')}, до сих пор тёплый.`
+      : n === 2 ? `Помнят, как ${heroOf} получил${sexW(hs, '', 'а')} знак от ${deityOf(s) === 'предки' ? 'предков' : deityOf(s) === 'Река' ? 'Реки' : deityOf(s) === 'Гора' ? 'Горы' : deityOf(s) === 'Лес' ? 'Леса' : 'Огня'} и ${how === 'landing' ? `привёл${sexW(hs, '', 'а')} первых людей из-за моря` : how === 'schism' ? `вывел${sexW(hs, '', 'а')} своих из несправедливой деревни${s.from ? ` «${s.from}»` : ''}` : `выбрал${sexW(hs, '', 'а')} это место`}.`
+      : how === 'landing' ? `Рассказывают, что ${heroOf} пришёл${sexW(hs, '', 'а')} из-за моря и поставил${sexW(hs, '', 'а')} здесь первый дом.`
+      : how === 'schism' ? `Рассказывают, что ${heroOf} увёл${sexW(hs, '', 'а')} своих от жадного вождя${s.from ? ` «${s.from}»` : ''} и основал${sexW(hs, '', 'а')} деревню.`
+      : `Рассказывают, что деревню основал${sexW(hs, '', 'а')} ${heroTail}.`;
+    if (n === 1) diff.push(how === 'schism' ? `«${s.from || 'прежняя деревня'}» была жадной только в глазах ушедших: раскол вырос из обид на вождя и борьбы за власть` : how === 'found' ? 'основали деревню двое, второго уже не называют' : how === 'colony' ? 'это была дочерняя деревня: в рассказе уже нет, откуда пришли' : 'в рассказе уже нет спутников основателя');
+    if (n >= 2) diff.push(`никакого знака не было: ${how === 'schism' ? 'это был раскол из-за обид на вождя' : how === 'colony' ? 'это была дочерняя деревня, ушедшая на свободную землю' : 'люди искали землю и воду'}`);
+    if (n >= 3) diff.push(`${H} — обычный человек, ${sexW(hs, 'сын', 'дочь')} своих родителей`);
+    return { text, diff };
+  }
+  if (y.villain) {
+    text = n >= 3 ? `Говорят, ${H} ${sexW(hs, 'был проклят', 'была проклята')} за то, что ел${sexW(hs, '', 'а')}, когда дети умирали, и род ${sexW(hs, 'его', 'её')} с тех пор несчастлив.`
+      : n === 2 ? `Помнят, как ${H} ел${sexW(hs, '', 'а')} досыта, когда дети умирали от голода.`
+      : `Рассказывают, что в голодную зиму ${H} не отдал${sexW(hs, '', 'а')} своей доли хлеба.`;
+    if (n === 1) diff.push('уже не помнят, что в ту зиму голодали не все');
+    if (n >= 2) diff.push(`${H} брал${sexW(hs, '', 'а')} обычную долю вождя; детей в ту зиму умерло не больше, чем в другие голодные годы`);
+    if (n >= 3) diff.push('проклятия не было: о роде просто помнят дурное');
+    return { text, diff };
+  }
+  if (y.kind === 'power') {
+    if (s.mon === 'mound') {
+      text = n >= 2 ? `Говорят, ${heroOf} правил${sexW(hs, '', 'а')} так мудро, что при ${sexW(hs, 'нём', 'ней')} не было голода, и потому над ${sexW(hs, 'ним', 'ней')} насыпали курган.`
+        : `Рассказывают, что в кургане лежит ${heroTail}, ${sexW(hs, 'правивший', 'правившая')} ${s.years ? yrs(s.years) : 'долго'}.`;
+      if (n === 1) diff.push('о том, как правил, уже не рассказывают: остался только курган');
+      if (n >= 2) diff.push(`о мудрости ${sexW(hs, 'его', 'её')} правления в летописи ничего нет: её добавил пересказ`);
+    } else {
+      const ours = y.version !== 'old';
+      text = ours ? `Рассказывают, что ${H || 'прежний вождь'} правил${sexW(hs, '', 'а')} жестоко, и деревню освободили.` : `Рассказывают, что ${H || 'законного вождя'} свергли изменой.`;
+      diff.push(ours ? 'переворот подняли из-за обид и борьбы родов, жестокостью его объяснили потом' : 'свергнутого вождя поддерживала только часть деревни');
+    }
+    return { text, diff };
+  }
+  return { text: `Рассказывают ${s.what}.`, diff };
+}
+
+// a legend is born from a memory whose last witness has died
+function newMyth(S, g, o) {
+  const y = Object.assign({ id: (S.mythId = (S.mythId || 0) + 1), t: S.tick, told: S.tick, step: 1, merged: [] }, o);
+  const t = tellMyth(S, g, y); y.text = t.text; y.diff = t.diff;
+  (g.myths || (g.myths = [])).push(y);
+  if (g.myths.length > MYTH_MAX) g.myths.shift();
+  cite(S, y.ev);
+  S.stats.myths = (S.stats.myths || 0) + 1;
+  const first = !S.firstMyth; S.firstMyth = true;
+  const ev = (first || o.kind === 'origin' ? log : note)(S, 'myth', `${first ? 'Первое предание в мире: ' : ''}в «${g.name}» рассказывают: ${y.text.charAt(0).toLowerCase()}${y.text.slice(1)}`, g.home ? g.home.x : g.cx, g.home ? g.home.y : g.cy, g.hue, { first, why: 'Последние, кто видел это сами, умерли; теперь это знают только по рассказам.', gs: [g.id], causes: [y.ev] });
+  y.born = ev.id;
+  return y;
+}
+// the next generation retells it; similar blood legends against one village merge into a Great War; the ruling line claims
+// the hero of a proud legend
+function retell(S, g, y) {
+  if (y.step >= 3) return;
+  y.step++; y.told = S.tick;
+  const L = S._a.get(g.leader);
+  if (y.step >= 2 && L && L.lin && y.heroName && (y.tone === 'win' || y.tone === 'pride') && y.heroLin !== L.lin && !y.claimLin) y.claimLin = L.lin;
+  if (y.kind === 'blood' && y.step >= 2) {
+    const same = g.myths.filter(x => x !== y && x.kind === 'blood' && x.other === y.other && x.version !== 'old');
+    if (same.length) {
+      y.kind = 'war'; y.merged = [y, ...same].map(x => [x.ev, Math.floor(x.src.t / 360)]).sort((a, b) => a[1] - b[1]);
+      g.myths = g.myths.filter(x => !same.includes(x));
+      S.stats.mythMerged = (S.stats.mythMerged || 0) + same.length;
+    }
+  }
+  const t = tellMyth(S, g, y); y.text = t.text; y.diff = t.diff;
+  // a legend that ends in a haunted place keeps people away even after the truth is gone
+  if (y.step >= 3 && (y.tone === 'loss' || y.src.sub === 'sea' || y.src.sub === 'plague')) { const p = placeById(S, y.place); if (p && !p.cursed) { p.cursed = S.tick; S.stats.cursed = (S.stats.cursed || 0) + 1; } }
+  S.stats.retold = (S.stats.retold || 0) + 1;
+}
+// the yearly round: legends are born from memories without witnesses and from forgotten names; old legends are retold
+function mythYear(S, g) {
+  if (!g.home) return;
+  for (const m of g.mem || []) {
+    if (m.myth || m.w < 0.3 || m.kind === 'good' || S.tick - m.t < 360 * 25) continue;
+    // a memory turns into a legend once a generation has passed and few of those who saw it are left (a quarter, at most two)
+    const live = witnesses(S, m); if (m.lastWit === null && live > Math.max(2, m.wit.length * 0.25)) continue;
+    m.myth = true;
+    newMyth(S, g, { ev: m.ev, kind: m.villain || m.mon === 'mound' ? 'power' : m.kind, tone: m.tone, villain: m.villain, hero: m.hero, heroName: m.heroName, heroSex: m.heroSex, heroLin: m.heroLin, other: m.other, otherName: m.otherName, place: m.place, placeName: m.placeName, lin: m.lin, src: m });
+  }
+  for (const m of g.memGone || []) {
+    if (m.named || !m.place || S.tick - m.gone < 360 * 5) continue;
+    const p = placeById(S, m.place); if (!p) continue;
+    m.named = true;
+    if ((g.myths || []).some(x => x.place === p.id)) continue;
+    newMyth(S, g, { ev: m.ev, kind: 'name', tone: 'wonder', place: p.id, placeName: p.name, heroName: m.heroName, src: Object.assign({ placeName: p.name, placeKind: p.kind }, m) });
+  }
+  for (const y of g.myths || []) if (S.tick - y.told >= MYTH_STEP) retell(S, g, y);
+}
+// after a coup a new line has the proud legends retold its way; the old telling stays with the deposed line
+function mythRewrite(S, g, oldL, newL, coupEv) {
+  if (!oldL || !newL || !newL.lin || oldL.lin === newL.lin || !g.myths) return;
+  let n = 0;
+  for (const y of g.myths.slice()) {
+    if (y.version === 'old' || (y.claimLin || y.heroLin) !== oldL.lin || !(y.tone === 'win' || y.tone === 'pride')) continue;
+    const old = Object.assign({}, y, { id: (S.mythId = (S.mythId || 0) + 1), version: 'old', lin: oldL.lin });
+    g.myths.push(old);
+    y.claimLin = newL.lin; const t = tellMyth(S, g, y); y.text = t.text; y.diff = t.diff.concat([`после переворота г.${Math.floor(S.tick / 360)} героя стали считать предком ${clanName(S, newL.lin, true)}; род ${clanName(S, oldL.lin, true)} рассказывает по-старому`]);
+    n++;
+  }
+  if (!n) return;
+  while (g.myths.length > MYTH_MAX) g.myths.shift();
+  S.stats.mythRewritten = (S.stats.mythRewritten || 0) + n;
+  log(S, 'myth', `${newL.name} велит рассказывать по-новому: герои ${pl(n, 'старого предания', 'старых преданий', 'старых преданий')} «${g.name}» теперь предки ${clanName(S, newL.lin, true)}`, g.home ? g.home.x : g.cx, g.home ? g.home.y : g.cy, g.hue, { why: sent([`род ${clanName(S, oldL.lin, true)} рассказывает по-старому`, 'кто правит, тот и решает, чьи предки были героями']), who: [newL.id, oldL.id], gs: [g.id], causes: [coupEv] });
+}
+// a proud legend whose hero the line claims: the line's right to rule is firmer (like two remembered mounds)
+function mythAncestor(S, g, lin) { return lin && (g.myths || []).find(y => y.version !== 'old' && (y.tone === 'win' || y.tone === 'pride') && (y.claimLin || y.heroLin) === lin); }
+// a legend about a tyrant: his line loses votes while it is told
+function mythVillain(S, g, lin) { return lin && (g.myths || []).find(y => y.villain && y.heroLin === lin); }
+
+// a daughter village carries away its mother's legends; from then on each retells them its own way (its own rulers claim
+// the heroes, its own gods punish), so the same event comes to be told differently in the two villages
+function inheritMyths(S, mother, child) {
+  if (!mother || !child || !mother.myths || !mother.myths.length) return;
+  child.myths = child.myths || [];
+  for (const y of mother.myths) {
+    if (y.version === 'old' || child.myths.length >= MYTH_MAX) continue;
+    child.myths.push(Object.assign({}, y, { id: (S.mythId = (S.mythId || 0) + 1), carried: mother.name, told: S.tick, merged: (y.merged || []).slice(), diff: y.diff.slice(), src: Object.assign({}, y.src, { faith: child.faith && S.faiths && S.faiths[child.faith] ? S.faiths[child.faith].base : y.src.faith }) }));
+  }
+  S.stats.mythCarried = (S.stats.mythCarried || 0) + 1;
 }
 /* ---------- rites: a wedding feast, a funeral to the burial ground, the harvest festival ---------- */
 // S.rites: gatherings the map shows for a few days [{ kind, x, y, t, until, g }]; g.cemetery = { x, y, graves }
@@ -4704,7 +4926,9 @@ function villageHistory(S, gid) {
   // К1: what the village remembers, how strongly, who still saw it, what holds it; what it has forgotten
   const memories = (g.mem || []).slice().sort((a, b) => b.w - a.w).map(m => Object.assign({}, m, { living: witnesses(S, m), placeName: (placeById(S, m.place) || {}).name, memorial: g.memDay === m.id }));
   const forgotten = (g.memGone || []).map(m => Object.assign({}, m, { placeName: (placeById(S, m.place) || {}).name }));
-  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns, memories, forgotten };
+  // К2: legends, each with the other villages' tellings of the same event
+  const myths = (g.myths || []).map(y => Object.assign({}, y, { others: S.groups.filter(o => o !== g).flatMap(o => (o.myths || []).filter(x => x.ev === y.ev || (x.merged || []).some(e => e[0] === y.ev)).map(x => ({ village: o.name, text: x.text }))) }));
+  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns, memories, forgotten, myths };
 }
 
 /* ---------- the household (Н4): what the regime means at the level of one family ---------- */
@@ -4794,7 +5018,7 @@ function linSuccession(S, g, W, old, ev) {
   if (g.dynasty || g.gov === 'assembly' || g.linN < 2 || g.members.length < 6) return;
   const share = linShare(S, g, g.linId);
   const son = old && (W.father === old.id || W.mother === old.id);
-  const mound = ancestorMound(S, g, g.linId);
+  const mound = ancestorMound(S, g, g.linId) || mythAncestor(S, g, g.linId);
   if (!(linStrong(S, g, g.linId) || son || mound) || rnd(S) > 0.5) return;
   g.dynasty = true; g.dynName = clanName(S, g.linId, true); g.dynLin = g.linId; g.dynGen = 1; if (g.gov !== 'assembly') g.gov = 'monarch';
   S.stats.linDynasty = (S.stats.linDynasty || 0) + 1;
@@ -5487,7 +5711,7 @@ function groupMonth(S, g) {
         const ng = createGroup(S, ch, sup, g.id);
         S.hostility[key(g.id, ng.id)] = 0.6; bump(ch, L, -0.5); bump(L, ch, -0.5); bond(S, L, ch, 'enemy', `${fem(ch, 'расколол', 'расколола')} «${g.name}» и ${fem(ch, 'увёл', 'увела')} людей`, 0.6); S.stats.schisms++;
         const sev = log(S, 'schism', `Раскол в «${g.name}»: ${ch.name} уводит ${sup.length} ${one(sup.length) ? 'человека' : 'человек'} и основывает «${ng.name}»`, ch.x, ch.y, ng.hue, { why: why2, sides: 1, who: [ch.id, L.id, ...sup.map(m => m.id)], gs: [g.id, ng.id] }); if (!ng.powerEv) powerEvent(S, ng, S.events[0].id);
-        memFounding(S, ng, ch, sev);
+        memFounding(S, ng, ch, sev, 'schism');
         refBond(S, L, ch, sev.id); refLast(S, ch, 'schism', sev.id);
         return;
       }
@@ -5563,6 +5787,7 @@ function coup(S, g, L, ch, sup, cur, why) {
   // the deposed, his grown children and the usurper's chronicle and ties point to the coup
   const id = cev.id; powerEvent(S, g, id);
   memPower(S, g, { ev: id, tone: 'grief', w: 0.7, what: `переворот, когда ${ch.name} ${fem(ch, 'сверг', 'свергла')} ${nameCase(L, 'accusative')}`, hero: L.id, lin: L.lin });
+  mythRewrite(S, g, L, ch, id);
   refBond(S, L, ch, id); refLast(S, ch, 'coup', id); refLast(S, L, 'deposed', id); refLast(S, ch, 'leader', id);
   if (L.group === g.id) powerDeposed(S, L, g, id);
   for (const o of S.agents) if ((o.mother === L.id || o.father === L.id) && o.age >= 15) { refBond(S, o, ch, id); refLast(S, o, 'feud', id); if (o.feud && o.feud.L === ch.id && !o.feud.ev) o.feud.ev = cite(S, id); }
@@ -5832,7 +6057,7 @@ function yearly(S) {
     const rev = log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why + (cause ? '' : ' Перемена копилась десять лет.'), gs: [g.id], who: [g.leader], causes: cause ? [cause] : undefined, drift: !cause });
     (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
-  for (const g of S.groups) { villageYear(S, g); memoryYear(S, g); }
+  for (const g of S.groups) { villageYear(S, g); memoryYear(S, g); mythYear(S, g); }
   if (S.tick % 3600 === 0) era(S);
 }
 function era(S) {
@@ -5959,7 +6184,7 @@ const CTL = [
   ['memory', 'Память', 'Как долго помнят доверие и обиды'],
   ['ambition', 'Властолюбие новичков', 'Насколько рвутся к власти новые люди']
 ];
-const TL = { tyranny: 'Хлеб голодных', tax: 'Доля вождя', arc: 'Судьба', boat: 'Лодка', emigr: 'Уплывают', drought: 'Засуха', thirst: 'Жажда', well: 'Колодец', revenge: 'Месть', elope: 'Побег', bridge: 'Мост', drown: 'Утонул', marriage: 'Брачный союз', plague: 'Мор', plagueEnd: 'Мор', abandon: 'Деревня брошена', state: 'Государство', money: 'Деньги', debt: 'Долги', land: 'Земля', gov: 'Правление', border: 'Граница', era: 'Итоги десятилетия', regime: 'Смена строя', faith: 'Вера', law: 'Закон', war: 'Поход', battle: 'Битва', conquest: 'Завоевание', ransom: 'Откуп', aid: 'Помощь', case: 'Суд', rumor: 'Слух', rite: 'Обряд', secret: 'Тайна', exile: 'Изгнание', quit: 'Уход', death: 'Смерть', revolt: 'Восстание', raid: 'Грабёж', trade: 'Торговля', route: 'Торговый путь', market: 'Рынок', tech: 'Новшество', settle: 'Поселение', famine: 'Голодная зима', coup: 'Переворот', schism: 'Раскол', crisis: 'Кризис преемственности', merge: 'Слияние', reform: 'Реформа', exodus: 'Исход', conflict: 'Стычка', alliance: 'Союз', break: 'Конец союза', found: 'Новая группа', colony: 'Дочерняя деревня', collapse: 'Распад', succession: 'Смена лидера', milestone: 'Рост иерархии', shock: 'Шок', genesis: 'Начало', fork: 'Развилка' };
+const TL = { myth: 'Предание', tyranny: 'Хлеб голодных', tax: 'Доля вождя', arc: 'Судьба', boat: 'Лодка', emigr: 'Уплывают', drought: 'Засуха', thirst: 'Жажда', well: 'Колодец', revenge: 'Месть', elope: 'Побег', bridge: 'Мост', drown: 'Утонул', marriage: 'Брачный союз', plague: 'Мор', plagueEnd: 'Мор', abandon: 'Деревня брошена', state: 'Государство', money: 'Деньги', debt: 'Долги', land: 'Земля', gov: 'Правление', border: 'Граница', era: 'Итоги десятилетия', regime: 'Смена строя', faith: 'Вера', law: 'Закон', war: 'Поход', battle: 'Битва', conquest: 'Завоевание', ransom: 'Откуп', aid: 'Помощь', case: 'Суд', rumor: 'Слух', rite: 'Обряд', secret: 'Тайна', exile: 'Изгнание', quit: 'Уход', death: 'Смерть', revolt: 'Восстание', raid: 'Грабёж', trade: 'Торговля', route: 'Торговый путь', market: 'Рынок', tech: 'Новшество', settle: 'Поселение', famine: 'Голодная зима', coup: 'Переворот', schism: 'Раскол', crisis: 'Кризис преемственности', merge: 'Слияние', reform: 'Реформа', exodus: 'Исход', conflict: 'Стычка', alliance: 'Союз', break: 'Конец союза', found: 'Новая группа', colony: 'Дочерняя деревня', collapse: 'Распад', succession: 'Смена лидера', milestone: 'Рост иерархии', shock: 'Шок', genesis: 'Начало', fork: 'Развилка' };
 const MAJOR = new Set(['drought', 'thirst', 'revenge', 'plague', 'coup', 'schism', 'crisis', 'merge', 'reform', 'exodus', 'famine', 'battle', 'conquest', 'revolt', 'era', 'regime', 'state']);
 const isMajor = e => MAJOR.has(e.type) || (e.type === 'conflict' && e.big) || ((e.type === 'boat' || e.type === 'emigr' || e.type === 'well' || e.type === 'elope' || e.type === 'bridge' || e.type === 'drown' || e.type === 'marriage' || e.type === 'settle' || e.type === 'tech' || e.type === 'trade' || e.type === 'faith' || e.type === 'land' || e.type === 'gov' || e.type === 'money' || e.type === 'debt') && e.first);
 const KEY = new Set(['state', 'money', 'debt', 'land', 'gov', 'era', 'regime', 'faith', 'law', 'war', 'battle', 'ransom', 'case', 'rumor', 'conquest', 'revolt', 'coup', 'schism', 'crisis', 'merge', 'famine', 'shock', 'genesis', 'fork']);
@@ -8889,12 +9114,26 @@ function vhMemory(h) {
   const gone = h.forgotten.map(m => `<li>${esc(m.what)} <small>г.${vhYear(m.t)}, забыто к г.${vhYear(m.gone)}</small>${m.placeName ? ` — место по-прежнему зовут «${esc(m.placeName)}», но уже не знают почему` : ''} <button class="evlink" data-ev="${m.ev}" aria-label="Открыть событие">↗</button></li>`);
   return `<h4>Что помнят</h4><ul class="vh-turns">${rows.join('') || '<li>Пока ничего особенного.</li>'}</ul>${gone.length ? `<details class="vh-more"><summary>Что забыли</summary><ul class="vh-turns">${gone.join('')}</ul></details>` : ''}`;
 }
+// К2: legends — how they are told, how it was, and how other villages tell the same story
+const MYTH_STEP_WORD = ['', 'первый пересказ', 'пересказ второго поколения', 'пересказ третьего поколения'];
+function vhMyths(h) {
+  if (!h.myths.length) return '';
+  const items = h.myths.slice().sort((a, b) => a.src.t - b.src.t).map(y => {
+    const truth = visibleEvent(y.ev);
+    const merged = (y.merged || []).length > 1 ? `<br><small>на деле: ${y.merged.map(([id, yr]) => `<button class="evlink" data-ev="${id}">битва г.${yr}</button>`).join(', ')}</small>` : '';
+    const others = (y.others || []).slice(0, 2).map(o => `<br><small>в «${esc(o.village)}» рассказывают иначе: ${esc(o.text)}</small>`).join('');
+    return `<li><b>${y.version === 'old' ? 'По-старому, как рассказывает свергнутый род: ' : ''}«${esc(y.text)}»</b> <small>${MYTH_STEP_WORD[y.step] || ''}${y.carried ? `; предание принесли из «${esc(y.carried)}»` : ''}</small>
+      <br><small>как было: ${truth ? `<button class="evlink" data-ev="${y.ev}">${esc(truth.text)}</button> (г.${vhYear(truth.t)})` : 'событие утрачено'}</small>${merged}
+      ${y.diff.length ? `<br><small>чем отличается: ${esc(y.diff.join('; '))}</small>` : ''}${others}</li>`;
+  });
+  return `<h4>Предания</h4><ul class="vh-turns">${items.join('')}</ul>`;
+}
 function villageHistoryHtml(gid) {
   const h = SIM.villageHistory(S, gid);
   if (!h) return '<p class="empty">Этой деревни больше нет.</p>';
   return `<h3>Как «${esc(h.name)}» стала такой</h3>
     <p class="role">Основана в г.${vhYear(h.founded)}${h.founder ? `, основатель ${esc(h.founder)}` : ''}. Сейчас: ${esc((h.rtype || '').toLowerCase())}.</p>
-    ${vhPath(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
+    ${vhPath(h)}${vhMyths(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
     <details class="vh-more"><summary>По десятилетиям</summary>${vhTable(h)}</details>
     <h4>Поворотные события</h4>${vhTurns(h)}`;
 }

@@ -18,7 +18,7 @@ const EVENT_HOUR = {
   // family: weddings before sunset, flight at night
   marriage: ['s', -1, 1], elope: ['s', 3, 1.5], break: ['s', 1, 1.5],
   // talk, plans and secrets: the evening by the fire
-  arc: ['s', 2, 1.5], secret: ['s', 2.5, 1.5], rumor: ['s', 2, 1.5],
+  arc: ['s', 2, 1.5], myth: ['s', 2.5, 1.5], secret: ['s', 2.5, 1.5], rumor: ['s', 2, 1.5],
   // work done: in the working hours
   tech: ['h', 14, 3], well: ['h', 15, 2], bridge: ['h', 15, 2], milestone: ['h', 15, 3], trade: ['h', 11, 2], route: ['h', 11, 2], market: ['h', 10, 2],
   // hardship: found out in the morning; the sea and the heat take people by day

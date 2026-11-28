@@ -139,6 +139,8 @@ export function runIsland(i, years) {
   const drama = SIM.dramaMeasure(SIM.topFates(S, 20));
   for (const k in st) if (k.startsWith('arc_')) { const [, kind, out] = k.split('_'); const o = arcs.kinds[kind] || (arcs.kinds[kind] = {}); o[out] = (o[out] || 0) + st[k]; }
   return { history, st, arcs, drama, power, laws, life, hist, tb, pops, villages, cbr, adults: adults.length, age, minPop, memory: S.params.memory, obs, grudge, places: (S.places || []).length, memAlive: S.groups.reduce((s, g) => s + (g.mem || []).length, 0),
+    myth: (() => { const all = S.groups.flatMap(g => (g.myths || []).map(y => [g, y])), evs = {}; for (const [g, y] of all) for (const id of [y.ev, ...(y.merged || []).map(e => e[0])]) (evs[id] || (evs[id] = new Set())).add(y.text); // distinct tellings of one event
+      return { n: all.length, linked: all.filter(([, y]) => SIM.eventById(S, y.ev)).length, diffs: all.reduce((s, [, y]) => s + y.diff.length, 0), withDiff: all.filter(([, y]) => y.diff.length).length, versions: Object.values(evs).filter(x => x.size > 1).length, steps: all.reduce((s, [, y]) => s + y.step, 0) }; })(),
     famN, houseN, villN, roofN, lodgerN, customW, customI, bondN, adultN, feuds, feudsNamed, refK, bondRef, bondK };
 }
 
@@ -167,6 +169,7 @@ async function main() {
   // the clock of events (Ч4): events with an hour, events by day of the month; how long things take
   const clock = { all: 0, timed: 0, day: new Array(30).fill(0) }, dur = {}; let memory = 0;
   const obs = { feed: 0, shown: 0, famEv: 0, famIn: 0, dau: 0, dauIn: 0 };
+  const myth = { n: [], linked: 0, diffs: 0, withDiff: 0, versions: 0, steps: 0 };
   const mem = { places: [], alive: 0, grudgeYears: 0, grudgeHot: 0, life: { bare: [0, 0], place: [0, 0], mon: [0, 0] } }, memSt = {};
   let B = 0, CD = 0, minPop = Infinity, customN = 0;
   let memoryMoves = 0, sponsoredMoves = 0, aidReturned = 0, aidChanged = 0;
@@ -185,8 +188,9 @@ async function main() {
     for (const k in life) life[k] += island.life[k] || 0;
     for (const k in tb) { tb[k][0] += island.tb[k][0]; tb[k][1] += island.tb[k][1]; }
     for (const k in obs) obs[k] += island.obs[k];
+    myth.n.push(island.myth.n); for (const k of ['linked', 'diffs', 'withDiff', 'versions', 'steps']) myth[k] += island.myth[k];
     mem.places.push(island.places); mem.alive += island.memAlive; mem.grudgeYears += island.grudge.years; mem.grudgeHot += island.grudge.hot;
-    for (const k of ['memories', 'forgotten', 'mounds', 'massGraves', 'stones', 'memorials', 'namedFor', 'grudgeHeld', 'dreadAvoided', 'unburied']) memSt[k] = (memSt[k] || 0) + (st[k] || 0);
+    for (const k of ['myths', 'retold', 'mythMerged', 'mythRewritten', 'mythCarried', 'cursed', 'memories', 'forgotten', 'mounds', 'massGraves', 'stones', 'memorials', 'namedFor', 'grudgeHeld', 'dreadAvoided', 'unburied']) memSt[k] = (memSt[k] || 0) + (st[k] || 0);
     for (const k in st.memLife || {}) { mem.life[k][0] += st.memLife[k][0]; mem.life[k][1] += st.memLife[k][1]; }
     if (st.clock) { clock.all += st.clock.all; clock.timed += st.clock.timed; st.clock.day.forEach((n, d) => { clock.day[d] += n; }); }
     for (const k in st.dur || {}) { const x = dur[k] || (dur[k] = [0, 0]); x[0] += st.dur[k][0]; x[1] += st.dur[k][1]; }
@@ -243,6 +247,9 @@ async function main() {
     Object.assign(rec, { feedRites: +(obs.shown / W).toFixed(1), familyInStory: pc1(obs.famIn, obs.famEv), daughterWeddings: pc1(obs.dauIn, obs.dau) });
     { const per = k => ((memSt[k] || 0) / W).toFixed(1), life = k => mem.life[k][1] ? `${(mem.life[k][0] / mem.life[k][1]).toFixed(0)} y (${mem.life[k][1]})` : '-';
       console.log(`memory (К1): named places per island ${(mem.places.reduce((s, x) => s + x, 0) / W).toFixed(1)} (by island ${mem.places.join(' ')}); memories made ${per('memories')}, alive at the end ${(mem.alive / W).toFixed(1)}, forgotten ${per('forgotten')} per island; mounds ${per('mounds')}, mass graves ${per('massGraves')}, stones ${per('stones')}, memorial days kept ${per('memorials')}, named after the remembered ${per('namedFor')}, unburied ${per('unburied')}; enmity held by memory ${per('grudgeHeld')} village-pair months; settlers kept from a feared place ${per('dreadAvoided')}; years with enmity within 15 years after a battle with dead ${percent(mem.grudgeHot, mem.grudgeYears)}; memory lasted when forgotten: bare ${life('bare')}, with a place ${life('place')}, with a monument ${life('mon')}`);
+      const nm = myth.n.reduce((s, x) => s + x, 0);
+      console.log(`myths (К2): legends alive at the end ${(nm / W).toFixed(1)} per island (by island ${myth.n.join(' ')}), born ${per('myths')}, retold ${per('retold')}; opening the true event ${percent(myth.linked, nm)}; with listed differences from the truth ${percent(myth.withDiff, nm)} (${nm ? (myth.diffs / nm).toFixed(1) : '-'} per legend, mean retelling ${nm ? (myth.steps / nm).toFixed(1) : '-'}); events told in two or more different tellings ${(myth.versions / W).toFixed(1)} per island; merged into a Great War ${per('mythMerged')}, rewritten by a new ruler ${per('mythRewritten')}, carried to a daughter village ${per('mythCarried')}, haunted places ${per('cursed')}`);
+      Object.assign(rec, { mythsPerIsland: +(nm / W).toFixed(1), mythVersions: +(myth.versions / W).toFixed(1), mythWithDiff: pc1(myth.withDiff, nm) });
       Object.assign(rec, { placesPerIsland: +(mem.places.reduce((s, x) => s + x, 0) / W).toFixed(1), grudgeAfterBattle: pc1(mem.grudgeHot, mem.grudgeYears), namedFor: +per('namedFor') }); }
     console.log(`event clock: with an hour ${percent(clock.timed, clock.all)} of ${clock.all} events; busiest day of the month ${bd} with ${percent(busiest, clock.all)}`);
     console.log('durations (days, model | real reference):');

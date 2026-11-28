@@ -108,7 +108,7 @@ function shareFelt(S, g, L) {
   for (const h of heads.slice(0, 5)) bio(S, h, 'tax', `Отдаёт вождю ${nameCase(L, 'dative')} ${P0(g.take)} урожая своей семьи`, ev.id);
 }
 // a tyrant's line is remembered: its candidates lose votes for thirty years
-const tyrantLine = (S, g, c) => g.tyr && S.tick - g.tyr.t < 360 * 30 && linOf(S, c) === g.tyr.lin;
+const tyrantLine = (S, g, c) => (g.tyr && S.tick - g.tyr.t < 360 * 30 && linOf(S, c) === g.tyr.lin) || !!mythVillain(S, g, linOf(S, c)); // К2: or while the legend of the tyrant is told
 // Hirschman 1970: exit is costly, and more so each time: whoever has already left a village or two puts up with the next
 // one longer (a house, fields and kin to lose again). The first exit is as before: it is the repeats that become rarer
 function exitCost(S, a, g) { const quits = (a.kc && a.kc.quit) || 0; return (linGraves(g, a.lin) >= 3 ? 0.8 : 1) / (1 + 2 * quits); } // К1: leaving the graves of one's line is harder

@@ -116,7 +116,9 @@ function villageHistory(S, gid) {
   // К1: what the village remembers, how strongly, who still saw it, what holds it; what it has forgotten
   const memories = (g.mem || []).slice().sort((a, b) => b.w - a.w).map(m => Object.assign({}, m, { living: witnesses(S, m), placeName: (placeById(S, m.place) || {}).name, memorial: g.memDay === m.id }));
   const forgotten = (g.memGone || []).map(m => Object.assign({}, m, { placeName: (placeById(S, m.place) || {}).name }));
-  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns, memories, forgotten };
+  // К2: legends, each with the other villages' tellings of the same event
+  const myths = (g.myths || []).map(y => Object.assign({}, y, { others: S.groups.filter(o => o !== g).flatMap(o => (o.myths || []).filter(x => x.ev === y.ev || (x.merged || []).some(e => e[0] === y.ev)).map(x => ({ village: o.name, text: x.text }))) }));
+  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns, memories, forgotten, myths };
 }
 
 /* ---------- the household (Н4): what the regime means at the level of one family ---------- */
