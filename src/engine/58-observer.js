@@ -78,3 +78,40 @@ function relOf(ev, fam) {
   for (const id of [...(ev.who || []), ...(ev.author ? [ev.author] : []), ...(ev.against || [])]) { const r = fam.get(id); if (r && r !== 'self' && (!best || REL_RANK[r] < REL_RANK[best[0]])) best = [r, id]; }
   return best || undefined;
 }
+
+/* ---------- how a village became what it is (Н3) ---------- */
+// The village keeps its own chronicle: the ids of its turning points (laws, regime changes, coups, successions, splits,
+// conquests, hungry winters, a leader's share) and once a year a short line of figures: people, the ruler and his line,
+// the leader's share, who holds the fields by lineage, the regime. The archive keeps the marked events, so the history page
+// can open a law from sixty years ago and its causes.
+const VILLAGE_TURNS = new Set(['regime', 'law', 'land', 'gov', 'debt', 'coup', 'succession', 'schism', 'exodus', 'conquest', 'revolt', 'famine', 'tyranny', 'tax', 'reform', 'found', 'colony', 'merge', 'state', 'battle', 'abandon', 'crisis', 'faith', 'money']);
+const VILLAGE_TURNS_MAX = 160;
+// the village is the first in gs; a second village keeps only a war, a conquest, a merger or a vassal state
+const VILLAGE_TURNS_BOTH = new Set(['battle', 'conquest', 'state', 'merge', 'revolt']);
+function histMark(S, ev) {
+  if (!VILLAGE_TURNS.has(ev.type) || !ev.gs || !S._g) return;
+  let marked = false;
+  ev.gs.forEach((id, i) => {
+    if (i > 0 && !VILLAGE_TURNS_BOTH.has(ev.type)) return;
+    const g = S._g.get(id); if (!g) return;
+    const h = g.hev || (g.hev = []); if (h[h.length - 1] !== ev.id) h.push(ev.id); if (h.length > VILLAGE_TURNS_MAX) h.shift();
+    marked = true;
+  });
+  // the village's own chronicle cites the event: it stays in the archive after it leaves the feed
+  if (marked) (S.evArch || (S.evArch = {}))[ev.id] = ev;
+}
+// once a year: [year, people, ruler's name, ruler's line (genitive: «из Фааричей»), hereditary?, leader's share %, regime, rule, land, fields, holdings]
+// holdings: [[line name, fields], ...] for private land, the three largest lines
+function villageYear(S, g) {
+  if (!g.home) return;
+  const L = S._a.get(g.leader), by = {};
+  if (g.land === 'private') for (const f of g.fields) { const o = f.owner && S._a.get(f.owner); const k = o && o.lin ? clanName(S, o.lin) : f.owner ? '?' : '—'; by[k] = (by[k] || 0) + 1; }
+  const hold = Object.entries(by).filter(([k]) => k !== '—').sort((a, b) => b[1] - a[1]).slice(0, 3);
+  (g.vrows || (g.vrows = [])).push([Math.floor(S.tick / 360), g.members.length, L ? L.name : '', L && L.lin ? clanName(S, L.lin, true) : '', g.dynasty ? 1 : 0, Math.round(g.take * 100), g.rtype || '', g.gov || '', g.land || 'common', g.fields.length, hold]);
+}
+// the history page of a village: its yearly lines and its turning points, oldest first, each with what caused it
+function villageHistory(S, gid) {
+  const g = S._g.get(gid); if (!g) return null;
+  const turns = (g.hev || []).map(id => eventById(S, id)).filter(Boolean).sort((a, b) => a.id - b.id);
+  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns };
+}

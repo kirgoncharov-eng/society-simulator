@@ -42,7 +42,7 @@ function enact(S, g, o) {
     backers.length ? `за — ${sidesTxt(S, backers)}` : '',
     against.length ? `против — ${against.map(p => nameLine(S, p)).join(', ')}` : 'открыто против никто не выступает'
   ]));
-  const ev = log(S, o.type || 'law', o.text, o.x !== undefined ? o.x : g.home.x, o.y !== undefined ? o.y : g.home.y, g.hue, Object.assign({ why, who: [A.id, ...against.map(p => p.id)], gs: [g.id], causes: cause ? [cause] : undefined, author: A.id, against: against.map(p => p.id), law: o.kind, via }, o.extra || {}));
+  const ev = log(S, o.type || 'law', o.text, o.x !== undefined ? o.x : g.home.x, o.y !== undefined ? o.y : g.home.y, g.hue, Object.assign({ why, who: [A.id, ...against.map(p => p.id)], gs: [g.id], causes: cause ? [cause] : undefined, author: A.id, against: against.map(p => p.id), backers: backers.slice(0, 10).map(p => p.id), law: o.kind, via }, o.extra || {}));
   if (o.authorLine) bio(S, A, 'law', o.authorLine, ev.id);
   for (const p of against) { bio(S, p, 'lawLost', o.lostLine(p), ev.id); bond(S, p, A, 'rival', o.grudge || `${fem(A, 'провёл', 'провела')} закон против меня`, 0.4, false, ev.id); }
   S.stats['law_' + o.kind] = (S.stats['law_' + o.kind] || 0) + 1;

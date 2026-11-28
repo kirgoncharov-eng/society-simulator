@@ -119,6 +119,21 @@ body.flat #cv:active{cursor:grabbing}
 .view{position:relative;max-width:calc(100svh - 150px)}
 .focus{position:absolute;z-index:4;left:10px;right:10px;bottom:10px;max-height:64%;overflow:auto;background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-left:5px solid var(--c,var(--ink));border-radius:4px;padding:12px 14px;font-size:15px;line-height:1.45;cursor:default}
 .focus[hidden]{display:none}
+.vhist{position:fixed;z-index:20;top:12px;right:12px;bottom:12px;width:min(560px,calc(100vw - 24px));background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.vhist[hidden]{display:none}
+.vh-body{height:100%;overflow:auto;padding:16px 18px 20px;font-size:15px;line-height:1.5}
+.vh-body h3{font:600 20px/1.25 "Source Serif 4",Georgia,serif;margin:0 30px 4px 0}
+.vh-body h4{margin:14px 0 6px;font-size:15px}
+.vh-body p{margin:0 0 10px}
+.vh-body small,.vh-body .who{color:var(--muted)}
+.vh-turns{list-style:none;margin:0;padding:0}
+.vh-turns li{padding:6px 0;border-bottom:1px solid var(--rule)}
+.vh-turns time{color:var(--muted);font-size:13px;margin-right:4px}
+.vh-turns .evlink,.vh-path .evlink{text-align:left}
+.vh-table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+.vh-table th,.vh-table td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--rule);vertical-align:top}
+.vh-more summary,.vh-open{cursor:pointer}
+.vh-open{margin:4px 0 12px;min-height:36px}
 .focus em{display:block;font-style:normal;font-size:13px;color:var(--muted)}
 .focus strong{display:block;font:600 19px/1.25 "Source Serif 4",Georgia,serif;margin:2px 0 6px;text-wrap:balance}
 .focus p{margin:0 0 8px}
@@ -556,6 +571,7 @@ function log(S, type, text, x, y, hue, ex) {
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
   evClock(S, ev);
   if (MINOR_CHECK.has(type) && minorEvent(S, ev)) ev.minor = true;
+  histMark(S, ev);
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
@@ -571,6 +587,7 @@ function note(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
   evClock(S, ev);
+  histMark(S, ev);
   (S.evArch || (S.evArch = {}))[ev.id] = ev;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
   return ev;
@@ -606,6 +623,7 @@ function archiveGC(S) {
     for (const c of g.cases || []) if (c[3]) keep.add(c[3]);
     if (g.powerEv) keep.add(g.powerEv);
     for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
+    for (const id of g.hev || []) keep.add(id);
   }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
@@ -2708,7 +2726,7 @@ function enact(S, g, o) {
     backers.length ? `за — ${sidesTxt(S, backers)}` : '',
     against.length ? `против — ${against.map(p => nameLine(S, p)).join(', ')}` : 'открыто против никто не выступает'
   ]));
-  const ev = log(S, o.type || 'law', o.text, o.x !== undefined ? o.x : g.home.x, o.y !== undefined ? o.y : g.home.y, g.hue, Object.assign({ why, who: [A.id, ...against.map(p => p.id)], gs: [g.id], causes: cause ? [cause] : undefined, author: A.id, against: against.map(p => p.id), law: o.kind, via }, o.extra || {}));
+  const ev = log(S, o.type || 'law', o.text, o.x !== undefined ? o.x : g.home.x, o.y !== undefined ? o.y : g.home.y, g.hue, Object.assign({ why, who: [A.id, ...against.map(p => p.id)], gs: [g.id], causes: cause ? [cause] : undefined, author: A.id, against: against.map(p => p.id), backers: backers.slice(0, 10).map(p => p.id), law: o.kind, via }, o.extra || {}));
   if (o.authorLine) bio(S, A, 'law', o.authorLine, ev.id);
   for (const p of against) { bio(S, p, 'lawLost', o.lostLine(p), ev.id); bond(S, p, A, 'rival', o.grudge || `${fem(A, 'провёл', 'провела')} закон против меня`, 0.4, false, ev.id); }
   S.stats['law_' + o.kind] = (S.stats['law_' + o.kind] || 0) + 1;
@@ -4394,6 +4412,43 @@ function relOf(ev, fam) {
   for (const id of [...(ev.who || []), ...(ev.author ? [ev.author] : []), ...(ev.against || [])]) { const r = fam.get(id); if (r && r !== 'self' && (!best || REL_RANK[r] < REL_RANK[best[0]])) best = [r, id]; }
   return best || undefined;
 }
+
+/* ---------- how a village became what it is (Н3) ---------- */
+// The village keeps its own chronicle: the ids of its turning points (laws, regime changes, coups, successions, splits,
+// conquests, hungry winters, a leader's share) and once a year a short line of figures: people, the ruler and his line,
+// the leader's share, who holds the fields by lineage, the regime. The archive keeps the marked events, so the history page
+// can open a law from sixty years ago and its causes.
+const VILLAGE_TURNS = new Set(['regime', 'law', 'land', 'gov', 'debt', 'coup', 'succession', 'schism', 'exodus', 'conquest', 'revolt', 'famine', 'tyranny', 'tax', 'reform', 'found', 'colony', 'merge', 'state', 'battle', 'abandon', 'crisis', 'faith', 'money']);
+const VILLAGE_TURNS_MAX = 160;
+// the village is the first in gs; a second village keeps only a war, a conquest, a merger or a vassal state
+const VILLAGE_TURNS_BOTH = new Set(['battle', 'conquest', 'state', 'merge', 'revolt']);
+function histMark(S, ev) {
+  if (!VILLAGE_TURNS.has(ev.type) || !ev.gs || !S._g) return;
+  let marked = false;
+  ev.gs.forEach((id, i) => {
+    if (i > 0 && !VILLAGE_TURNS_BOTH.has(ev.type)) return;
+    const g = S._g.get(id); if (!g) return;
+    const h = g.hev || (g.hev = []); if (h[h.length - 1] !== ev.id) h.push(ev.id); if (h.length > VILLAGE_TURNS_MAX) h.shift();
+    marked = true;
+  });
+  // the village's own chronicle cites the event: it stays in the archive after it leaves the feed
+  if (marked) (S.evArch || (S.evArch = {}))[ev.id] = ev;
+}
+// once a year: [year, people, ruler's name, ruler's line (genitive: «из Фааричей»), hereditary?, leader's share %, regime, rule, land, fields, holdings]
+// holdings: [[line name, fields], ...] for private land, the three largest lines
+function villageYear(S, g) {
+  if (!g.home) return;
+  const L = S._a.get(g.leader), by = {};
+  if (g.land === 'private') for (const f of g.fields) { const o = f.owner && S._a.get(f.owner); const k = o && o.lin ? clanName(S, o.lin) : f.owner ? '?' : '—'; by[k] = (by[k] || 0) + 1; }
+  const hold = Object.entries(by).filter(([k]) => k !== '—').sort((a, b) => b[1] - a[1]).slice(0, 3);
+  (g.vrows || (g.vrows = [])).push([Math.floor(S.tick / 360), g.members.length, L ? L.name : '', L && L.lin ? clanName(S, L.lin, true) : '', g.dynasty ? 1 : 0, Math.round(g.take * 100), g.rtype || '', g.gov || '', g.land || 'common', g.fields.length, hold]);
+}
+// the history page of a village: its yearly lines and its turning points, oldest first, each with what caused it
+function villageHistory(S, gid) {
+  const g = S._g.get(gid); if (!g) return null;
+  const turns = (g.hev || []).map(id => eventById(S, id)).filter(Boolean).sort((a, b) => a.id - b.id);
+  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns };
+}
 /* ---------- lineages: a line from a founder, its head, and how lines take sides (П1, see docs/POLITICS.md) ---------- */
 // a.lin: the lineage, the id of its founder (whoever landed or came from outside); children take the father's line,
 // or the mother's when the father is unknown. S.lins[id] = { n: founder's name, t: tick }.
@@ -5466,6 +5521,7 @@ function yearly(S) {
     const rev = log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why + (cause ? '' : ' Перемена копилась десять лет.'), gs: [g.id], who: [g.leader], causes: cause ? [cause] : undefined, drift: !cause });
     (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
+  for (const g of S.groups) villageYear(S, g);
   if (S.tick % 3600 === 0) era(S);
 }
 function era(S) {
@@ -5555,7 +5611,7 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {
@@ -8039,7 +8095,7 @@ function portraits(force) {
       `Основана ${age ? `${yrsTxt(age)} назад` : 'в этом году'} основателем ${esc(g.founder)}; живёт ${g.members.length} чел. в ${g.houses.length} домах.`,
       `<span class="vstat">${[['entropy', Math.min(1, g.entropy / 1.6)], ['legit', g.legit], ['take', g.take], ['norm', g.norm], ['room', g.room === undefined ? 1 : g.room], ['bureau', g.bureau || 0]].map(([k, v]) => `<span title="${esc(SIM.VILLAGE[k].about + ' Влияет: ' + SIM.VILLAGE[k].affects)}">${SIM.VILLAGE[k].name}: ${esc(SIM.word(k, v, null, true))}</span>`).join('')}</span>`
     ];
-    return `<button class="por" data-a="${g.leader}"><span class="ph"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}</strong><em>${esc(r.type)}</em></span>${lines.map(l => `<span class="pl">${l}</span>`).join('')}</button>`;
+    return `<button class="vh-open" data-vh="${g.id}">Как «${esc(g.name)}» стала такой</button><button class="por" data-a="${g.leader}"><span class="ph"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}</strong><em>${esc(r.type)}</em></span>${lines.map(l => `<span class="pl">${l}</span>`).join('')}</button>`;
   }).join('');
 }
 $('soc').addEventListener('pointerdown', ev => {
@@ -8406,7 +8462,7 @@ function card() {
   ${bondsTxt(a)}
   ${a.goals && a.goals.length ? `<div class="rel"><b>Цели и дуги</b>${arcsHtml(a.goals, true)}</div>` : ''}
   ${a.feud && !a.feud.done ? `<p class="rel"><b>Ждёт мести</b> за ${esc(a.feud.rel)} ${esc(a.feud.v)}: ${a.feud.personal ? esc(a.feud.Lname) : `«${esc(a.feud.gname)}»`}.</p>` : ''}
-  <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : followVillage ? 'Следить за деревней' : 'Следить камерой'}</button></div>
+  <div class="fbtn"><button id="cfollow" aria-pressed="${follow}">${follow ? 'Не следить' : followVillage ? 'Следить за деревней' : 'Следить камерой'}</button>${g && g.home ? `<button data-vh="${g.id}">Как «${esc(g.name)}» стала такой</button>` : ''}</div>
   ${a.bio && a.bio.length > 1 ? `<details class="chron1"><summary>Летопись жизни · ${arcOf({ bio: a.bio })}</summary>${storyText({ bio: a.bio }, true)}</details>` : ''}
   ${a.load > 0.3 ? `<p class="rel">${a.haul ? 'Несёт на склад' : 'Набирает груз'}: ${goodsTxt(a.load, a.lk)}.</p>` : ''}
   ${a.car ? `<p class="rel">${a.car.phase === 'go' ? `Везёт ${goodsTxt(a.car.qx, a.car.x)} в «${esc((S._g.get(a.car.to) || {}).name || '?')}»` : `Возвращается домой: везёт ${goodsTxt(a.car.qy, a.car.y)}${a.car.failed ? ' (сделка сорвалась, товар назад)' : ''}`}. Караванов за жизнь: ${a.trades || 0}.</p>` : a.trades ? `<p class="rel">Купец: караванов за жизнь ${a.trades}.</p>` : ''}
@@ -8429,6 +8485,89 @@ function syncCtls() {
 function syncPlay() { $('play').textContent = playing ? 'Пауза' : 'Пуск'; if (focusEv && $('go')) $('go').textContent = playing ? 'Закрыть' : 'Дальше'; }
 
 
+/* ---------- Н3: how a village became what it is ---------- */
+// The page reads the village's own chronicle (SIM.villageHistory): a line of figures for every year and the turning
+// points with their causes. It answers three questions without debug data: how the regime changed and why, who got the
+// land, and who ruled and how much they took.
+const VH_SKIP = new Set(['reform', 'colony']);
+const vhYear = t => Math.floor(t / 360);
+function vhPerson(id) { const p = id && SIM.personOf(S, id); return p ? p.name : null; }
+function vhShare(v) { return `${v} % (${SIM.word('take', v / 100, null, true)})`; }
+function vhHold(hold, fields) { return hold.length ? hold.map(([k, n]) => `${esc(k)} ${n}`).join(', ') + ` из ${fields}` : 'поля общие'; }
+
+// the path of the regime: the first label and every change, each change opens its event
+function vhPath(h) {
+  const first = h.rows[0], steps = [];
+  if (first && first[6]) steps.push(`${esc(first[6].toLowerCase())} <small>г.${first[0]}</small>`);
+  for (const e of h.turns) if (e.type === 'regime') {
+    const to = (e.text.split('→')[1] || '').trim();
+    steps.push(`<button class="evlink" data-ev="${e.id}">${esc(to)}</button> <small>г.${vhYear(e.t)}${e.drift ? ', постепенно' : ''}</small>`);
+  }
+  return steps.length ? `<p class="vh-path"><b>Путь строя:</b> ${steps.join(' → ')}</p>` : '';
+}
+// the land: when it was divided, who got it, how the share of the largest holder grew
+function vhLand(h) {
+  const priv = h.rows.filter(r => r[8] === 'private');
+  if (!priv.length) return '<p><b>Земля</b> всё время общая: полями владеет деревня.</p>';
+  const law = h.turns.find(e => e.type === 'land' && e.law === 'land');
+  const first = priv[0], last = priv[priv.length - 1];
+  const share = r => r[10].length && r[9] ? Math.round(100 * r[10][0][1] / r[9]) : 0;
+  const owners = law && (law.backers || []).map(vhPerson).filter(Boolean);
+  const lost = law && (law.against || []).map(vhPerson).filter(Boolean);
+  const big = h.turns.find(e => e.type === 'land' && !e.law);
+  return `<p><b>Земля.</b> ${law ? `Поля поделены в собственность в г.${vhYear(law.t)} <button class="evlink" data-ev="${law.id}" aria-label="Открыть событие">↗</button>.` : `Поля в собственности с г.${first[0]}.`}
+    ${owners && owners.length ? `Получили: ${esc(owners.join(', '))}.` : ''} ${lost && lost.length ? `Остались без поля и были против: ${esc(lost.join(', '))}.` : ''}
+    По родам в г.${first[0]}: ${vhHold(first[10], first[9])}; сейчас: ${vhHold(last[10], last[9])}.
+    У крупнейшего рода ${share(first)} % полей → ${share(last)} %.${big ? ` ${esc(big.text)} <small>г.${vhYear(big.t)}</small>.` : ''}</p>`;
+}
+// rulers and their lines, and the leader's share, from one change to the next
+function vhPower(h) {
+  const runs = [];
+  for (const r of h.rows) { const p = runs[runs.length - 1]; if (p && p.name === r[2]) { p.to = r[0]; p.take.push(r[5]); } else runs.push({ name: r[2], lin: r[3], dyn: r[4], from: r[0], to: r[0], take: [r[5]] }); }
+  if (!runs.length) return '';
+  return `<p><b>Кто правил:</b> ${runs.map(x => `${esc(x.name)}${x.lin ? ` из ${esc(x.lin)}` : ''}${x.dyn ? ' (наследственно)' : ''} <small>г.${x.from}${x.to > x.from ? '–' + x.to : ''}</small>, доля вождя ${vhShare(x.take[0])}${x.take[x.take.length - 1] !== x.take[0] ? ` → ${vhShare(x.take[x.take.length - 1])}` : ''}`).join('; ')}.</p>`;
+}
+// one line every ten years: people, ruler, share, land, regime
+function vhTable(h) {
+  const rows = h.rows.filter((r, i) => i === 0 || i === h.rows.length - 1 || r[0] % 10 === 0);
+  return `<table class="vh-table"><thead><tr><th>год</th><th>людей</th><th>правит</th><th>доля вождя</th><th>поля по родам</th><th>строй</th></tr></thead><tbody>${rows.map(r =>
+    `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${esc(r[2])}${r[3] ? ` <small>из ${esc(r[3])}</small>` : ''}</td><td>${r[5]} %</td><td>${r[8] === 'private' ? vhHold(r[10], r[9]) : 'общие'}</td><td>${esc(r[6] || '')}</td></tr>`).join('')}</tbody></table>`;
+}
+// the turning points, oldest first; a law names its author and opponents; frequent small reforms are counted
+function vhTurns(h) {
+  const skipped = h.turns.filter(e => VH_SKIP.has(e.type));
+  const items = h.turns.filter(e => !VH_SKIP.has(e.type)).map(e => {
+    const author = vhPerson(e.author), against = (e.against || []).map(vhPerson).filter(Boolean);
+    const sides = e.author ? ` <small>${author ? `предложил${(SIM.personOf(S, e.author) || {}).sex === 'f' ? 'а' : ''} ${esc(author)}` : ''}${against.length ? `; против — ${esc(against.join(', '))}` : ''}</small>` : '';
+    const cause = (e.causes || []).map(id => visibleEvent(id)).filter(Boolean)[0];
+    return `<li><time>г.${vhYear(e.t)}</time> <button class="evlink" data-ev="${e.id}">${esc(e.text)}</button>${sides}${cause ? `<br><small>причина: ${esc(cause.text)} (г.${vhYear(cause.t)})</small>` : ''}</li>`;
+  });
+  const reforms = skipped.filter(e => e.type === 'reform').length, colonies = skipped.filter(e => e.type === 'colony').length;
+  const extra = [reforms ? `вождь наводил порядок ${reforms} раз` : '', colonies ? `дочерних деревень ушло ${colonies}` : ''].filter(Boolean).join('; ');
+  return `<ol class="vh-turns">${items.join('')}</ol>${extra ? `<p class="who">Кроме того: ${extra}.</p>` : ''}`;
+}
+function villageHistoryHtml(gid) {
+  const h = SIM.villageHistory(S, gid);
+  if (!h) return '<p class="empty">Этой деревни больше нет.</p>';
+  return `<h3>Как «${esc(h.name)}» стала такой</h3>
+    <p class="role">Основана в г.${vhYear(h.founded)}${h.founder ? `, основатель ${esc(h.founder)}` : ''}. Сейчас: ${esc((h.rtype || '').toLowerCase())}.</p>
+    ${vhPath(h)}${vhLand(h)}${vhPower(h)}
+    <details class="vh-more"><summary>По десятилетиям</summary>${vhTable(h)}</details>
+    <h4>Поворотные события</h4>${vhTurns(h)}`;
+}
+function openVillageHistory(gid) {
+  const box = $('vhist');
+  box.querySelector('.vh-body').innerHTML = villageHistoryHtml(gid);
+  box.hidden = false;
+  box.querySelector('.vh-body').scrollTop = 0;
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('[data-vh]');
+  if (b) { ev.preventDefault(); ev.stopPropagation(); openVillageHistory(+b.dataset.vh); return; }
+  // an event opened from the page shows in the event panel on the map: the page steps aside
+  if (ev.target.closest && ev.target.closest('#vhist [data-ev]')) { $('vhist').hidden = true; return; }
+  if (ev.target.closest && ev.target.closest('#vhistx')) $('vhist').hidden = true;
+});
 /* ---------- search the retained chronicle ---------- */
 const archiveQuery = $('archive-query');
 const archiveStatus = $('archive-status');
@@ -9581,5 +9720,6 @@ window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude
 }
 
 </script>
+<div class="vhist" id="vhist" hidden role="dialog" aria-modal="false" aria-label="История деревни"><button class="cx" id="vhistx" aria-label="Закрыть историю деревни">×</button><div class="vh-body"></div></div>
 </body>
 </html>

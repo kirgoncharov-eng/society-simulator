@@ -24,6 +24,7 @@ function yearly(S) {
     const rev = log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why + (cause ? '' : ' Перемена копилась десять лет.'), gs: [g.id], who: [g.leader], causes: cause ? [cause] : undefined, drift: !cause });
     (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
+  for (const g of S.groups) villageYear(S, g);
   if (S.tick % 3600 === 0) era(S);
 }
 function era(S) {
@@ -113,5 +114,5 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 

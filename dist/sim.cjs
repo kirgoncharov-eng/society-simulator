@@ -54,6 +54,7 @@ function log(S, type, text, x, y, hue, ex) {
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue }, ex || {});
   evClock(S, ev);
   if (MINOR_CHECK.has(type) && minorEvent(S, ev)) ev.minor = true;
+  histMark(S, ev);
   S.events.unshift(ev);
   if (S.events.length > 250) S.events.length = 250;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
@@ -69,6 +70,7 @@ function note(S, type, text, x, y, hue, ex) {
   S.evId = (S.evId || 0) + 1;
   const ev = Object.assign({ id: S.evId, t: S.tick, type, text, x, y, hue, quiet: true }, ex || {});
   evClock(S, ev);
+  histMark(S, ev);
   (S.evArch || (S.evArch = {}))[ev.id] = ev;
   if (ev.causes) for (const c of ev.causes) cite(S, c);
   return ev;
@@ -104,6 +106,7 @@ function archiveGC(S) {
     for (const c of g.cases || []) if (c[3]) keep.add(c[3]);
     if (g.powerEv) keep.add(g.powerEv);
     for (const h of g.houses) if (h.deathEv) keep.add(h.deathEv);
+    for (const id of g.hev || []) keep.add(id);
   }
   for (const e of S.events) for (const c of e.causes || []) keep.add(c);
   const stack = [...keep];
@@ -2206,7 +2209,7 @@ function enact(S, g, o) {
     backers.length ? `за — ${sidesTxt(S, backers)}` : '',
     against.length ? `против — ${against.map(p => nameLine(S, p)).join(', ')}` : 'открыто против никто не выступает'
   ]));
-  const ev = log(S, o.type || 'law', o.text, o.x !== undefined ? o.x : g.home.x, o.y !== undefined ? o.y : g.home.y, g.hue, Object.assign({ why, who: [A.id, ...against.map(p => p.id)], gs: [g.id], causes: cause ? [cause] : undefined, author: A.id, against: against.map(p => p.id), law: o.kind, via }, o.extra || {}));
+  const ev = log(S, o.type || 'law', o.text, o.x !== undefined ? o.x : g.home.x, o.y !== undefined ? o.y : g.home.y, g.hue, Object.assign({ why, who: [A.id, ...against.map(p => p.id)], gs: [g.id], causes: cause ? [cause] : undefined, author: A.id, against: against.map(p => p.id), backers: backers.slice(0, 10).map(p => p.id), law: o.kind, via }, o.extra || {}));
   if (o.authorLine) bio(S, A, 'law', o.authorLine, ev.id);
   for (const p of against) { bio(S, p, 'lawLost', o.lostLine(p), ev.id); bond(S, p, A, 'rival', o.grudge || `${fem(A, 'провёл', 'провела')} закон против меня`, 0.4, false, ev.id); }
   S.stats['law_' + o.kind] = (S.stats['law_' + o.kind] || 0) + 1;
@@ -3892,6 +3895,43 @@ function relOf(ev, fam) {
   for (const id of [...(ev.who || []), ...(ev.author ? [ev.author] : []), ...(ev.against || [])]) { const r = fam.get(id); if (r && r !== 'self' && (!best || REL_RANK[r] < REL_RANK[best[0]])) best = [r, id]; }
   return best || undefined;
 }
+
+/* ---------- how a village became what it is (Н3) ---------- */
+// The village keeps its own chronicle: the ids of its turning points (laws, regime changes, coups, successions, splits,
+// conquests, hungry winters, a leader's share) and once a year a short line of figures: people, the ruler and his line,
+// the leader's share, who holds the fields by lineage, the regime. The archive keeps the marked events, so the history page
+// can open a law from sixty years ago and its causes.
+const VILLAGE_TURNS = new Set(['regime', 'law', 'land', 'gov', 'debt', 'coup', 'succession', 'schism', 'exodus', 'conquest', 'revolt', 'famine', 'tyranny', 'tax', 'reform', 'found', 'colony', 'merge', 'state', 'battle', 'abandon', 'crisis', 'faith', 'money']);
+const VILLAGE_TURNS_MAX = 160;
+// the village is the first in gs; a second village keeps only a war, a conquest, a merger or a vassal state
+const VILLAGE_TURNS_BOTH = new Set(['battle', 'conquest', 'state', 'merge', 'revolt']);
+function histMark(S, ev) {
+  if (!VILLAGE_TURNS.has(ev.type) || !ev.gs || !S._g) return;
+  let marked = false;
+  ev.gs.forEach((id, i) => {
+    if (i > 0 && !VILLAGE_TURNS_BOTH.has(ev.type)) return;
+    const g = S._g.get(id); if (!g) return;
+    const h = g.hev || (g.hev = []); if (h[h.length - 1] !== ev.id) h.push(ev.id); if (h.length > VILLAGE_TURNS_MAX) h.shift();
+    marked = true;
+  });
+  // the village's own chronicle cites the event: it stays in the archive after it leaves the feed
+  if (marked) (S.evArch || (S.evArch = {}))[ev.id] = ev;
+}
+// once a year: [year, people, ruler's name, ruler's line (genitive: «из Фааричей»), hereditary?, leader's share %, regime, rule, land, fields, holdings]
+// holdings: [[line name, fields], ...] for private land, the three largest lines
+function villageYear(S, g) {
+  if (!g.home) return;
+  const L = S._a.get(g.leader), by = {};
+  if (g.land === 'private') for (const f of g.fields) { const o = f.owner && S._a.get(f.owner); const k = o && o.lin ? clanName(S, o.lin) : f.owner ? '?' : '—'; by[k] = (by[k] || 0) + 1; }
+  const hold = Object.entries(by).filter(([k]) => k !== '—').sort((a, b) => b[1] - a[1]).slice(0, 3);
+  (g.vrows || (g.vrows = [])).push([Math.floor(S.tick / 360), g.members.length, L ? L.name : '', L && L.lin ? clanName(S, L.lin, true) : '', g.dynasty ? 1 : 0, Math.round(g.take * 100), g.rtype || '', g.gov || '', g.land || 'common', g.fields.length, hold]);
+}
+// the history page of a village: its yearly lines and its turning points, oldest first, each with what caused it
+function villageHistory(S, gid) {
+  const g = S._g.get(gid); if (!g) return null;
+  const turns = (g.hev || []).map(id => eventById(S, id)).filter(Boolean).sort((a, b) => a.id - b.id);
+  return { id: g.id, name: g.name, founded: g.founded, founder: g.founder, rtype: g.rtype, rows: g.vrows || [], turns };
+}
 /* ---------- lineages: a line from a founder, its head, and how lines take sides (П1, see docs/POLITICS.md) ---------- */
 // a.lin: the lineage, the id of its founder (whoever landed or came from outside); children take the father's line,
 // or the mother's when the father is unknown. S.lins[id] = { n: founder's name, t: tick }.
@@ -4964,6 +5004,7 @@ function yearly(S) {
     const rev = log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why + (cause ? '' : ' Перемена копилась десять лет.'), gs: [g.id], who: [g.leader], causes: cause ? [cause] : undefined, drift: !cause });
     (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
+  for (const g of S.groups) villageYear(S, g);
   if (S.tick % 3600 === 0) era(S);
 }
 function era(S) {
@@ -5053,7 +5094,7 @@ function restore(str) {
   return S;
 }
 
-return { MODEL, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
+return { MODEL, villageHistory, storyOf, familyOf, storyWhy, personOf, dayWords, TRAITS, VILLAGE, word, statusLvl, repLvl, trustWord, hostWord, stepsWord, resWhy, GOAL_NAME, GOAL_OUT, nameCase, clanName, linMembers, linHead, linShare, sidesOf, topFates, dramaMeasure, turnKind, bondLabel, eventById, housemates, DAY_MINUTES, CELL_METRES, daylightHours, prepareDay, advanceMinutes, eventTime, routinePosition, newWorld, step, shock, serialize, restore, date, key, gini, regime, landTop, popOf, kin, kidsOf, groupName };
 
 // Opt-in observations for the Node audit. They never affect a simulation decision.
 function noteAgeExit(S, a, why) {

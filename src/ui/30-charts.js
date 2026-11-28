@@ -71,7 +71,7 @@ function portraits(force) {
       `Основана ${age ? `${yrsTxt(age)} назад` : 'в этом году'} основателем ${esc(g.founder)}; живёт ${g.members.length} чел. в ${g.houses.length} домах.`,
       `<span class="vstat">${[['entropy', Math.min(1, g.entropy / 1.6)], ['legit', g.legit], ['take', g.take], ['norm', g.norm], ['room', g.room === undefined ? 1 : g.room], ['bureau', g.bureau || 0]].map(([k, v]) => `<span title="${esc(SIM.VILLAGE[k].about + ' Влияет: ' + SIM.VILLAGE[k].affects)}">${SIM.VILLAGE[k].name}: ${esc(SIM.word(k, v, null, true))}</span>`).join('')}</span>`
     ];
-    return `<button class="por" data-a="${g.leader}"><span class="ph"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}</strong><em>${esc(r.type)}</em></span>${lines.map(l => `<span class="pl">${l}</span>`).join('')}</button>`;
+    return `<button class="vh-open" data-vh="${g.id}">Как «${esc(g.name)}» стала такой</button><button class="por" data-a="${g.leader}"><span class="ph"><i style="background:${hueC(g.hue)}"></i><strong>${esc(g.name)}</strong><em>${esc(r.type)}</em></span>${lines.map(l => `<span class="pl">${l}</span>`).join('')}</button>`;
   }).join('');
 }
 $('soc').addEventListener('pointerdown', ev => {
