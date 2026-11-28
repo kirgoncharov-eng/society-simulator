@@ -24,6 +24,8 @@ function relations(S) {
     // К1: remembered blood keeps the enmity from cooling to nothing; remembered help cools it faster
     const gm = MT.grudge[k]; if (gm && h < GRUDGE_FLOOR * gm.w) { h = GRUDGE_FLOOR * gm.w; S.stats.grudgeHeld = (S.stats.grudgeHeld || 0) + 1; }
     if (MT.thanks[k]) h *= 1 - 0.05 * MT.thanks[k];
+    // К3: own people quarrel less, strangers drift apart (moderately)
+    if (A.people && B.people) { if (A.people === B.people) h *= 0.98; else if (d < 450) h += 0.008; }
     h = clamp(h, 0, 2);
     if (A.home && B.home) {
       const pa = A.treasury / Math.max(1, A.members.length), pb = B.treasury / Math.max(1, B.members.length);
@@ -39,7 +41,7 @@ function relations(S) {
     } else if (h > 1 && rnd(S) < 0.12) { conflict(S, A, B); h = 0.3; }
     if (A.dead || B.dead) continue;
     if (h < 0.01) delete S.hostility[k]; else S.hostility[k] = h;
-    if (!al && mutual + 0.3 * (MT.thanks[k] || 0) > 0.2 && h < 0.3 && d < 450 && rnd(S) < 0.12) {
+    if (!al && mutual + 0.3 * (MT.thanks[k] || 0) + (A.people && A.people === B.people ? 0.1 : 0) > 0.2 && h < 0.3 && d < 450 && rnd(S) < 0.12) {
       S.alliances.push({ a: A.id, b: B.id, since: S.tick });
       log(S, 'alliance', `«${A.name}» и «${B.name}» заключают союз`, (A.cx + B.cx) / 2, (A.cy + B.cy) / 2, A.hue, { why: `Вожди ${LA.name} и ${LB.name} ${trustWord(mutual)}, а вражды между деревнями почти нет. Союзники не воюют и помогают друг другу в стычках.`, who: [LA.id, LB.id], gs: [A.id, B.id] });
     } else if (al && (mutual < -0.05 || h > 0.7)) {

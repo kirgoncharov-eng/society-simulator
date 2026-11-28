@@ -85,12 +85,26 @@ function vhMyths(h) {
   });
   return `<h4>Предания</h4><ul class="vh-turns">${items.join('')}</ul>`;
 }
+// К3: the culture of the village — each trait in words and where it came from; the people it belongs to; newcomers
+const CULT_HOW = { own: 'своё с основания', mother: 'от деревни-матери', apart: 'назло деревне-матери, после раскола', borrowed: 'переняли у соседей', migrants: 'от пришлых', enemy: 'чтобы не походить на врагов', new: 'новый обычай' };
+function vhCulture(gid) {
+  const g = S._g.get(gid), c = g && g.cult; if (!c) return '';
+  const p = g.people && (S.peoples || []).find(x => x.id === g.people);
+  const rows = Object.keys(SIM.CULT).filter(k => k !== 'pattern').map(k => {
+    const f = c.from[k] || {}, val = k === 'color' ? `${SIM.cultWord('color', c.color)}, узор — ${SIM.cultWord('pattern', c.pattern)}` : SIM.cultWord(k, c[k]);
+    return `<li>${k === 'color' ? 'Знак' : SIM.CULT[k].name}: <b>${esc(val)}</b> <small>— ${CULT_HOW[f.how] || ''}${f.from ? ` «${esc(f.from)}»` : ''}${f.t ? `, г.${vhYear(f.t)}` : ''}</small></li>`;
+  });
+  const by = {}; for (const id of g.members) { const a = S._a.get(id); if (a && a.age >= 16 && a.home0 && a.home0.g !== g.id) by[a.home0.name] = (by[a.home0.name] || 0) + 1; }
+  const nb = Object.entries(by).sort((x, y) => y[1] - x[1]).slice(0, 3);
+  return `<h4>Культура</h4><p>${p ? `Народ: <b>${esc(p.self)}</b> — так они зовут себя; соседи зовут их ${esc(p.exo)}. Деревни народа: ${p.villages.map(id => S._g.get(id)).filter(Boolean).map(v => `«${esc(v.name)}»`).join(', ')}.` : 'Своего народа у деревни нет: ни с кем из соседей у неё нет общего знака и обычаев.'}</p>
+    <ul class="vh-turns">${rows.join('')}</ul>${nb.length ? `<p class="who">Пришлые взрослые: ${nb.map(([n, k]) => `из «${esc(n)}» — ${k}`).join(', ')}.</p>` : ''}`;
+}
 function villageHistoryHtml(gid) {
   const h = SIM.villageHistory(S, gid);
   if (!h) return '<p class="empty">Этой деревни больше нет.</p>';
   return `<h3>Как «${esc(h.name)}» стала такой</h3>
     <p class="role">Основана в г.${vhYear(h.founded)}${h.founder ? `, основатель ${esc(h.founder)}` : ''}. Сейчас: ${esc((h.rtype || '').toLowerCase())}.</p>
-    ${vhPath(h)}${vhMyths(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
+    ${vhPath(h)}${vhCulture(gid)}${vhMyths(h)}${vhMemory(h)}${vhLand(h)}${vhPower(h)}
     <details class="vh-more"><summary>По десятилетиям</summary>${vhTable(h)}</details>
     <h4>Поворотные события</h4>${vhTurns(h)}`;
 }

@@ -61,6 +61,11 @@ function yardHtml(a) {
 }
 
 // К1: what an old person saw with their own eyes and the village still remembers
+function homeTxt(a, g) {
+  if (!a.home0 || !g || a.home0.g === g.id) return '';
+  const p0 = a.home0.people && (S.peoples || []).find(p => p.id === a.home0.people), pg = g.people && (S.peoples || []).find(p => p.id === g.people);
+  return `<p class="rel">Родом из «${esc(a.home0.name)}»${p0 && p0 !== pg ? `, из народа ${esc(p0.self)}: держится своих обычаев` : ''}.</p>`;
+}
 function witnessTxt(a, g) {
   const seen = ((g && g.mem) || []).filter(m => m.wit.includes(a.id) && m.t < S.tick - 360 * 5).sort((x, y) => y.w0 - x.w0).slice(0, 3);
   return seen.length ? `<p class="rel">Помнит сам: ${seen.map(m => `${esc(m.what)} (г.${Math.floor(m.t / 360)})${evLink(m.ev)}`).join('; ')}.</p>` : '';

@@ -23,7 +23,7 @@ function families(S) {
       if (m.spouse || Math.abs(m.age - f.age) > 14 || kin(m, f)) continue;
       const d = Math.hypot(m.x - f.x, m.y - f.y), gm = S._g.get(m.group), gf = S._g.get(f.group);
       if (m.group !== f.group && d > 320) continue;
-      const v = (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + bondW(f, m) + Math.min(0, bondW(S._a.get(f.father), m), bondW(S._a.get(f.mother), m)) + 0.3 * (m.rep || 0) + 0.02 * m.status + matchPull(S, f, m) - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
+      const v = peopleBond(S, f, m) + (m.group && m.group === f.group ? 0.8 : 0) + (f.trust[m.id] || 0) + bondW(f, m) + Math.min(0, bondW(S._a.get(f.father), m), bondW(S._a.get(f.mother), m)) + 0.3 * (m.rep || 0) + 0.02 * m.status + matchPull(S, f, m) - d / 600 - (gm && gf && gm !== gf ? cdist(gm, gf) * 0.6 : 0);
       if (v > bv) { bv = v; best = m; }
     }
     if (!best || bv < -0.4) continue;
@@ -86,6 +86,7 @@ function marry(S, f, m) {
   S.hostility[k] = (S.hostility[k] || 0) * (royal(f) || royal(m) ? 0.4 : 0.85);
   if (LF && LM) { bump(LF, LM, royal(f) || royal(m) ? 0.3 : 0.05); bump(LM, LF, royal(f) || royal(m) ? 0.3 : 0.05); }
   S.kinTies = S.kinTies || {}; S.kinTies[k] = (S.kinTies[k] || 0) + 1;
+  { const pa = gf, pb = gm; if (pa && pb && pa.people && pb.people) S.stats[pa.people === pb.people ? 'marPeopleSame' : 'marPeopleDiff'] = (S.stats[pa.people === pb.people ? 'marPeopleSame' : 'marPeopleDiff'] || 0) + 1; }
   if ((royal(f) || royal(m)) && gf.home && gm.home && (S.marLog || {})[k] === undefined || ((royal(f) || royal(m)) && S.tick - ((S.marLog || {})[k] || 0) > 360 * 6)) {
     S.marLog = S.marLog || {}; S.marLog[k] = S.tick;
     const al = allied(S, gf.id, gm.id);
@@ -97,7 +98,7 @@ function marry(S, f, m) {
 function growUp(S, k, mo, fa, g) {
   const p = mo || fa;
   const a = spawn(S, 'child', { parent: p, mother: mo, father: fa, lin: k.lin, g, x: k.x, y: k.y });
-  a.sex = k.sex; a.bornT = k.t;
+  a.sex = k.sex; a.bornT = k.t; setHome0(S, a, g);
   // К1: named after someone the village remembers
   const nm = memoryName(S, a, g); if (nm) { a.name = nm.name; a.namedFor = nm.hero; S.stats.namedFor = (S.stats.namedFor || 0) + 1; }
   const par = [S._a.get(k.mo0 || k.mo), S._a.get(k.fa)].filter(Boolean);
