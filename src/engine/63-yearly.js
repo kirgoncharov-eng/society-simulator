@@ -24,7 +24,7 @@ function yearly(S) {
     const rev = log(S, 'regime', `«${g.name}» меняет строй: ${from.toLowerCase()} → ${r.type.toLowerCase()}`, g.home.x, g.home.y, g.hue, { why: r.why + (cause ? '' : ' Перемена копилась десять лет.'), gs: [g.id], who: [g.leader], causes: cause ? [cause] : undefined, drift: !cause });
     (g.regimes || (g.regimes = [])).push([S.tick, r.type, rev.id]); if (g.regimes.length > 8) g.regimes.shift();
   }
-  for (const g of S.groups) { villageYear(S, g); memoryYear(S, g); }
+  for (const g of S.groups) { villageYear(S, g); memoryYear(S, g); mythYear(S, g); }
   if (S.tick % 3600 === 0) era(S);
 }
 function era(S) {

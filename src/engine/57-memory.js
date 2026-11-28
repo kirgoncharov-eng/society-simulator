@@ -17,6 +17,11 @@ function remember(S, g, o) {
   if (!g || g.dead || !o.ev) return null;
   const wit = g.members.filter(id => { const m = S._a.get(id); return m && m.age >= 16; }).slice(0, 60);
   const m = Object.assign({ id: (S.memId = (S.memId || 0) + 1), t: S.tick, w0: o.w, wit, lastWit: null }, o);
+  // names are kept with the memory: the people and villages it speaks of may be long gone when it becomes a legend (К2)
+  const h = o.hero && personOf(S, o.hero); if (h) { m.heroName = h.name; m.heroSex = h.sex; m.heroLin = h.lin || h.linId || null; }
+  const og = o.other && S._g.get(o.other); if (og) m.otherName = og.name;
+  const pl0 = o.place && placeById(S, o.place); if (pl0) m.placeName = pl0.name;
+  m.gname = g.name; m.faith = g.faith && S.faiths && S.faiths[g.faith] ? S.faiths[g.faith].base : null;
   (g.mem || (g.mem = [])).push(m);
   // a village keeps at most twenty memories: the weakest goes first
   if (g.mem.length > 20) { g.mem.sort((a, b) => b.w - a.w); forget(S, g, g.mem[g.mem.length - 1], true); }
@@ -81,8 +86,8 @@ function memBattle(S, A, B, win, deadA, deadB, ev) {
   // attackers who lost leave their dead on enemy land; a hard leader does not bury them
   const unburied = !win && deadA.length && LB && LB.coop < 0.4;
   // the fallen of each side are its heroes; the side that lost remembers the battle harder
-  const ma = remember(S, A, { ev: ev.id, kind: 'blood', tone: win ? 'win' : 'loss', w: clamp(0.5 + 0.12 * dead + (win ? 0 : 0.2) + (unburied ? 0.3 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: B.id, hero: deadA[0] && deadA[0].id, unburied: unburied || undefined });
-  const mb = remember(S, B, { ev: ev.id, kind: 'blood', tone: win ? 'loss' : 'win', w: clamp(0.6 + 0.12 * dead + (win ? 0.2 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: A.id, hero: deadB[0] && deadB[0].id });
+  const ma = remember(S, A, { ev: ev.id, kind: 'blood', tone: win ? 'win' : 'loss', w: clamp(0.5 + 0.12 * dead + (win ? 0 : 0.2) + (unburied ? 0.3 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: B.id, hero: deadA[0] && deadA[0].id, unburied: unburied || undefined, dead: deadA.length, foeDead: deadB.length, att: true });
+  const mb = remember(S, B, { ev: ev.id, kind: 'blood', tone: win ? 'loss' : 'win', w: clamp(0.6 + 0.12 * dead + (win ? 0.2 : 0), 0.4, 2), what, place: place && place.id, mon: place && place.mon, other: A.id, hero: deadB[0] && deadB[0].id, dead: deadB.length, foeDead: deadA.length });
   for (const [g, m] of [[A, ma], [B, mb]]) if (m && m.mon && hash01(ev.id + g.id) < 0.4) memorialFor(S, g, m);
   if (place && place.mon) note(S, 'rite', `${unburied ? `Павших «${A.name}» оставляют без погребения, своих` : 'Павших'} хоронят в братской могиле: ${place.name}`, x, y, B.hue, { rite: 'grave', who: deadA.concat(deadB).slice(0, 6).map(m => m.id), gs: [B.id, A.id], causes: [ev.id] });
   if (unburied) S.stats.unburied = (S.stats.unburied || 0) + 1;
@@ -95,7 +100,7 @@ function memSea(S, g, m, ev) {
   if (stone) g.stone -= 1;
   const place = namePlace(S, { name: stone ? `Камень ${nameCase(m, 'genitive')}` : pickBy(PLACE_NAMES.sea, ev.id), kind: 'sea', x, y, ev: ev.id, g: g.id, mon: stone ? 'stone' : null });
   if (stone) S.stats.stones = (S.stats.stones || 0) + 1;
-  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: 0.7, what: `лодку ${nameCase(m, 'genitive')}, что не вернулась с моря`, place: place.id, mon: place.mon, hero: m.id });
+  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: 0.7, what: `лодку ${nameCase(m, 'genitive')}, что не вернулась с моря`, place: place.id, mon: place.mon, hero: m.id, dead: 1, sub: 'sea' });
 }
 // a plague that killed many: the dead go into a pit at the edge of the burial ground, a place people fear
 function memPlague(S, g, dead, ev) {
@@ -103,22 +108,24 @@ function memPlague(S, g, dead, ev) {
   const cem = g.cemetery || g.home, x = cem.x + 18, y = cem.y + 12;
   const place = namePlace(S, { name: pickBy(PLACE_NAMES.plague, ev.id), kind: 'plague', x, y, ev: ev.id, g: g.id, mon: 'massgrave', dread: true });
   S.stats.massGraves = (S.stats.massGraves || 0) + 1;
-  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.6 + dead * 0.05, 0.6, 2), what: `мор, унёсший ${dead} ${pl(dead, 'человека', 'человек', 'человек')}`, place: place.id, mon: 'massgrave' });
+  remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.6 + dead * 0.05, 0.6, 2), what: `мор, унёсший ${dead} ${pl(dead, 'человека', 'человек', 'человек')}`, place: place.id, mon: 'massgrave', dead, sub: 'plague' });
 }
-function memFamine(S, g, hungry, n, ev) { remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.3 + hungry / Math.max(1, n), 0.4, 1.3), what: `голодную зиму г.${Math.floor(S.tick / 360)}` }); }
+function memFamine(S, g, hungry, n, ev) { remember(S, g, { ev: ev.id, kind: 'woe', tone: 'grief', w: clamp(0.3 + hungry / Math.max(1, n), 0.4, 1.3), what: `голодную зиму г.${Math.floor(S.tick / 360)}`, sub: 'famine' }); }
 // the founding of a village: a stone where the first house stood
-function memFounding(S, g, L, ev) {
+function memFounding(S, g, L, ev, how) {
   if (!g || !L) return;
+  // К2: a daughter village carries its mother's legends
+  if (how === 'colony' || how === 'schism') inheritMyths(S, ev.gs && S._g.get(ev.gs.find(id => id !== g.id)), g);
   const at = g.home || { x: g.cx, y: g.cy };
   const place = g.home ? namePlace(S, { name: `Камень ${nameCase(L, 'genitive')}`, kind: 'origin', x: at.x - 14, y: at.y + 10, ev: ev.id, g: g.id, mon: 'stone' }) : null;
-  remember(S, g, { ev: ev.id, kind: 'origin', tone: 'pride', w: 1, what: `основание деревни ${L.name}`, place: place && place.id, mon: place && 'stone', hero: L.id, lin: L.lin });
+  remember(S, g, { ev: ev.id, kind: 'origin', tone: 'pride', w: 1, what: `основание деревни ${L.name}`, place: place && place.id, mon: place && 'stone', hero: L.id, lin: L.lin, how: how || (S.tick < 360 * 8 ? 'landing' : 'found'), from: ev.gs && ev.gs.length > 1 ? (S._g.get(ev.gs.find(id => id !== g.id)) || {}).name : undefined });
 }
 // a village founded on the march gets its stone when it settles
 function originStone(S, g) {
   const m = (g.mem || []).find(x => x.kind === 'origin' && !x.place); if (!m) return;
   const L = personOf(S, m.hero); if (!L) return;
   const p = namePlace(S, { name: `Камень ${nameCase(L, 'genitive')}`, kind: 'origin', x: g.home.x - 14, y: g.home.y + 10, ev: m.ev, g: g.id, mon: 'stone' });
-  m.place = p.id; m.mon = 'stone';
+  m.place = p.id; m.mon = 'stone'; m.placeName = p.name;
 }
 function memAid(S, from, to, ev) { remember(S, to, { ev: ev.id, kind: 'good', tone: 'thanks', w: 0.6, what: `зерно от «${from.name}» в голодную зиму`, other: from.id }); }
 function memPower(S, g, o) { remember(S, g, Object.assign({ kind: 'power' }, o)); }
@@ -141,7 +148,7 @@ function rulerMound(S, g, a, fev) {
   S.stats.mounds = (S.stats.mounds || 0) + 1;
   const ev = log(S, 'rite', `«${g.name}» насыпает курган над ${fem(a, 'вождём', 'вождём')} ${nameCase(a, 'instrumental')}`, x, y, g.hue, { rite: 'mound', why: sent([founder ? `${a.name} ${fem(a, 'основал', 'основала')} деревню` : `${a.name} ${fem(a, 'правил', 'правила')} ${yrs(years)}`, 'всё лето мужчины носят землю; деревня кормит работников из общего амбара', 'курган будет виден издалека и напомнит, чей род здесь первый']), who: [a.id], gs: [g.id], causes: [fev].filter(Boolean) });
   place.ev = ev.id;
-  remember(S, g, { ev: ev.id, kind: founder ? 'origin' : 'power', tone: 'pride', w: founder ? 1.2 : 0.9, what: `${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')}, что лежит в кургане`, place: place.id, mon: 'mound', hero: a.id, lin: a.lin });
+  remember(S, g, { ev: ev.id, kind: founder ? 'origin' : 'power', tone: 'pride', w: founder ? 1.2 : 0.9, what: `${fem(a, 'вождя', 'вождя')} ${nameCase(a, 'accusative')}, что лежит в кургане`, place: place.id, mon: 'mound', hero: a.id, lin: a.lin, years });
 }
 // an ancestor's mound that is still remembered: the line of its hero holds the right to rule more firmly
 function ancestorMound(S, g, lin) { return (g.mem || []).find(m => m.mon === 'mound' && m.lin === lin && m.w >= 0.4); }
@@ -205,13 +212,18 @@ function memoryTies(S) {
     if (m.kind === 'blood') { if (!grudge[k] || grudge[k].w < m.w) grudge[k] = m; }
     else if (m.kind === 'good') thanks[k] = Math.max(thanks[k] || 0, m.w);
   }
+  // К2: a legend of defeat or of a Great War keeps the grudge after the last witness is gone
+  for (const g of S.groups) for (const y of g.myths || []) {
+    if (!y.other || !(y.kind === 'war' || (y.kind === 'blood' && y.tone === 'loss'))) continue;
+    const k = key(g.id, y.other); if (!grudge[k] || grudge[k].w < 0.6) grudge[k] = { w: 0.6, ev: y.ev, myth: true };
+  }
   return { grudge, thanks };
 }
 const GRUDGE_FLOOR = 0.35;
 // fear of a place: a plague pit or a mass grave, still remembered, keeps settlers and fields away
 function dreadAt(S, x, y, r = 70) {
   for (const p of S.places || []) {
-    if (p.forgot || !(p.dread || p.mon === 'massgrave')) continue;
+    if (!p.cursed && (p.forgot || !(p.dread || p.mon === 'massgrave'))) continue; // К2: a haunted place keeps its fear
     if (Math.hypot(p.x - x, p.y - y) < r) return p;
   }
   return null;
@@ -222,9 +234,10 @@ function onMonument(S, x, y) { for (const p of S.places || []) if (p.mon && Math
 function memoryName(S, a, g) {
   const cands = [];
   for (const m of (g && g.mem) || []) { if (!m.hero || m.w < 0.5) continue; const h = personOf(S, m.hero); if (h && h.sex === a.sex && h.name !== a.name) cands.push([h, m]); }
+  for (const y of (g && g.myths) || []) { if (!y.heroName || y.villain || y.heroSex !== a.sex || y.version === 'old') continue; cands.push([{ name: y.heroName, sex: y.heroSex }, { w: 0.8, ev: y.ev, what: `предание о ${y.heroName}` }]); }
   const gps = [a.mother, a.father].map(id => personOf(S, id)).filter(Boolean).flatMap(p => [p.mother, p.father]).map(id => personOf(S, id)).filter(p => p && p.sex === a.sex && !S._a.has(p.id));
   const u = hash01(a.id * 31 + S.tick);
-  if (cands.length && u < 0.12 * cands[0][1].w) { const [h, m] = cands[Math.floor(hash01(a.id) * cands.length) % cands.length]; return { name: h.name, why: `в честь ${nameCase(h, 'genitive')}: в «${g.name}» помнят ${m.what}`, ev: m.ev, hero: h.id }; }
+  if (cands.length && u < 0.12 * cands[0][1].w) { const [h, m] = cands[Math.floor(hash01(a.id) * cands.length) % cands.length]; return { name: h.name, why: `в честь ${h.id ? nameCase(h, 'genitive') : h.name}: в «${g.name}» ${m.what.startsWith('предание') ? 'рассказывают ' + m.what : 'помнят ' + m.what}`, ev: m.ev, hero: h.id }; }
   if (gps.length && u > 0.9) { const h = gps[0]; return { name: h.name, why: `в честь ${h.sex === 'f' ? 'бабушки' : 'деда'} ${nameCase(h, 'genitive')}`, hero: h.id }; }
   return null;
 }
